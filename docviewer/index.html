@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文檔檢視器 - DocViewer</title>
+    
+    <!-- 引入 CodeMirror 6 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6/dist/index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6/dist/index.css">
+    
+    <!-- 引入 Highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+    
+    <!-- 自定義樣式 -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>" type="image/svg+xml">
+</head>
+<body>
+    <div class="header">
+        <h1>📝 DocViewer</h1>
+        <div class="header-controls">
+            <button class="btn" id="toggleEditor">📝 隱藏</button>
+            <button class="btn" id="themeToggle">🌙 深色</button>
+            <button class="btn" id="clearBtn">🗑️ 清除</button>
+            <button class="btn" id="importBtn">📥 匯入</button>
+            <button class="btn btn-primary" id="exportBtn">📤 匯出</button>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" hidden accept=".md,.txt">
+
+    <div class="container">
+        <div class="editor-panel">
+            <div class="panel-header">
+                📝 編輯區
+            </div>
+            <div class="editor-container">
+                <textarea class="editor-textarea" id="editor" placeholder="在此輸入 Markdown 或 Mermaid 語法..."></textarea>
+            </div>
+        </div>
+        
+        <div class="resizer" id="resizer"></div>
+        
+        <div class="preview-panel">
+            <div class="panel-header">
+                👁️ 即時預覽
+            </div>
+            <div class="preview-container">
+                <div class="preview-content" id="preview">
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入所需的 JavaScript 庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 highlight.js -->
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common/highlight.min.js"></script>
+    
+    <script src="script.js"></script>
+
+    <!-- 模態視窗 -->
+    <div id="diagramModal" class="modal">
+        <div class="modal-content">            <div class="modal-controls">
+                <button class="modal-btn" id="downloadPng" title="下載PNG">💾</button>
+                <button class="modal-btn" id="closeModal" title="關閉">❌</button>
+            </div>
+            <div class="modal-diagram" id="modalDiagram"></div>
+        </div>
+    </div>
+</body>
+</html>

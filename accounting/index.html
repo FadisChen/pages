@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記帳 APP</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰️</text></svg>" type="image/svg+xml">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        glass: 'rgba(255, 255, 255, 0.1)',
+                        'glass-border': 'rgba(255, 255, 255, 0.2)',
+                        'glass-bg': 'rgba(255, 255, 255, 0.05)',
+                    },
+                    backdropBlur: {
+                        'xs': '2px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .glass-input {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .glass-input option {
+            background: #f8f9fa !important;
+            color: #333 !important;
+            padding: 8px;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        /* 針對 Webkit 瀏覽器的下拉選單樣式 */
+        select.glass-input {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+        /* Firefox 特殊處理 */
+        @-moz-document url-prefix() {
+            .glass-input option {
+                background-color: #f8f9fa;
+                color: #333;
+            }
+        }
+        /* Safari 和 Chrome 的下拉選單文字對比度 */
+        select.glass-input:not(:focus) {
+            color: white;
+        }
+        select.glass-input:focus {
+            color: #333;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        /* 確保選項在所有瀏覽器中都有良好的對比度 */
+        select.glass-input option {
+            background-color: #ffffff !important;
+            color: #333333 !important;
+            padding: 10px !important;
+            border: none !important;
+        }
+        .delete-btn:hover {
+            background: rgba(239, 68, 68, 0.8);
+        }
+    </style>
+</head>
+<body class="font-sans text-white">
+    <div class="container mx-auto px-4 py-6 max-w-md">
+        <!-- Header -->
+        <header class="glass rounded-3xl p-6 mb-6 text-center">            
+            <!-- Month Navigation -->
+            <div class="flex items-center justify-between mb-4">
+                <button id="prevMonth" class="glass-card rounded-full p-3 hover:bg-white/20 transition-all">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+                <h2 id="currentMonth" class="text-xl font-semibold">2024年01月</h2>
+                <button id="nextMonth" class="glass-card rounded-full p-3 hover:bg-white/20 transition-all">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Monthly Total -->
+            <div class="glass-card rounded-2xl p-4">
+                <p class="text-sm opacity-80">本月支出總計</p>
+                <p id="monthlyTotal" class="text-3xl font-bold">$0</p>
+            </div>
+        </header>
+
+        <!-- Add New Record Section -->
+        <section class="glass rounded-3xl p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4">新增支出記錄</h3>
+            
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="date" id="expenseDate" class="glass-input rounded-xl p-3 text-white placeholder-white/70" />
+                    <input type="text" id="itemName" placeholder="項目名稱" class="glass-input rounded-xl p-3 text-white placeholder-white/70" />
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <select id="expenseType" class="glass-input rounded-xl p-3 text-white" style="color-scheme: dark;">
+                        <option value="吃喝" style="background: #f8f9fa; color: #333;">吃喝</option>
+                        <option value="購物" style="background: #f8f9fa; color: #333;">購物</option>
+                        <option value="住宿" style="background: #f8f9fa; color: #333;">住宿</option>
+                        <option value="交通" style="background: #f8f9fa; color: #333;">交通</option>
+                        <option value="學習" style="background: #f8f9fa; color: #333;">學習</option>
+                        <option value="娛樂" style="background: #f8f9fa; color: #333;">娛樂</option>
+                    </select>
+                    <select id="paymentMethod" class="glass-input rounded-xl p-3 text-white" style="color-scheme: dark;">
+                        <option value="現金" style="background: #f8f9fa; color: #333;">現金</option>
+                        <option value="信用卡" style="background: #f8f9fa; color: #333;">信用卡</option>
+                    </select>
+                </div>
+                
+                <input type="number" id="amount" placeholder="金額" class="glass-input rounded-xl p-3 w-full text-white placeholder-white/70" />
+                
+                <div class="flex gap-3">
+                    <button id="addRecord" class="flex-1 glass-card rounded-xl p-3 font-semibold hover:bg-white/20 transition-all">
+                        新增記錄
+                    </button>
+                    <button id="voiceInput" class="glass-card rounded-xl p-3 hover:bg-white/20 transition-all" title="語音輸入">
+                        🎤
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Statistics Chart -->
+        <section class="glass rounded-3xl p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4">消費類型統計</h3>
+            <div class="h-64">
+                <canvas id="expenseChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Expense List -->
+        <section class="glass rounded-3xl p-6">
+            <h3 class="text-lg font-semibold mb-4">支出清單</h3>
+            <div id="expenseList" class="space-y-3">
+                <!-- Expense items will be dynamically added here -->
+            </div>
+        </section>
+
+        <!-- Voice Recording Modal -->
+        <div id="voiceModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+            <div class="glass-card rounded-3xl p-8 m-4 max-w-sm w-full text-center">
+                <div id="recordingIndicator" class="mb-6">
+                    <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-red-500/30 flex items-center justify-center">
+                        <div class="w-8 h-8 rounded-full bg-red-500 animate-pulse"></div>
+                    </div>
+                    <p class="text-lg">正在聆聽...</p>
+                    <p class="text-sm opacity-70">請說出您的消費記錄</p>
+                </div>
+                <button id="stopRecording" class="glass-card rounded-xl px-6 py-3 hover:bg-white/20 transition-all">
+                    停止聆聽
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Modal -->
+        <div id="loadingModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+            <div class="glass-card rounded-3xl p-8 m-4 max-w-sm w-full text-center">
+                <div class="w-16 h-16 mx-auto mb-4">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white"></div>
+                </div>
+                <p class="text-lg">處理中...</p>
+            </div>
+        </div>
+
+        <!-- 自定義警告彈出視窗 -->
+        <div id="alertModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+            <div class="glass-card rounded-3xl p-8 m-4 max-w-md w-full text-center">
+                <div class="mb-6">
+                    <div id="alertIcon" class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center">
+                        <!-- 圖示將由 JavaScript 動態設定 -->
+                    </div>
+                    <h3 id="alertTitle" class="text-xl font-bold mb-2">提示</h3>
+                    <p id="alertMessage" class="text-base opacity-90"></p>
+                </div>
+                <button id="alertConfirm" class="glass-card w-full py-3 px-6 rounded-2xl font-medium hover:bg-white/20 transition-all">
+                    確定
+                </button>
+            </div>
+        </div>
+
+        <!-- 自定義確認彈出視窗 -->
+        <div id="confirmModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+            <div class="glass-card rounded-3xl p-8 m-4 max-w-md w-full text-center">
+                <div class="mb-6">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-500/20 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.962-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 id="confirmTitle" class="text-xl font-bold mb-2">確認操作</h3>
+                    <p id="confirmMessage" class="text-base opacity-90"></p>
+                </div>
+                <div class="flex gap-3">
+                    <button id="confirmCancel" class="flex-1 py-3 px-6 rounded-2xl font-medium bg-white/10 hover:bg-white/20 transition-all">
+                        取消
+                    </button>
+                    <button id="confirmOk" class="flex-1 py-3 px-6 rounded-2xl font-medium bg-red-500/30 hover:bg-red-500/50 transition-all">
+                        確認
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
