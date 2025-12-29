@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Design Patterns 學習指南</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Markmap -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
+
+    <!-- Mermaid -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+
+    <!-- Highlight.js -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Outfit', 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            height: 100vh;
+            overflow: hidden;
+            color: #1e293b;
+        }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        #markmap-container svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3 {
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .markdown-body h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+
+        .markdown-body h3 {
+            font-size: 1.25em;
+        }
+
+        .markdown-body p {
+            margin-bottom: 1em;
+            line-height: 1.6;
+        }
+
+        .markdown-body ul {
+            list-style-type: disc;
+            padding-left: 2em;
+            margin-bottom: 1em;
+        }
+
+        .markdown-body code {
+            background-color: rgba(175, 184, 193, 0.2);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
+        .markdown-body pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .nav-item.active {
+            background-color: #e0e7ff;
+            /* indigo-100 */
+            color: #4338ca;
+            /* indigo-700 */
+            border-left: 4px solid #4f46e5;
+            /* indigo-600 */
+        }
+
+        /* Mermaid Fixes */
+        .mermaid {
+            background: transparent;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body class="flex h-screen">
+
+    <!-- Sidebar: Pattern List / Markmap Focus -->
+    <aside class="w-80 glass flex flex-col z-20 transition-all duration-300 transform" id="sidebar">
+        <div class="p-6 border-b border-white/50">
+            <button onclick="app.toggleMapOnly()" class="float-right text-slate-400 hover:text-indigo-600 lg:hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clip-rule="evenodd" />
+                </svg>
+            </button>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Design Patterns
+            </h1>
+            <p class="text-xs text-slate-500 mt-1">互動式學習指南 (C# Edition)</p>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-4" id="pattern-nav">
+            <!-- Dynamically populated -->
+        </nav>
+
+        <div class="p-4 border-t border-white/50 text-center text-xs text-slate-400">
+            Design Patterns Visualizer v1.2
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+
+        <!-- Toggle View Controls -->
+        <div class="absolute top-4 right-4 z-50 flex gap-2">
+            <button onclick="app.toggleMapOnly()"
+                class="glass px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/80 transition-colors shadow-sm flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                        d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+                <span>全地圖模式</span>
+            </button>
+        </div>
+
+        <!-- Split View Container -->
+        <div class="flex-1 flex w-full h-full">
+
+            <!-- Left/Top: Markmap -->
+            <div id="map-panel" class="w-1/2 h-full border-r border-white/50 transition-all duration-300 relative">
+                <div
+                    class="absolute top-4 left-4 z-10 glass px-2 py-1 rounded text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Knowledge Map
+                </div>
+                <svg id="markmap" class="w-full h-full"></svg>
+            </div>
+
+            <!-- Right/Bottom: Details -->
+            <div id="detail-panel"
+                class="w-1/2 h-full overflow-y-auto bg-white/40 backdrop-blur-md p-8 transition-all duration-300">
+                <div id="empty-state" class="h-full flex flex-col items-center justify-center text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 opacity-50" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <p class="text-lg font-medium">點擊左側地圖節點以查看詳情</p>
+                    <p class="text-sm mt-2">包含圖解、說明與程式碼範例</p>
+                </div>
+
+                <div id="content-state" class="hidden max-w-3xl mx-auto pb-20">
+                    <!-- Dynamic Content -->
+                    <div class="mb-2">
+                        <span id="pattern-type"
+                            class="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-bold uppercase tracking-wider">Type</span>
+                    </div>
+                    <h2 id="pattern-title" class="text-3xl font-bold text-slate-800 mb-6">Pattern Name</h2>
+
+                    <!-- Diagram -->
+                    <div
+                        class="glass-panel p-6 rounded-2xl mb-8 flex flex-col items-center bg-white/60 overflow-hidden relative group">
+                        <div id="mermaid-diagram" class="mermaid">
+                            <!-- Mermaid render here -->
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="space-y-6">
+                        <section>
+                            <h3 class="text-lg font-bold text-slate-700 flex items-center gap-2 mb-3">
+                                <span class="bg-blue-100 text-blue-600 p-1 rounded">📝</span> 模式定義
+                            </h3>
+                            <p id="pattern-desc"
+                                class="text-slate-600 leading-relaxed text-base bg-white/40 p-4 rounded-xl border border-white/50">
+                                Description here.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 class="text-lg font-bold text-slate-700 flex items-center gap-2 mb-3">
+                                <span class="bg-green-100 text-green-600 p-1 rounded">🎯</span> 使用情境 (When to use)
+                            </h3>
+                            <ul id="pattern-scenario"
+                                class="list-disc list-inside space-y-2 text-slate-600 bg-white/40 p-4 rounded-xl border border-white/50">
+                                <li>Scenario 1</li>
+                            </ul>
+                        </section>
+
+                        <section>
+                            <h3 class="text-lg font-bold text-slate-700 flex items-center gap-2 mb-3">
+                                <span class="bg-purple-100 text-purple-600 p-1 rounded">💻</span> C# 實作範例
+                            </h3>
+                            <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4">
+                                <div class="mb-3">
+                                    <h4 class="text-sm font-bold text-slate-700 mb-1">程式碼說明：</h4>
+                                    <p id="code-desc" class="text-sm text-slate-600">說明文字...</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-700 mb-1">套用優點：</h4>
+                                    <ul id="code-pros" class="text-sm text-slate-600 list-disc list-inside">
+                                        <li>優點1</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl overflow-hidden shadow-lg border border-slate-200 relative">
+                                <pre><code id="pattern-code" class="language-csharp">
+// Code here
+                                </code></pre>
+                            </div>
+                        </section>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- DATA ---
+        const DESIGN_PATTERNS = {
+            creational: {
+                name: "創建型 (Creational)",
+                description: "關注物件的建立過程，將物件的建立與使用分離。",
+                items: [
+                    {
+                        id: "singleton",
+                        name: "Singleton (單例模式)",
+                        desc: "保證一個類別只有一個實例 (Instance)，並提供一個存取它的全域訪問點。",
+                        scenarios: [
+                            "設定檔管理 (Configuration Manager)",
+                            "資料庫連線池 (Connection Pool)",
+                            "日誌記錄器 (Logger)",
+                            "快取機制 (Cache)"
+                        ],
+                        diagram: `classDiagram
+    class Singleton {
+        - static instance: Singleton
+        - Singleton()
+        + static getInstance() : Singleton
+    }`,
+                        code: `public sealed class Singleton
+{
+    private static Singleton _instance = null;
+    private static readonly object _padlock = new object();
+
+    private Singleton() { }
+
+    public static Singleton Instance
+    {
+        get
+        {
+            // Thread Safe Lock
+            lock (_padlock)
+            {
+                if (_instance == null)
+                {
+                    _instance = new Singleton();
+                }
+                return _instance;
+            }
+        }
+    }
+}`,
+                        codeDesc: "使用 sealed 關鍵字防止繼承，並將建構子設為 private 禁止外部實例化。透過 lock 機制確保在多執行緒環境下，只會建立一個實例。",
+                        pros: [
+                            "確保全域唯一實例，方便管理共享資源。",
+                            "避免頻繁建立銷毀物件，節省系統資源。",
+                            "提供對唯一實例的受控存取。"
+                        ]
+                    },
+                    {
+                        id: "factory_method",
+                        name: "Factory Method (工廠方法)",
+                        desc: "定義一個用於建立物件的介面，但讓子類別決定實例化哪一個類別。",
+                        scenarios: [
+                            "框架需要建立物件但無法預知具體類別",
+                            "需要擴充新的產品類型時不想修改既有程式碼",
+                            "跨平台 GUI 元件產生"
+                        ],
+                        diagram: `classDiagram
+    class Creator {
+        +factoryMethod() Product
+        +someOperation()
+    }
+    class ConcreteCreatorA {
+        +factoryMethod() Product
+    }
+    class ConcreteCreatorB {
+        +factoryMethod() Product
+    }
+    class Product {
+        <<interface>>
+    }
+    class ConcreteProductA
+    class ConcreteProductB
+    Creator <|-- ConcreteCreatorA
+    Creator <|-- ConcreteCreatorB
+    Product <|.. ConcreteProductA
+    Product <|.. ConcreteProductB
+    ConcreteCreatorA ..> ConcreteProductA
+    ConcreteCreatorB ..> ConcreteProductB`,
+                        code: `public abstract class Logistics
+{
+    // Factory Method
+    public abstract ITransport CreateTransport();
+
+    public string PlanDelivery()
+    {
+        var transport = CreateTransport();
+        return $"Logistics: {transport.Deliver()}";
+    }
+}
+
+public class RoadLogistics : Logistics
+{
+    public override ITransport CreateTransport() => new Truck();
+}
+
+public class SeaLogistics : Logistics
+{
+    public override ITransport CreateTransport() => new Ship();
+}
+
+public interface ITransport
+{
+    string Deliver();
+}
+
+public class Truck : ITransport
+{
+    public string Deliver() => "Truck delivery on road";
+}
+
+public class Ship : ITransport
+{
+    public string Deliver() => "Ship delivery by sea";
+}`,
+                        codeDesc: "Logistics 抽象類別定義了 `CreateTransport` 介面，但不決定具體交通工具。由 `RoadLogistics` 和 `SeaLogistics` 實作該方法，決定產生 `Truck` 或 `Ship`。",
+                        pros: [
+                            "符合開放封閉原則 (OCP)，新增產品種類無需修改 Creator 邏輯。",
+                            "單一職責原則 (SRP)，將產品建立程式碼移至同一位置。",
+                            "解耦了產品的使用者與產品的建立過程。"
+                        ]
+                    },
+                    {
+                        id: "abstract_factory",
+                        name: "Abstract Factory (抽象工廠)",
+                        desc: "提供一個介面，用於建立相關或相依物件的「家族」，而無需指定它們具體的類分。",
+                        scenarios: [
+                            "UI 主題切換 (建立一系列 LightTheme 按鈕、視窗、選單)",
+                            "跨平台軟體支援"
+                        ],
+                        diagram: `classDiagram
+    class GUIFactory {
+        <<interface>>
+        +createButton()
+        +createCheckbox()
+    }
+    class WinFactory {
+        +createButton()
+        +createCheckbox()
+    }
+    class MacFactory {
+        +createButton()
+        +createCheckbox()
+    }
+    GUIFactory <|.. WinFactory
+    GUIFactory <|.. MacFactory`,
+                        code: `public interface IGUIFactory
+{
+    IButton CreateButton();
+    ICheckbox CreateCheckbox();
+}
+
+public class WinFactory : IGUIFactory
+{
+    public IButton CreateButton() => new WinButton();
+    public ICheckbox CreateCheckbox() => new WinCheckbox();
+}
+
+public class MacFactory : IGUIFactory
+{
+    public IButton CreateButton() => new MacButton();
+    public ICheckbox CreateCheckbox() => new MacCheckbox();
+}
+
+public class Application
+{
+    private IButton _button;
+    public Application(IGUIFactory factory)
+    {
+        _button = factory.CreateButton();
+    }
+    public void Paint() => _button.Paint();
+}`,
+                        codeDesc: "定義一個工廠介面 `IGUIFactory` 來建立一系列相關物件 (Button, Checkbox)。透過切換傳入 `Application` 的具體工廠 (WinFactory 或 MacFactory)，即可改變整體的 UI 風格。",
+                        pros: [
+                            "可以確保同一工廠所產生的產品是彼此相容的 (Product Families)。",
+                            "避免與具體產品類別緊密耦合。",
+                            "符合單一職責原則與開放封閉原則。"
+                        ]
+                    },
+                    {
+                        id: "builder",
+                        name: "Builder (建造者模式)",
+                        desc: "將一個複雜物件的建構與其表示分離，使得同樣的建構過程可以建立不同的表示。",
+                        scenarios: [
+                            "SQL 查詢產生器",
+                            "複雜的物件設定 (如 HttpClient)",
+                            "餐點客製化"
+                        ],
+                        diagram: `classDiagram
+    class Director {
+        +construct(builder)
+    }
+    class Builder {
+        <<interface>>
+        +buildPartA()
+        +buildPartB()
+        +getResult()
+    }
+    class ConcreteBuilder {
+        -product
+        +buildPartA()
+        +buildPartB()
+        +getResult()
+    }
+    Director o-- Builder
+    Builder <|.. ConcreteBuilder`,
+                        code: `public class BurgerBuilder
+{
+    private Burger _burger = new Burger();
+
+    public BurgerBuilder AddCheese()
+    {
+        _burger.HasCheese = true;
+        return this;
+    }
+    public BurgerBuilder AddLettuce()
+    {
+        _burger.HasLettuce = true;
+        return this;
+    }
+    public Burger Build() => _burger;
+}
+
+// Usage
+var burger = new BurgerBuilder()
+    .AddCheese()
+    .AddLettuce()
+    .Build();`,
+                        codeDesc: "使用 Fluent Interface 風格 (Return this)，讓使用者可以像點餐一樣一步步組裝 `Burger` 物件，最後呼叫 `Build()` 取得成品。",
+                        pros: [
+                            "可以分步驟建立物件，或延遲執行步驟。",
+                            "同樣的建構流程可以產生不同的產品表示。",
+                            "代碼閱讀性高，避免了建構子參數過多 (Telescoping Constructor) 的問題。"
+                        ]
+                    },
+                    {
+                        id: "prototype",
+                        name: "Prototype (原型模式)",
+                        desc: "透過複製現有的實例來建立新的物件，而不是透過新建構子。",
+                        scenarios: [
+                            "物件建立成本過高",
+                            "物件之間只有少許狀態差異"
+                        ],
+                        diagram: `classDiagram
+    class Prototype {
+        <<interface>>
+        +clone()
+    }
+    class ConcretePrototype {
+        +clone()
+    }
+    Prototype <|.. ConcretePrototype`,
+                        code: `public class Person : ICloneable
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+
+    public object Clone()
+    {
+        // 淺層複製 (Shallow Copy)
+        return this.MemberwiseClone();
+    }
+}
+
+// Usage
+var p1 = new Person { Name = "Alice", Age = 30 };
+var p2 = (Person)p1.Clone();
+p2.Name = "Bob";`,
+                        codeDesc: "實作 `ICloneable` 介面，使用 C# 內建的 `MemberwiseClone()` 進行淺層複製。如果需要深層複製 (Deep Copy)，則需手動處理參考型別的欄位。",
+                        pros: [
+                            "可以直接複製複雜物件，不需要知道其具體類別。",
+                            "減少重複的初始化程式碼。",
+                            "如果是資源密集型的物件建立，複製通常比新建更有效率。"
+                        ]
+                    }
+                ]
+            },
+            structural: {
+                name: "結構型 (Structural)",
+                description: "如何組合類別和物件以獲得更大的結構。",
+                items: [
+                    {
+                        id: "adapter",
+                        name: "Adapter (轉接器模式)",
+                        desc: "將一個類別的介面轉換成客戶希望的另一個介面，解決介面不相容問題。",
+                        scenarios: [
+                            "整合舊有系統",
+                            "使用第三方套件但接口不符"
+                        ],
+                        diagram: `classDiagram
+    class Target {
+        +request()
+    }
+    class Adapter {
+        -adaptee
+        +request()
+    }
+    class Adaptee {
+        +specificRequest()
+    }
+    Target <|.. Adapter
+    Adapter --> Adaptee`,
+                        code: `public interface ITarget
+{
+    string GetRequest();
+}
+
+public class Adaptee
+{
+    public string GetSpecificRequest() => "Specific ID";
+}
+
+public class Adapter : ITarget
+{
+    private readonly Adaptee _adaptee;
+    public Adapter(Adaptee adaptee)
+    {
+        _adaptee = adaptee;
+    }
+
+    public string GetRequest()
+    {
+        return $"This is '{_adaptee.GetSpecificRequest()}'";
+    }
+}`,
+                        codeDesc: "`Adapter` 類別包裝了 `Adaptee` 物件。當客戶端呼叫 `GetRequest()` (目標介面) 時，Adapter 內部將其轉換呼叫 `Adaptee` 的 `GetSpecificRequest()` (既有介面)。",
+                        pros: [
+                            "單一職責原則：將介面轉換程式碼從主要業務邏輯中分離。",
+                            "開放封閉原則：可以在不修改現有客戶端程式碼的情況下引入新的轉接器。",
+                            "讓原本不相容的類別可以協同工作。"
+                        ]
+                    },
+                    {
+                        id: "decorator",
+                        name: "Decorator (裝飾者模式)",
+                        desc: "動態地給一個物件添加一些額外的職責。比繼承更靈活。",
+                        scenarios: [
+                            "I/O Stream (BufferedStream, GZipStream)",
+                            "為 UI 元件添加邊框、滾動條"
+                        ],
+                        diagram: `classDiagram
+    class Component {
+        +operation()
+    }
+    class ConcreteComponent {
+        +operation()
+    }
+    class Decorator {
+        -component
+        +operation()
+    }
+    class ConcreteDecoratorA {
+        +operation()
+    }
+    Component <|.. ConcreteComponent
+    Component <|.. Decorator
+    Decorator <|-- ConcreteDecoratorA`,
+                        code: `public abstract class Coffee
+{
+    public abstract double Cost();
+    public abstract string Description();
+}
+
+public class SimpleCoffee : Coffee
+{
+    public override double Cost() => 10.0;
+    public override string Description() => "Simple Coffee";
+}
+
+public class MilkDecorator : Coffee
+{
+    private Coffee _coffee;
+    public MilkDecorator(Coffee coffee) { _coffee = coffee; }
+    
+    public override double Cost() => _coffee.Cost() + 2.0;
+    public override string Description() => _coffee.Description() + ", Milk";
+}`,
+                        codeDesc: "`MilkDecorator` 繼承自 `Coffee` 並持有一個 `Coffee` 物件。它在呼叫 `Cost()` 時，會先呼叫被包裝物件的 `Cost()` 加上自己的價格，達成功能疊加。",
+                        pros: [
+                            "比繼承更有彈性：可以在執行期動態決定物件的行為。",
+                            "避免類別爆炸頻繁：不需要為每一種組合 (如 Milk+Sugar, MilkOnly) 建立子類別。",
+                            "單一職責原則：每個裝飾者只專注添加一種功能。"
+                        ]
+                    },
+                    {
+                        id: "proxy",
+                        name: "Proxy (代理模式)",
+                        desc: "為其他物件提供一種代理以控制對這個物件的存取。",
+                        scenarios: [
+                            "權限控制",
+                            "延遲載入 (Lazy Loading)",
+                            "遠端代理 (Remote Proxy)"
+                        ],
+                        diagram: `classDiagram
+    class Subject {
+        <<interface>>
+        +request()
+    }
+    class RealSubject {
+        +request()
+    }
+    class Proxy {
+        -realSubject
+        +request()
+    }
+    Subject <|.. RealSubject
+    Subject <|.. Proxy
+    Proxy --> RealSubject`,
+                        code: `public interface ISubject
+{
+    void Request();
+}
+
+public class RealSubject : ISubject
+{
+    public void Request() => Console.WriteLine("RealSubject: Handling request.");
+}
+
+public class Proxy : ISubject
+{
+    private RealSubject _realSubject;
+
+    public void Request()
+    {
+        if (_realSubject == null)
+        {
+            Console.WriteLine("Proxy: Checking access and creating RealSubject.");
+            _realSubject = new RealSubject();
+        }
+        _realSubject.Request();
+    }
+}`,
+                        codeDesc: "`Proxy` 實作了與 `RealSubject` 相同的介面。在此範例中，Proxy 實作了「延遲初始化 (Lazy Initialization)」，只有在真正呼叫 `Request()` 時才建立 `RealSubject`。",
+                        pros: [
+                            "可以在不修改客戶端的情況下控制服務物件。",
+                            "可以管理服務物件的生命週期 (創建/銷毀)。",
+                            "即使服務物件還沒準備好，代理也可以正常運作 (如顯示 Loading)。"
+                        ]
+                    },
+                    {
+                        id: "facade",
+                        name: "Facade (外觀模式)",
+                        desc: "為子系統中的一組介面提供一個一致的介面，簡化使用。",
+                        scenarios: [
+                            "簡化複雜 library 的使用方式",
+                            "提供高層次的操作介面"
+                        ],
+                        diagram: `classDiagram
+    class Facade {
+        +operation()
+    }
+    class SubSystem1 {
+        +op1()
+    }
+    class SubSystem2 {
+        +op2()
+    }
+    Facade --> SubSystem1
+    Facade --> SubSystem2`,
+                        code: `public class SubSystem1
+{
+    public string Operation1() => "Sub1 Ready";
+}
+
+public class SubSystem2
+{
+    public string Operation2() => "Sub2 Go";
+}
+
+public class ComputerFacade
+{
+    private SubSystem1 _s1;
+    private SubSystem2 _s2;
+
+    public ComputerFacade()
+    {
+        _s1 = new SubSystem1();
+        _s2 = new SubSystem2();
+    }
+
+    public string Start()
+    {
+        return $"{_s1.Operation1()} + {_s2.Operation2()}";
+    }
+}`,
+                        codeDesc: "`ComputerFacade` 封裝了 `SubSystem1` 與 `SubSystem2` 的複雜初始化與呼叫過程，提供一個簡單的 `Start()` 方法供外部使用。",
+                        pros: [
+                            "讓程式碼與複雜的子系統解耦。",
+                            "提供簡單的介面，降低學習與使用門檻。",
+                            "可以更好地劃分層次結構。"
+                        ]
+                    },
+                    {
+                        id: "composite",
+                        name: "Composite (組合模式)",
+                        desc: "將物件組合成樹形結構以表示「部分-整體」的層次結構。",
+                        scenarios: [
+                            "檔案系統 (File/Folder)",
+                            "GUI 樹狀結構 (Control/Panel)"
+                        ],
+                        diagram: `classDiagram
+    class Component {
+        +operation()
+        +add(c)
+        +remove(c)
+    }
+    class Leaf {
+        +operation()
+    }
+    class Composite {
+        -children
+        +operation()
+        +add(c)
+        +remove(c)
+    }
+    Component <|-- Leaf
+    Component <|-- Composite
+    Composite o-- Component`,
+                        code: `public abstract class Component
+{
+    public abstract void Display(int depth);
+}
+
+public class Leaf : Component
+{
+    private string _name;
+    public Leaf(string name) { _name = name; }
+    public override void Display(int depth) => Console.WriteLine(new String('-', depth) + _name);
+}
+
+public class Composite : Component
+{
+    private List<Component> _children = new List<Component>();
+    private string _name;
+    public Composite(string name) { _name = name; }
+    
+    public void Add(Component c) => _children.Add(c);
+    
+    public override void Display(int depth)
+    {
+        Console.WriteLine(new String('-', depth) + _name);
+        foreach (var c in _children) c.Display(depth + 2);
+    }
+}`,
+                        codeDesc: "`Composite` (容器) 與 `Leaf` (葉節點) 都繼承自 `Component`。這讓使用者可以一致地呼叫 `Display()`，無論是對單一檔案，或是包含多個檔案的資料夾。",
+                        pros: [
+                            "可以利用遞迴結構方便地處理複雜的樹狀資料。",
+                            "符合開放封閉原則：新增新的節點類型不需修改現有結構。",
+                            "簡化了客戶端程式碼，因為不需區分是處理單一物件還是組合物件。"
+                        ]
+                    }
+                ]
+            },
+            behavioral: {
+                name: "行為型 (Behavioral)",
+                description: "關注物件之間的通訊與職責分配。",
+                items: [
+                    {
+                        id: "observer",
+                        name: "Observer (觀察者模式)",
+                        desc: "定義物件間的一對多依賴，當物件狀態改變，所有依賴者都會收到通知。",
+                        scenarios: [
+                            "C# Events / Delegates",
+                            "Model-View-Controller (MVC)",
+                            "Reactive Extensions (Rx)"
+                        ],
+                        diagram: `classDiagram
+    class Subject {
+        -observers
+        +attach(Observer)
+        +detach(Observer)
+        +notify()
+    }
+    class Observer {
+        <<interface>>
+        +update()
+    }
+    class ConcreteObserver {
+        +update()
+    }
+    Subject o-- Observer
+    Observer <|.. ConcreteObserver`,
+                        code: `public class Subject
+{
+    // C# built-in observer pattern via Action or EventHandler
+    public event Action<string> OnNotify;
+
+    public void DoSomething()
+    {
+        // ... Logic
+        OnNotify?.Invoke("Event happened!");
+    }
+}
+
+// Usage
+var subject = new Subject();
+subject.OnNotify += msg => Console.WriteLine($"Observer 1: {msg}");
+subject.OnNotify += msg => Console.WriteLine($"Observer 2: {msg}");
+subject.DoSomething();`,
+                        codeDesc: "使用 C# 的 `event` 機制是最經典的 Observer 實作。訂閱者只需將方法 (`+=`) 註冊到事件上，當 `Subject` 觸發事件時，所有訂閱者都會收到通知。",
+                        pros: [
+                            "符合開放封閉原則：可以在不修改 Subject 的情況下新增訂閱者。",
+                            "建立物件之間的鬆散耦合關係。",
+                            "支援廣播通訊。"
+                        ]
+                    },
+                    {
+                        id: "strategy",
+                        name: "Strategy (策略模式)",
+                        desc: "定義一系列演算法，將它們封裝起來，並使它們可以互相替換。",
+                        scenarios: [
+                            "Dependency Injection (注入不同實作)",
+                            "排序策略 (SortStrategy)",
+                            "折扣計算 (DiscountStrategy)"
+                        ],
+                        diagram: `classDiagram
+    class Context {
+        -strategy
+        +setStrategy(Strategy)
+        +execute()
+    }
+    class Strategy {
+        <<interface>>
+        +algorithm()
+    }
+    class StrategyA {
+        +algorithm()
+    }
+    class StrategyB {
+        +algorithm()
+    }
+    Context o-- Strategy
+    Strategy <|.. StrategyA
+    Strategy <|.. StrategyB`,
+                        code: `public interface IStrategy
+{
+    int Execute(int a, int b);
+}
+
+public class AddStrategy : IStrategy
+{
+    public int Execute(int a, int b) => a + b;
+}
+
+public class Context
+{
+    private IStrategy _strategy;
+    public Context(IStrategy strategy) { _strategy = strategy; }
+    public int ExecuteStrategy(int a, int b) => _strategy.Execute(a, b);
+}
+
+// Usage
+var context = new Context(new AddStrategy());
+var result = context.ExecuteStrategy(10, 5);`,
+                        codeDesc: "將具體的演算法封裝在 `AddStrategy` 中，`Context` 只依賴 `IStrategy` 介面。這使得我們可以在執行期由外部注入不同的策略。",
+                        pros: [
+                            "可以在執行期切換物件內的演算法。",
+                            "將實作細節從使用它的類別中分離出來。",
+                            "使用組合取代繼承，更有彈性。"
+                        ]
+                    },
+                    {
+                        id: "command",
+                        name: "Command (命令模式)",
+                        desc: "將請求封裝成物件，讓你可用不同的請求對客戶進行參數化，並支援復原操作。",
+                        scenarios: [
+                            "WPF ICommand",
+                            "交易系統",
+                            "巨集錄製 (Macro)"
+                        ],
+                        diagram: `classDiagram
+    class Invoker {
+        -command
+        +setCommand(c)
+        +executeCommand()
+    }
+    class Command {
+        <<interface>>
+        +execute()
+    }
+    class ConcreteCommand {
+        -receiver
+        +execute()
+    }
+    class Receiver {
+        +action()
+    }
+    Invoker o-- Command
+    Command <|.. ConcreteCommand
+    ConcreteCommand --> Receiver`,
+                        code: `public interface ICommand
+{
+    void Execute();
+}
+
+public class Light
+{
+    public void On() => Console.WriteLine("Light is On");
+}
+
+public class LightOnCommand : ICommand
+{
+    private Light _light;
+    public LightOnCommand(Light light) { _light = light; }
+    public void Execute() => _light.On();
+}
+
+public class Invoker
+{
+    private ICommand _command;
+    public void SetCommand(ICommand cmd) => _command = cmd;
+    public void Run() => _command.Execute();
+}`,
+                        codeDesc: "`LightOnCommand` 將「開燈」這個動作封裝成一個物件。`Invoker` (如遙控器) 不需要知道具體如何開燈，只需要呼叫 `Execute()`。",
+                        pros: [
+                            "單一職責原則：解耦發起操作的物件與執行操作的物件。",
+                            "可以實作復原 (Undo) 與重做 (Redo) 功能。",
+                            "可以將命令放入佇列 (Queue) 中延後執行。"
+                        ]
+                    },
+                    {
+                        id: "state",
+                        name: "State (狀態模式)",
+                        desc: "允許一個物件在其內部狀態改變時改變它的行為。",
+                        scenarios: [
+                            "工作流引擎 (Workflow)",
+                            "TCP 連線",
+                            "媒體播放器 (Play/Pause/Stop)"
+                        ],
+                        diagram: `classDiagram
+    class Context {
+        -state
+        +request()
+    }
+    class State {
+        <<interface>>
+        +handle()
+    }
+    class ConcreteStateA {
+        +handle()
+    }
+    class ConcreteStateB {
+        +handle()
+    }
+    Context o-- State
+    State <|.. ConcreteStateA
+    State <|.. ConcreteStateB`,
+                        code: `public abstract class State
+{
+    protected Context _context;
+    public void SetContext(Context context) => _context = context;
+    public abstract void Handle();
+}
+
+public class Context
+{
+    private State _state;
+    public Context(State state) { TransitionTo(state); }
+    public void TransitionTo(State state)
+    {
+        _state = state;
+        _state.SetContext(this);
+    }
+    public void Request() => _state.Handle();
+}
+
+public class ConcreteStateA : State
+{
+    public override void Handle() 
+    {
+        Console.WriteLine("State A handles request.");
+        _context.TransitionTo(new ConcreteStateB());
+    }
+}
+public class ConcreteStateB : State
+{
+    public override void Handle() => Console.WriteLine("State B handles request.");
+}`,
+                        codeDesc: "`Context` 將行為委託給當前的 `State` 物件。當 `ConcreteStateA` 完成處理後，它主動將 Context 的狀態切換為 `ConcreteStateB`，改變了 Context 後續的行為。",
+                        pros: [
+                            "將與特定狀態相關的程式碼集中在一個類別中 (SRP)。",
+                            "消除冗長的 if-else 或 switch-case 狀態判斷邏輯。",
+                            "狀態轉換邏輯清晰明確。"
+                        ]
+                    },
+                    {
+                        id: "template_method",
+                        name: "Template Method (樣板方法)",
+                        desc: "在一個方法中定義演算法的骨架，將一些步驟延遲到子類別中。",
+                        scenarios: [
+                            "ASP.NET Page Life Cycle",
+                            "單元測試 Setup/Teardown",
+                            "資料匯入流程"
+                        ],
+                        diagram: `classDiagram
+    class AbstractClass {
+        +templateMethod()
+        #primitiveOp1()
+        #primitiveOp2()
+    }
+    class ConcreteClass {
+        #primitiveOp1()
+        #primitiveOp2()
+    }
+    AbstractClass <|-- ConcreteClass`,
+                        code: `public abstract class AbstractClass
+{
+    // Template Method
+    public void TemplateMethod()
+    {
+        PrimitiveOperation1();
+        PrimitiveOperation2();
+    }
+
+    protected abstract void PrimitiveOperation1();
+    protected abstract void PrimitiveOperation2();
+}
+
+public class ConcreteClass : AbstractClass
+{
+    protected override void PrimitiveOperation1() => Console.WriteLine("Op1");
+    protected override void PrimitiveOperation2() => Console.WriteLine("Op2");
+}`,
+                        codeDesc: "`TemplateMethod` 定義了執行的順序 (Op1 -> Op2)，但具體的 Op1 與 Op2 實作則留給子類別 `ConcreteClass` 決定。",
+                        pros: [
+                            "這是一種代碼復用技術，將公共邏輯提升到父類別。",
+                            "子類別可以覆寫演算法的特定步驟，而不改變演算法的結構。",
+                            "反向控制 (IoC)：父類別呼叫子類別的操作。"
+                        ]
+                    },
+                    {
+                        id: "iterator",
+                        name: "Iterator (疊代器模式)",
+                        desc: "提供一種方法順序存取一個聚合物件中各個元素，而又不暴露該物件的內部表示。",
+                        scenarios: [
+                            "foreach 迴圈 (IEnumerable/IEnumerator)",
+                            "LINQ",
+                            "資料庫 Cursor"
+                        ],
+                        diagram: `classDiagram
+    class Iterable {
+        +createIterator()
+    }
+    class Iterator {
+        +next()
+        +hasNext()
+    }
+    Iterable ..> Iterator`,
+                        code: `public class DaysOfTheWeek : IEnumerable
+{
+    private string[] days = { "Sun", "Mon", "Tue" };
+
+    public IEnumerator GetEnumerator()
+    {
+        for (int i = 0; i < days.Length; i++)
+        {
+            yield return days[i];
+        }
+    }
+}
+
+// Usage
+foreach (var day in new DaysOfTheWeek())
+{
+    Console.WriteLine(day);
+}`,
+                        codeDesc: "C# 的 `yield return` 語法糖極大地簡化了疊代器的實作。實作 `IEnumerable` 介面後，該物件即可被 `foreach` 迴圈直接遍歷。",
+                        pros: [
+                            "單一職責原則：將遍歷演算法從集合類別中分離出來。",
+                            "可以對同一個集合同時進行多個遍歷。",
+                            "提供一致的介面來遍歷不同的集合結構 (List, Tree, Graph)。"
+                        ]
+                    }
+                ]
+            }
+        };
+
+        // --- APP LOGIC ---
+        const app = {
+            markmap: null,
+            isMapOnly: false,
+
+            init() {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'base',
+                    securityLevel: 'loose'
+                });
+                this.renderSidebar();
+                this.renderMarkmap();
+
+                // Default view
+                const firstPattern = DESIGN_PATTERNS.creational.items[0];
+                this.showDetail(firstPattern.id);
+            },
+
+            generateMarkdown() {
+                let md = `# Design Patterns\n\n`;
+                for (const [key, category] of Object.entries(DESIGN_PATTERNS)) {
+                    md += `## ${category.name}\n`;
+                    category.items.forEach(item => {
+                        md += `- ${item.name}\n`;
+                    });
+                }
+                return md;
+            },
+
+            renderMarkmap() {
+                const markdown = this.generateMarkdown();
+                // Ensure markmap global is available
+                if (!window.markmap) {
+                    console.error('Markmap library not loaded');
+                    return;
+                }
+                const { Markmap, Transformer } = window.markmap;
+                const transformer = new Transformer();
+                const { root } = transformer.transform(markdown);
+
+                if (this.markmap) {
+                    this.markmap.setData(root);
+                    this.markmap.fit();
+                } else {
+                    this.markmap = Markmap.create('#markmap', {
+                        embedGlobalCSS: true,
+                        scrollForPan: true,
+                        zoom: true,
+                        pan: { enable: true },
+                        initialExpandLevel: 2,
+                        maxWidth: 300
+                    }, root);
+
+                    // Delay to ensure SVG nodes are created before attaching listeners
+                    setTimeout(() => {
+                        this.attachNodeListeners();
+                        this.markmap.fit();
+                    }, 800);
+                }
+            },
+
+            attachNodeListeners() {
+                // Markmap renders nodes as <g> elements with class "markmap-node"
+                // The text is inside various levels of tspans or foreignObjects usually.
+                // We'll select common text containers.
+
+                // Newer Markmap versions render hierarchy differently. 
+                // We will try to find the text elements.
+                // Usually direct clicking might be intercepted by Markmap's own zoom/collapse handlers.
+                // We rely on the fact that we can attach to the `g` container typically.
+
+                const svg = document.querySelector('#markmap');
+                if (!svg) return;
+
+                // Markmap usually stops propagation, so we might need to capture.
+                // However, Markmap node clicking toggles fold usually.
+                // We want to detect the click payload.
+
+                // A robustness strategy: Listen on the SVG and find the target text.
+                svg.addEventListener('click', (e) => {
+                    // Check if target is a text or tspan inside a node
+                    let target = e.target;
+                    // Walk up to find if it was a node content
+                    // Markmap text usually resides in <tspan> inside <text> inside <g>
+
+                    // Helper: get text content if it looks like a pattern name
+                    const text = target.textContent.trim();
+                    if (text) {
+                        this.handleNodeClick(text);
+                    }
+                });
+            },
+
+            handleNodeClick(text) {
+                // console.log("Clicked:", text); 
+                let foundItem = null;
+                let foundCategory = null;
+
+                for (const [catKey, category] of Object.entries(DESIGN_PATTERNS)) {
+                    // Check strict or loose match
+                    if (text === category.name || category.name.includes(text) && text.length > 5) {
+                        return; // Clicked Category: do nothing or expand? Markmap handles expand.
+                    }
+                    // Match pattern name
+                    // Pattern names are like "Singleton (單例模式)"
+                    // Clicked text might be "Singleton (單例模式)"
+                    const item = category.items.find(i => i.name === text || (text.length > 3 && i.name.includes(text)));
+
+                    if (item) {
+                        foundItem = item;
+                        foundCategory = category;
+                        break;
+                    }
+                }
+
+                if (foundItem) {
+                    this.showDetail(foundItem.id);
+                    if (this.isMapOnly) this.toggleMapOnly();
+                }
+            },
+
+            findPatternById(id) {
+                for (const cat of Object.values(DESIGN_PATTERNS)) {
+                    const found = cat.items.find(i => i.id === id);
+                    if (found) return { item: found, category: cat };
+                }
+                return null;
+            },
+
+            renderSidebar() {
+                const nav = document.getElementById('pattern-nav');
+                let html = '';
+
+                for (const [key, category] of Object.entries(DESIGN_PATTERNS)) {
+                    html += `
+                        <div class="mb-4">
+                            <div class="px-6 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">${category.name}</div>
+                            <div class="space-y-1">
+                     `;
+                    category.items.forEach(item => {
+                        html += `
+                            <button onclick="app.showDetail('${item.id}')" id="nav-${item.id}"
+                                class="nav-item w-full text-left px-6 py-2 text-sm text-slate-600 hover:bg-white/50 hover:text-indigo-600 transition-colors border-l-4 border-transparent pl-5">
+                                ${item.name.split(' ')[0]}
+                            </button>
+                         `;
+                    });
+                    html += `</div></div>`;
+                }
+                nav.innerHTML = html;
+            },
+
+            async showDetail(id) {
+                const result = this.findPatternById(id);
+                if (!result) return;
+                const { item, category } = result;
+
+                // UI Reset
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('content-state').classList.remove('hidden');
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                const navBtn = document.getElementById(`nav-${id}`);
+                if (navBtn) navBtn.classList.add('active');
+
+                // Fill Content
+                document.getElementById('pattern-type').textContent = category.name.split(' ')[0];
+                document.getElementById('pattern-title').textContent = item.name;
+                document.getElementById('pattern-desc').textContent = item.desc;
+
+                document.getElementById('pattern-scenario').innerHTML = item.scenarios.map(s => `<li>${s}</li>`).join('');
+
+                // Code Description & Pros
+                document.getElementById('code-desc').textContent = item.codeDesc || "暫無說明";
+                document.getElementById('code-pros').innerHTML = (item.pros || []).map(p => `<li>${p}</li>`).join('');
+
+                // Highlight.js Fix
+                const codeBlock = document.getElementById('pattern-code');
+                delete codeBlock.dataset.highlighted;
+                codeBlock.className = 'language-csharp';
+                codeBlock.textContent = item.code;
+                hljs.highlightElement(codeBlock);
+
+                // Mermaid Render
+                const mermaidContainer = document.getElementById('mermaid-diagram');
+                mermaidContainer.textContent = item.diagram;
+                mermaidContainer.removeAttribute('data-processed'); // Reset mermaid
+
+                try {
+                    await mermaid.run({
+                        nodes: [mermaidContainer]
+                    });
+                } catch (e) {
+                    console.error("Mermaid error:", e);
+                    mermaidContainer.innerHTML = `<div class="text-red-500 text-sm p-4">Diagram Render Failed:<br>${e.message}</div>`;
+                }
+            },
+
+            toggleMapOnly() {
+                this.isMapOnly = !this.isMapOnly;
+                const mapPanel = document.getElementById('map-panel');
+                const detailPanel = document.getElementById('detail-panel');
+
+                if (this.isMapOnly) {
+                    mapPanel.classList.remove('w-1/2');
+                    mapPanel.classList.add('w-full');
+                    detailPanel.classList.add('hidden');
+                } else {
+                    mapPanel.classList.add('w-1/2');
+                    mapPanel.classList.remove('w-full');
+                    detailPanel.classList.remove('hidden');
+                }
+                if (this.markmap) setTimeout(() => this.markmap.fit(), 300);
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+
+    </script>
+</body>
+
+</html>
