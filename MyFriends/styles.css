@@ -89,7 +89,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 14px;
   background: var(--coral);
   box-shadow: inset 0 -4px 9px rgba(133, 50, 31, .13), 0 5px 15px rgba(233, 111, 81, .2);
-  transform: rotate(-3deg);
 }
 
 .brand-mark i { position: absolute; top: 11px; width: 12px; height: 17px; border-radius: 50% 50% 45% 45%; background: var(--card); }
@@ -216,7 +215,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .friend-action small { color: var(--ink-faint); }
 
 .empty-state { display: grid; min-height: 340px; place-items: center; padding: 45px 24px; border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); text-align: center; }
-.empty-state .empty-mark { display: grid; width: 76px; height: 76px; margin: 0 auto 20px; place-items: center; border-radius: 26px; color: var(--coral-dark); background: var(--coral-soft); font: 36px/1 Georgia, serif; transform: rotate(-4deg); }
+.empty-state .empty-mark { display: grid; width: 76px; height: 76px; margin: 0 auto 20px; place-items: center; border-radius: 26px; color: var(--coral-dark); background: var(--coral-soft); font: 36px/1 Georgia, serif; }
 .empty-state h2 { margin: 0 0 8px; font-family: Georgia, "Noto Serif TC", serif; font-size: 24px; }
 .empty-state p { max-width: 420px; margin: 0 auto 22px; color: var(--ink-soft); }
 
@@ -295,7 +294,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .accent-choice { position: relative; display: block; width: 30px; height: 30px; }
 .accent-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .accent-choice span { display: block; width: 100%; height: 100%; border: 3px solid var(--card); border-radius: 10px; background: var(--swatch); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
-.accent-choice input:checked + span { box-shadow: 0 0 0 2px var(--ink); transform: rotate(-5deg); }
+.accent-choice input:checked + span { box-shadow: 0 0 0 2px var(--ink); }
 
 .preview-card { position: sticky; top: 30px; text-align: center; }
 .preview-avatar { display: grid; width: 92px; height: 92px; margin: 10px auto 18px; place-items: center; border-radius: 31px; color: #fff; background: var(--preview-accent, var(--coral)); font: 700 38px/1 Georgia, serif; box-shadow: inset 0 -8px 14px rgba(0,0,0,.09); }
