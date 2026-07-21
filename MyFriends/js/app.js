@@ -14,6 +14,7 @@ import {
   updateCharacter,
   updateMemory,
 } from "./store.js";
+import { LIVE_MODEL } from "./constants.js";
 import {
   buildSystemPrompt,
   checkModel,
@@ -23,6 +24,7 @@ import {
   optimizeCharacter,
 } from "./gemini.js";
 import { BrowserAudioEngine } from "./audio.js";
+import { mergePartial } from "./transcript.js";
 
 const VOICES = [
   "", "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
@@ -369,7 +371,7 @@ function renderSettings() {
           <div class="form-field"><label for="apiKey">Gemini API key</label><div class="secret-wrap"><input class="input" id="apiKey" type="password" autocomplete="off" value="${attr(getApiKey())}" placeholder="AIza…"><button class="secret-toggle" type="button" data-action="toggle-secret" data-target="apiKey">顯示</button></div></div>
           <div class="switch-row"><div class="switch-copy"><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到此分頁／瀏覽器工作階段結束</small></div><label class="switch"><input id="rememberApiKey" type="checkbox" ${settings.rememberApiKey ? "checked" : ""}><span></span></label></div>
           <div class="setting-divider"></div>
-          <div class="form-field"><label for="liveModel">Live 模型 <small>語音對話</small></label><input class="input" id="liveModel" value="${attr(settings.liveModel)}"></div>
+          <div class="form-field"><label for="liveModel">Live 模型 <small>固定使用非同步工具相容版本</small></label><input class="input" id="liveModel" value="${attr(LIVE_MODEL)}" readonly><p class="field-hint">Gemini 2.5 Live 支援 NON_BLOCKING 非同步 function calling，不會自動切換模型。</p></div>
           <div class="form-field"><label for="flashModel">Flash 模型 <small>記憶與潤飾</small></label><input class="input" id="flashModel" value="${attr(settings.flashModel)}"></div>
           <button class="button button-secondary button-small" type="button" id="testConnectionButton">測試連線</button><p class="status-text" id="connectionStatus"></p>
         </section>
@@ -412,7 +414,7 @@ function saveSettings(event) {
   const remember = document.getElementById("rememberApiKey").checked;
   data.settings = {
     ...data.settings,
-    liveModel: document.getElementById("liveModel").value.trim(),
+    liveModel: LIVE_MODEL,
     flashModel: document.getElementById("flashModel").value.trim(),
     groundingModel: document.getElementById("groundingModel").value.trim(),
     memoryBudgetTokens: rangedNumber(document.getElementById("memoryBudget").value, 200, 100000, 3000),
@@ -428,10 +430,10 @@ function saveSettings(event) {
 
 async function testConnection() {
   const key = document.getElementById("apiKey").value.trim();
-  const model = document.getElementById("flashModel").value.trim();
+  const flashModel = document.getElementById("flashModel").value.trim();
   const button = document.getElementById("testConnectionButton");
   const status = document.getElementById("connectionStatus");
-  if (!key || !model) {
+  if (!key || !flashModel) {
     status.textContent = "請先輸入 API key 與模型名稱。";
     status.className = "status-text is-error";
     return;
@@ -440,8 +442,8 @@ async function testConnection() {
   status.textContent = "正在向 Gemini 驗證模型存取權…";
   status.className = "status-text";
   try {
-    await checkModel(key, model);
-    status.textContent = `連線成功，可使用 ${model}。`;
+    await Promise.all([checkModel(key, LIVE_MODEL), checkModel(key, flashModel)]);
+    status.textContent = `連線成功，可使用 ${LIVE_MODEL} 與 ${flashModel}。`;
     status.className = "status-text is-success";
   } catch (error) {
     status.textContent = error.message;
@@ -809,17 +811,27 @@ class TranscriptCollector {
     this.userBuffer = "";
     this.modelBuffer = "";
   }
-  onUser(text) { this.flushModel(); this.userBuffer += text; }
-  onModel(text) { this.flushUser(); this.modelBuffer += text; }
+  onUser(text) { this.flushModel(); this.userBuffer = mergePartial(this.userBuffer, text); }
+  onModel(text) { this.flushUser(); this.modelBuffer = mergePartial(this.modelBuffer, text); }
   onInterrupted() { this.flushModel(); }
   onTurnComplete() { this.flushUser(); this.flushModel(); }
   onTool(text) { this.flushUser(); this.flushModel(); this.lines.push({ role: "tool", text }); }
-  flushUser() { if (this.userBuffer) { this.lines.push({ role: "user", text: this.userBuffer }); this.userBuffer = ""; } }
-  flushModel() { if (this.modelBuffer) { this.lines.push({ role: "model", text: this.modelBuffer }); this.modelBuffer = ""; } }
+  flushUser() {
+    const text = this.userBuffer.trim();
+    if (text) this.lines.push({ role: "user", text });
+    this.userBuffer = "";
+  }
+  flushModel() {
+    const text = this.modelBuffer.trim();
+    if (text) this.lines.push({ role: "model", text });
+    this.modelBuffer = "";
+  }
   preview() {
     const output = [...this.lines];
-    if (this.userBuffer) output.push({ role: "user", text: this.userBuffer });
-    if (this.modelBuffer) output.push({ role: "model", text: this.modelBuffer });
+    const userText = this.userBuffer.trim();
+    const modelText = this.modelBuffer.trim();
+    if (userText) output.push({ role: "user", text: userText });
+    if (modelText) output.push({ role: "model", text: modelText });
     return output;
   }
   snapshot() { this.flushUser(); this.flushModel(); return this.lines.filter((line) => line.role !== "tool"); }

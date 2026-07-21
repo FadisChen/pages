@@ -1,5 +1,9 @@
+import { LIVE_MODEL, LIVE_TOOL_BEHAVIOR, LIVE_TOOL_RESPONSE_SCHEDULING } from "./constants.js";
+
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+const WS_OPEN = 1;
+const THINKING_BUDGETS = Object.freeze({ OFF: 0, MINIMAL: 512, LOW: 1024, MEDIUM: 4096, HIGH: 8192 });
 
 const LANGUAGE_RULES = `## 語言規則
 使用者是臺灣人。一律使用臺灣繁體中文（zh-TW）交談，詞彙與用字遵循臺灣習慣（例如：影片而非视频、計程車而非出租车）。絕對不要使用簡體字；語音回應請用台灣腔調發音（自然的台灣語調），避免大陸腔或港式廣東腔；除非使用者明確要求，不要切換到其他語言。`;
@@ -16,6 +20,7 @@ const MEMORY_RULES = `## 記憶內容使用規則
 const FUNCTION_DECLARATIONS = [
   {
     name: "web_search",
+    behavior: LIVE_TOOL_BEHAVIOR,
     description: "查詢即時或近期資訊，例如新聞、天氣、股價、剛發生的事件等模型知識庫可能過時或不知道的內容。",
     parameters: {
       type: "OBJECT",
@@ -25,6 +30,7 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: "find_nearby_places",
+    behavior: LIVE_TOOL_BEHAVIOR,
     description: "查詢使用者目前位置附近的地點，例如餐廳、店家、景點等在地資訊。query 必須是英文。",
     parameters: {
       type: "OBJECT",
@@ -124,7 +130,7 @@ async function generateText(apiKey, model, prompt, options = {}) {
   return text.trim();
 }
 
-async function groundedText(apiKey, model, prompt, mapsLocation = null) {
+async function groundedText(apiKey, model, prompt, mapsLocation = null, signal) {
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
@@ -137,6 +143,7 @@ async function groundedText(apiKey, model, prompt, mapsLocation = null) {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body),
+    signal,
   }, 18000);
   const data = await readJson(response);
   if (!response.ok) throw apiErrorFromData(response, data, model);
@@ -145,11 +152,12 @@ async function groundedText(apiKey, model, prompt, mapsLocation = null) {
   return text;
 }
 
-async function tavilySearch(apiKey, query) {
+async function tavilySearch(apiKey, query, signal) {
   const response = await fetchWithTimeout("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ query, search_depth: "basic", max_results: 5, include_answer: true }),
+    signal,
   }, 16000);
   const data = await readJson(response);
   if (!response.ok) throw new Error(`Tavily HTTP ${response.status}：${data?.detail || response.statusText}`);
@@ -160,16 +168,17 @@ async function tavilySearch(apiKey, query) {
   return rows.join("\n\n");
 }
 
-export async function executeLiveTool(call, context) {
+export async function executeLiveTool(call, context, signal) {
   const query = typeof call.args?.query === "string" ? call.args.query.trim() : "";
   if (!query) return "缺少查詢關鍵字";
   if (call.name === "web_search") {
     context.onActivity?.(`🔍 查詢：${query}`);
     try {
-      return await groundedText(context.apiKey, context.model, query);
+      return await groundedText(context.apiKey, context.model, query, null, signal);
     } catch (error) {
+      if (signal?.aborted) throw error;
       if (!context.tavilyKey) return `查詢失敗：${error.message}`;
-      try { return await tavilySearch(context.tavilyKey, query); }
+      try { return await tavilySearch(context.tavilyKey, query, signal); }
       catch (fallbackError) { return `查詢失敗：${fallbackError.message}`; }
     }
   }
@@ -177,26 +186,43 @@ export async function executeLiveTool(call, context) {
     context.onActivity?.(`📍 查詢：${query}`);
     if (!context.locationEnabled) return "定位查詢未啟用；請在偏好設定中開啟。";
     try {
-      const location = await getPosition();
-      return await groundedText(context.apiKey, context.model, query, location);
+      const location = await getPosition(signal);
+      return await groundedText(context.apiKey, context.model, query, location, signal);
     } catch (error) {
+      if (signal?.aborted) throw error;
       if (!context.tavilyKey) return `附近地點查詢失敗：${error.message}`;
-      try { return await tavilySearch(context.tavilyKey, `${query} near me`); }
+      try { return await tavilySearch(context.tavilyKey, `${query} near me`, signal); }
       catch (fallbackError) { return `附近地點查詢失敗：${fallbackError.message}`; }
     }
   }
   return `工具不存在：${call.name}`;
 }
 
-function getPosition() {
+function getPosition(signal) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("瀏覽器不支援定位。"));
+    if (signal?.aborted) return reject(abortError());
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      callback(value);
+    };
+    const onAbort = () => finish(reject, abortError());
+    signal?.addEventListener("abort", onAbort, { once: true });
     navigator.geolocation.getCurrentPosition(
-      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
-      (error) => reject(new Error(error.message || "無法取得目前位置。")),
+      (position) => finish(resolve, { latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      (error) => finish(reject, new Error(error.message || "無法取得目前位置。")),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     );
   });
+}
+
+function abortError() {
+  const error = new Error("工具工作已取消。");
+  error.name = "AbortError";
+  return error;
 }
 
 export class LiveSession {
@@ -205,34 +231,41 @@ export class LiveSession {
     this.callbacks = callbacks;
     this.socket = null;
     this.ready = false;
-    this.stopped = false;
+    this.stopped = true;
     this.failures = 0;
     this.resumptionHandle = "";
     this.audioBuffer = [];
     this.audioBufferBytes = 0;
     this.reconnectTimer = null;
+    this.runId = 0;
+    this.toolJobs = new Map();
   }
 
   start() {
+    if (!this.stopped) this.stop(false);
     this.stopped = false;
+    this.failures = 0;
+    this.runId += 1;
     this.connect(false);
   }
 
-  stop() {
+  stop(notify = true) {
     this.stopped = true;
+    this.runId += 1;
     clearTimeout(this.reconnectTimer);
+    this.cancelToolCalls([...this.toolJobs.keys()]);
     if (this.ready) this.send({ realtimeInput: { audioStreamEnd: true } });
     this.socket?.close(1000, "user hangup");
     this.socket = null;
     this.ready = false;
     this.audioBuffer = [];
     this.audioBufferBytes = 0;
-    this.callbacks.onStatus?.("stopped");
+    if (notify) this.callbacks.onStatus?.("stopped");
   }
 
   sendAudio(bytes) {
     if (this.stopped || !bytes?.byteLength) return;
-    if (this.ready && this.socket?.readyState === WebSocket.OPEN) {
+    if (this.ready && this.socket?.readyState === WS_OPEN) {
       this.sendAudioNow(bytes);
       return;
     }
@@ -259,16 +292,17 @@ export class LiveSession {
     const character = this.config.character;
     const generationConfig = {
       responseModalities: ["AUDIO"],
-      speechConfig: { languageCode: "zh-TW" },
     };
     if (character.voiceName) {
-      generationConfig.speechConfig.voiceConfig = { prebuiltVoiceConfig: { voiceName: character.voiceName } };
+      generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } } };
     }
-    if (character.thinkingLevel === "OFF") generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    else if (character.thinkingLevel) generationConfig.thinkingConfig = { thinkingLevel: character.thinkingLevel };
+    const thinkingLevel = String(character.thinkingLevel || "").toUpperCase();
+    if (thinkingLevel in THINKING_BUDGETS) {
+      generationConfig.thinkingConfig = { thinkingBudget: THINKING_BUDGETS[thinkingLevel] };
+    }
 
     const setup = {
-      model: `models/${this.config.model}`,
+      model: `models/${LIVE_MODEL}`,
       generationConfig,
       systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
       realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
@@ -282,7 +316,7 @@ export class LiveSession {
   }
 
   async handleRawMessage(socket, raw) {
-    if (socket !== this.socket && socket.readyState !== WebSocket.OPEN) return;
+    if (socket !== this.socket) return;
     try {
       const text = typeof raw === "string" ? raw : await raw.text();
       this.handleMessage(socket, JSON.parse(text));
@@ -307,8 +341,10 @@ export class LiveSession {
         if (part.inlineData?.data) this.callbacks.onAudio?.(base64ToBytes(part.inlineData.data));
       }
       if (content.modelTurn?.parts?.some((part) => part.inlineData?.data)) this.callbacks.onStatus?.("speaking");
-      if (content.inputTranscription?.text) this.callbacks.onUserTranscript?.(content.inputTranscription.text);
-      if (content.outputTranscription?.text) this.callbacks.onModelTranscript?.(content.outputTranscription.text);
+      const inputText = content.inputTranscription?.text?.trim();
+      const outputText = content.outputTranscription?.text?.trim();
+      if (inputText) this.callbacks.onUserTranscript?.(inputText);
+      if (outputText) this.callbacks.onModelTranscript?.(outputText);
       if (content.interrupted) {
         this.callbacks.onInterrupted?.();
         this.callbacks.onStatus?.("listening");
@@ -319,23 +355,57 @@ export class LiveSession {
       }
     }
     if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
+    if (message.toolCallCancellation?.ids?.length) this.cancelToolCalls(message.toolCallCancellation.ids);
     if (message.goAway) socket.close(1000, "go away");
   }
 
-  async handleToolCalls(socket, calls) {
-    const responses = await Promise.all(calls.map(async (call) => {
-      let result;
-      try { result = await executeLiveTool(call, this.config.toolContext); }
-      catch (error) { result = `工具執行失敗：${error.message}`; }
-      return { id: call.id, name: call.name, response: { result } };
+  handleToolCalls(socket, calls) {
+    for (const call of calls) void this.handleToolCall(socket, call);
+  }
+
+  async handleToolCall(socket, call) {
+    const controller = new AbortController();
+    const runId = this.runId;
+    this.toolJobs.get(call.id)?.abort();
+    this.toolJobs.set(call.id, controller);
+    try {
+      const executor = this.config.toolExecutor || executeLiveTool;
+      const result = await executor(call, this.config.toolContext, controller.signal);
+      if (this.stopped || runId !== this.runId || socket !== this.socket || controller.signal.aborted) return;
+      this.sendToolResponse(socket, call, result);
+    } catch (error) {
+      if (controller.signal.aborted || this.stopped || runId !== this.runId || socket !== this.socket) return;
+      this.sendToolResponse(socket, call, `工具執行失敗：${error.message}`);
+    } finally {
+      if (this.toolJobs.get(call.id) === controller) this.toolJobs.delete(call.id);
+    }
+  }
+
+  sendToolResponse(socket, call, result) {
+    if (socket.readyState !== WS_OPEN) return;
+    socket.send(JSON.stringify({
+      toolResponse: {
+        functionResponses: [{
+          id: call.id,
+          name: call.name,
+          response: { result, scheduling: LIVE_TOOL_RESPONSE_SCHEDULING },
+        }],
+      },
     }));
-    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+  }
+
+  cancelToolCalls(ids) {
+    for (const id of ids || []) {
+      this.toolJobs.get(id)?.abort();
+      this.toolJobs.delete(id);
+    }
   }
 
   handleClose(socket, event) {
     if (socket !== this.socket || this.stopped) return;
     this.ready = false;
     this.socket = null;
+    this.cancelToolCalls([...this.toolJobs.keys()]);
     this.failures += 1;
     if (this.failures >= 3) {
       this.callbacks.onStatus?.("failed");
@@ -359,7 +429,7 @@ export class LiveSession {
   }
 
   send(message) {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+    if (this.socket?.readyState === WS_OPEN) this.socket.send(JSON.stringify(message));
   }
 }
 
@@ -398,9 +468,16 @@ function base64ToBytes(base64) {
 
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
+  const externalSignal = options.signal;
+  const onAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try { return await fetch(url, { ...options, signal: controller.signal }); }
-  finally { clearTimeout(timer); }
+  finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", onAbort);
+  }
 }
 
 async function readJson(response) {
