@@ -10,6 +10,7 @@ export const ACCENTS = ["#e96f51", "#4f7c6b", "#5378a6", "#9a6aa6", "#d19a34", "
 
 export const DEFAULT_SETTINGS = Object.freeze({
   liveModel: DEFAULT_LIVE_MODEL,
+  liveThinkingLevel: "",
   flashModel: "gemini-3.5-flash",
   groundingModel: "gemini-2.5-flash",
   memoryBudgetTokens: 3000,
@@ -42,6 +43,7 @@ function cleanData(value) {
     settings: {
       ...DEFAULT_SETTINGS,
       liveModel: getLiveModelOption(settings.liveModel).id,
+      liveThinkingLevel: getLiveThinkingOption(settings.liveThinkingLevel).id,
       flashModel: stringValue(settings.flashModel, DEFAULT_SETTINGS.flashModel),
       groundingModel: stringValue(settings.groundingModel, DEFAULT_SETTINGS.groundingModel),
       memoryBudgetTokens: numberInRange(settings.memoryBudgetTokens, 200, 100000, DEFAULT_SETTINGS.memoryBudgetTokens),
@@ -65,7 +67,6 @@ function cleanCharacter(value, index = 0) {
     name,
     description: stringValue(value.description).trim().slice(0, 12000),
     voiceName: stringValue(value.voiceName).slice(0, 80),
-    thinkingLevel: getLiveThinkingOption(stringValue(value.thinkingLevel)).id,
     accent: isHexColor(value.accent) ? value.accent : ACCENTS[index % ACCENTS.length],
     createdAt: Number(value.createdAt) || Date.now(),
     updatedAt: Number(value.updatedAt) || Number(value.createdAt) || Date.now(),

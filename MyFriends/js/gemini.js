@@ -295,7 +295,7 @@ export class LiveSession {
     if (character.voiceName) {
       generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } } };
     }
-    const rawThinkingLevel = String(character.thinkingLevel || "").trim().toUpperCase();
+    const rawThinkingLevel = String(this.config.thinkingLevel || "").trim().toUpperCase();
     const thinkingOption = getLiveThinkingOption(rawThinkingLevel);
     if (rawThinkingLevel === "OFF") {
       // 相容尚未經 storage migration 的舊角色。2.5 可使用 budget 0；3.1 只能送 level。

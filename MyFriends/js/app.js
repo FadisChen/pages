@@ -153,7 +153,6 @@ function emptyHome() {
 
 function friendCard(character) {
   const memories = memoriesFor(character.id);
-  const thinking = getLiveThinkingOption(character.thinkingLevel);
   return `
     <article class="friend-card" style="--friend-accent:${attr(character.accent)}">
       <div class="friend-top">
@@ -168,7 +167,6 @@ function friendCard(character) {
       <p class="friend-description">${html(character.description || "一位還在慢慢認識你的朋友。")}</p>
       <div class="tag-row">
         <span class="tag">♪ ${html(character.voiceName || "預設聲音")}</span>
-        <span class="tag">思考 ${html(thinking.label)}</span>
       </div>
       <div class="friend-action">
         <small>⌘ ${memories.length} 條記憶</small>
@@ -184,11 +182,8 @@ function renderCharacterForm() {
     name: "",
     description: "",
     voiceName: "Aoede",
-    thinkingLevel: "",
     accent: ACCENTS[data.characters.length % ACCENTS.length],
   };
-  const thinking = getLiveThinkingOption(character.thinkingLevel);
-  const thinkingIndex = Math.max(0, LIVE_THINKING_OPTIONS.indexOf(thinking));
   appElement.innerHTML = `
     <div class="page">
       <button class="back-button" type="button" data-action="home">← 返回朋友列表</button>
@@ -215,12 +210,6 @@ function renderCharacterForm() {
             <p class="field-hint">Gemini 提供 30 種預設聲線；實際音色會依模型版本略有差異。</p>
           </div>
           <div class="form-field">
-            <label class="thinking-label" for="thinkingLevel"><span>思考強度 <small>越高，回應延遲通常越長</small></span><output id="thinkingValue" for="thinkingLevel">${html(thinking.label)}</output></label>
-            <input class="thinking-range" id="thinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}">
-            <div class="thinking-scale" aria-hidden="true">${LIVE_THINKING_OPTIONS.map((option) => `<span>${html(option.label)}</span>`).join("")}</div>
-            <p class="thinking-description" id="thinkingHint">${html(describeLiveThinking(data.settings.liveModel, thinking.id))}</p>
-          </div>
-          <div class="form-field">
             <span class="field-label">代表色</span>
             <div class="accent-row">${ACCENTS.map((color) => `<label class="accent-choice" style="--swatch:${color}"><input type="radio" name="accent" value="${color}" ${color === character.accent ? "checked" : ""}><span aria-label="${color}"></span></label>`).join("")}</div>
           </div>
@@ -235,7 +224,7 @@ function renderCharacterForm() {
           <div class="preview-avatar" id="previewAvatar">${html(initial(character.name || "？"))}</div>
           <h3 id="previewName">${html(character.name || "還沒有名字")}</h3>
           <p id="previewDescription">${html(shorten(character.description || "在這裡預覽你們的第一張朋友卡片。", 70))}</p>
-          <div class="preview-meta"><span class="tag" id="previewVoice">♪ ${html(character.voiceName || "預設聲音")}</span><span class="tag" id="previewThinking">思考 ${html(thinking.label)}</span></div>
+          <div class="preview-meta"><span class="tag" id="previewVoice">♪ ${html(character.voiceName || "預設聲音")}</span></div>
         </aside>
       </form>
     </div>`;
@@ -252,15 +241,10 @@ function updateCharacterPreview() {
   const name = String(values.get("name") || "").trim();
   const description = String(values.get("description") || "").trim();
   const accent = String(values.get("accent") || ACCENTS[0]);
-  const thinking = selectedThinkingOption();
   document.getElementById("previewName").textContent = name || "還沒有名字";
   document.getElementById("previewAvatar").textContent = initial(name || "？");
   document.getElementById("previewDescription").textContent = shorten(description || "在這裡預覽你們的第一張朋友卡片。", 70);
   document.getElementById("previewVoice").textContent = `♪ ${values.get("voiceName") || "預設聲音"}`;
-  document.getElementById("thinkingValue").value = thinking.label;
-  document.getElementById("thinkingHint").textContent = describeLiveThinking(data.settings.liveModel, thinking.id);
-  document.getElementById("thinkingLevel").setAttribute("aria-valuetext", thinking.label);
-  document.getElementById("previewThinking").textContent = `思考 ${thinking.label}`;
   document.getElementById("characterPreview").style.setProperty("--preview-accent", accent);
 }
 
@@ -272,7 +256,6 @@ function saveCharacterForm(event, existing) {
     name: String(values.get("name") || "").trim(),
     description: String(values.get("description") || "").trim(),
     voiceName: String(values.get("voiceName") || ""),
-    thinkingLevel: selectedThinkingOption().id,
     accent: String(values.get("accent") || ACCENTS[0]),
   };
   document.getElementById("nameError").classList.toggle("hidden", Boolean(input.name));
@@ -283,11 +266,6 @@ function saveCharacterForm(event, existing) {
   persist();
   toast(existing ? "角色設定已更新。" : `已建立 ${input.name}，現在可以開始聊天了。`);
   navigate("home");
-}
-
-function selectedThinkingOption() {
-  const slider = document.getElementById("thinkingLevel");
-  return LIVE_THINKING_OPTIONS[Number(slider?.value)] || LIVE_THINKING_OPTIONS[0];
 }
 
 async function optimizeDescription() {
@@ -380,6 +358,8 @@ function openMemoryEditor(memory, characterId) {
 
 function renderSettings() {
   const settings = data.settings;
+  const thinking = getLiveThinkingOption(settings.liveThinkingLevel);
+  const thinkingIndex = Math.max(0, LIVE_THINKING_OPTIONS.indexOf(thinking));
   appElement.innerHTML = `
     <div class="page">
       <header class="page-header"><div><span class="eyebrow">Preferences</span><h1>偏好設定</h1><p>BYOK 直連 Gemini；本站沒有帳號、雲端資料庫或應用程式後端。</p></div></header>
@@ -390,6 +370,12 @@ function renderSettings() {
           <div class="switch-row"><div class="switch-copy"><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到此分頁／瀏覽器工作階段結束</small></div><label class="switch"><input id="rememberApiKey" type="checkbox" ${settings.rememberApiKey ? "checked" : ""}><span></span></label></div>
           <div class="setting-divider"></div>
           <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.1 以低延遲同步工具呼叫為主；2.5 支援 NON_BLOCKING 非同步工具呼叫，工具結果會在模型空閒時回報。</p></div>
+          <div class="form-field">
+            <label class="thinking-label" for="settingsThinkingLevel"><span>思考強度 <small>套用到所有角色</small></span><output id="thinkingValue" for="settingsThinkingLevel">${html(thinking.label)}</output></label>
+            <input class="thinking-range" id="settingsThinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}">
+            <div class="thinking-scale" aria-hidden="true">${LIVE_THINKING_OPTIONS.map((option) => `<span>${html(option.label)}</span>`).join("")}</div>
+            <p class="thinking-description" id="thinkingHint">${html(describeLiveThinking(settings.liveModel, thinking.id))}</p>
+          </div>
           <div class="form-field"><label for="flashModel">Flash 模型 <small>記憶與潤飾</small></label><input class="input" id="flashModel" value="${attr(settings.flashModel)}"></div>
           <button class="button button-secondary button-small" type="button" id="testConnectionButton">測試連線</button><p class="status-text" id="connectionStatus"></p>
         </section>
@@ -418,6 +404,8 @@ function renderSettings() {
     </div>`;
 
   document.getElementById("settingsForm").addEventListener("submit", saveSettings);
+  document.getElementById("liveModel").addEventListener("change", renderSettingsThinking);
+  document.getElementById("settingsThinkingLevel").addEventListener("input", renderSettingsThinking);
   document.getElementById("testConnectionButton").addEventListener("click", testConnection);
   document.getElementById("exportButton").addEventListener("click", exportData);
   document.getElementById("importButton").addEventListener("click", () => document.getElementById("importFile").click());
@@ -433,6 +421,7 @@ function saveSettings(event) {
   data.settings = {
     ...data.settings,
     liveModel: document.getElementById("liveModel").value,
+    liveThinkingLevel: selectedSettingsThinkingOption().id,
     flashModel: document.getElementById("flashModel").value.trim(),
     groundingModel: document.getElementById("groundingModel").value.trim(),
     memoryBudgetTokens: rangedNumber(document.getElementById("memoryBudget").value, 200, 100000, 3000),
@@ -444,6 +433,19 @@ function saveSettings(event) {
   saveSecrets(apiKey, tavilyKey, remember);
   persist();
   toast("偏好設定已儲存。 ");
+}
+
+function selectedSettingsThinkingOption() {
+  const slider = document.getElementById("settingsThinkingLevel");
+  return LIVE_THINKING_OPTIONS[Number(slider?.value)] || LIVE_THINKING_OPTIONS[0];
+}
+
+function renderSettingsThinking() {
+  const thinking = selectedSettingsThinkingOption();
+  const model = document.getElementById("liveModel").value;
+  document.getElementById("thinkingValue").value = thinking.label;
+  document.getElementById("thinkingHint").textContent = describeLiveThinking(model, thinking.id);
+  document.getElementById("settingsThinkingLevel").setAttribute("aria-valuetext", thinking.label);
 }
 
 async function testConnection() {
@@ -566,6 +568,7 @@ async function startCall() {
     call.session = new LiveSession({
       apiKey,
       model: data.settings.liveModel,
+      thinkingLevel: data.settings.liveThinkingLevel,
       character: call.character,
       systemInstruction: buildSystemPrompt(call.character.description, memories),
       triggerTokens: data.settings.triggerTokens,
