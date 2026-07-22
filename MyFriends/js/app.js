@@ -14,7 +14,7 @@ import {
   updateCharacter,
   updateMemory,
 } from "./store.js";
-import { LIVE_MODEL } from "./constants.js";
+import { LIVE_MODEL_OPTIONS } from "./constants.js";
 import {
   buildSystemPrompt,
   checkModel,
@@ -371,7 +371,7 @@ function renderSettings() {
           <div class="form-field"><label for="apiKey">Gemini API key</label><div class="secret-wrap"><input class="input" id="apiKey" type="password" autocomplete="off" value="${attr(getApiKey())}" placeholder="AIza…"><button class="secret-toggle" type="button" data-action="toggle-secret" data-target="apiKey">顯示</button></div></div>
           <div class="switch-row"><div class="switch-copy"><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到此分頁／瀏覽器工作階段結束</small></div><label class="switch"><input id="rememberApiKey" type="checkbox" ${settings.rememberApiKey ? "checked" : ""}><span></span></label></div>
           <div class="setting-divider"></div>
-          <div class="form-field"><label for="liveModel">Live 模型 <small>固定使用非同步工具相容版本</small></label><input class="input" id="liveModel" value="${attr(LIVE_MODEL)}" readonly><p class="field-hint">Gemini 2.5 Live 支援 NON_BLOCKING 非同步 function calling，不會自動切換模型。</p></div>
+          <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.1 以低延遲同步工具呼叫為主；2.5 支援 NON_BLOCKING 非同步工具呼叫，工具結果會在模型空閒時回報。</p></div>
           <div class="form-field"><label for="flashModel">Flash 模型 <small>記憶與潤飾</small></label><input class="input" id="flashModel" value="${attr(settings.flashModel)}"></div>
           <button class="button button-secondary button-small" type="button" id="testConnectionButton">測試連線</button><p class="status-text" id="connectionStatus"></p>
         </section>
@@ -414,7 +414,7 @@ function saveSettings(event) {
   const remember = document.getElementById("rememberApiKey").checked;
   data.settings = {
     ...data.settings,
-    liveModel: LIVE_MODEL,
+    liveModel: document.getElementById("liveModel").value,
     flashModel: document.getElementById("flashModel").value.trim(),
     groundingModel: document.getElementById("groundingModel").value.trim(),
     memoryBudgetTokens: rangedNumber(document.getElementById("memoryBudget").value, 200, 100000, 3000),
@@ -430,6 +430,7 @@ function saveSettings(event) {
 
 async function testConnection() {
   const key = document.getElementById("apiKey").value.trim();
+  const liveModel = document.getElementById("liveModel").value;
   const flashModel = document.getElementById("flashModel").value.trim();
   const button = document.getElementById("testConnectionButton");
   const status = document.getElementById("connectionStatus");
@@ -442,8 +443,8 @@ async function testConnection() {
   status.textContent = "正在向 Gemini 驗證模型存取權…";
   status.className = "status-text";
   try {
-    await Promise.all([checkModel(key, LIVE_MODEL), checkModel(key, flashModel)]);
-    status.textContent = `連線成功，可使用 ${LIVE_MODEL} 與 ${flashModel}。`;
+    await Promise.all([checkModel(key, liveModel), checkModel(key, flashModel)]);
+    status.textContent = `連線成功，可使用 ${liveModel} 與 ${flashModel}。`;
     status.className = "status-text is-success";
   } catch (error) {
     status.textContent = error.message;

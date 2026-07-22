@@ -1,4 +1,4 @@
-import { LIVE_MODEL } from "./constants.js";
+import { DEFAULT_LIVE_MODEL, getLiveModelOption } from "./constants.js";
 
 const DATA_KEY = "myfriends.web.data.v1";
 const API_KEY_LOCAL = "myfriends.web.geminiKey";
@@ -9,7 +9,7 @@ const TAVILY_KEY_SESSION = "myfriends.web.tavilyKey.session";
 export const ACCENTS = ["#e96f51", "#4f7c6b", "#5378a6", "#9a6aa6", "#d19a34", "#ba596d"];
 
 export const DEFAULT_SETTINGS = Object.freeze({
-  liveModel: LIVE_MODEL,
+  liveModel: DEFAULT_LIVE_MODEL,
   flashModel: "gemini-3.5-flash",
   groundingModel: "gemini-2.5-flash",
   memoryBudgetTokens: 3000,
@@ -41,7 +41,7 @@ function cleanData(value) {
     version: 1,
     settings: {
       ...DEFAULT_SETTINGS,
-      liveModel: LIVE_MODEL,
+      liveModel: getLiveModelOption(settings.liveModel).id,
       flashModel: stringValue(settings.flashModel, DEFAULT_SETTINGS.flashModel),
       groundingModel: stringValue(settings.groundingModel, DEFAULT_SETTINGS.groundingModel),
       memoryBudgetTokens: numberInRange(settings.memoryBudgetTokens, 200, 100000, DEFAULT_SETTINGS.memoryBudgetTokens),

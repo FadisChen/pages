@@ -1,4 +1,4 @@
-import { LIVE_MODEL, LIVE_TOOL_BEHAVIOR, LIVE_TOOL_RESPONSE_SCHEDULING } from "./constants.js";
+import { getLiveModelOption } from "./constants.js";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
@@ -20,7 +20,6 @@ const MEMORY_RULES = `## 記憶內容使用規則
 const FUNCTION_DECLARATIONS = [
   {
     name: "web_search",
-    behavior: LIVE_TOOL_BEHAVIOR,
     description: "查詢即時或近期資訊，例如新聞、天氣、股價、剛發生的事件等模型知識庫可能過時或不知道的內容。",
     parameters: {
       type: "OBJECT",
@@ -30,7 +29,6 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: "find_nearby_places",
-    behavior: LIVE_TOOL_BEHAVIOR,
     description: "查詢使用者目前位置附近的地點，例如餐廳、店家、景點等在地資訊。query 必須是英文。",
     parameters: {
       type: "OBJECT",
@@ -228,6 +226,7 @@ function abortError() {
 export class LiveSession {
   constructor(config, callbacks = {}) {
     this.config = config;
+    this.modelOption = getLiveModelOption(config.model);
     this.callbacks = callbacks;
     this.socket = null;
     this.ready = false;
@@ -297,12 +296,16 @@ export class LiveSession {
       generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } } };
     }
     const thinkingLevel = String(character.thinkingLevel || "").toUpperCase();
-    if (thinkingLevel in THINKING_BUDGETS) {
+    if (this.modelOption.asyncToolCalling && thinkingLevel in THINKING_BUDGETS) {
       generationConfig.thinkingConfig = { thinkingBudget: THINKING_BUDGETS[thinkingLevel] };
+    } else if (!this.modelOption.asyncToolCalling && thinkingLevel === "OFF") {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    } else if (!this.modelOption.asyncToolCalling && thinkingLevel) {
+      generationConfig.thinkingConfig = { thinkingLevel };
     }
 
     const setup = {
-      model: `models/${LIVE_MODEL}`,
+      model: `models/${this.modelOption.id}`,
       generationConfig,
       systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
       realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
@@ -311,7 +314,14 @@ export class LiveSession {
       inputAudioTranscription: {},
       outputAudioTranscription: {},
     };
-    if (this.config.toolsEnabled) setup.tools = [{ functionDeclarations: FUNCTION_DECLARATIONS }];
+    if (this.config.toolsEnabled) {
+      const functionDeclarations = FUNCTION_DECLARATIONS.map((declaration) => (
+        this.modelOption.asyncToolCalling
+          ? { ...declaration, behavior: "NON_BLOCKING" }
+          : declaration
+      ));
+      setup.tools = [{ functionDeclarations }];
+    }
     return { setup };
   }
 
@@ -383,12 +393,14 @@ export class LiveSession {
 
   sendToolResponse(socket, call, result) {
     if (socket.readyState !== WS_OPEN) return;
+    const response = { result };
+    if (this.modelOption.asyncToolCalling) response.scheduling = "WHEN_IDLE";
     socket.send(JSON.stringify({
       toolResponse: {
         functionResponses: [{
           id: call.id,
           name: call.name,
-          response: { result, scheduling: LIVE_TOOL_RESPONSE_SCHEDULING },
+          response,
         }],
       },
     }));
