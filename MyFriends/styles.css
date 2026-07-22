@@ -290,6 +290,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .choice-chip span { display: block; padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; color: var(--ink-soft); background: var(--card); font-size: 11px; cursor: pointer; }
 .choice-chip input:checked + span { border-color: var(--coral); color: var(--coral-dark); background: var(--coral-soft); font-weight: 750; }
 
+.thinking-label output { color: var(--sage); font-size: 12px; font-weight: 750; }
+.thinking-range {
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--sage);
+  cursor: pointer;
+}
+.thinking-range:focus { outline: none; box-shadow: none; }
+.thinking-range:focus-visible { outline: 2px solid var(--sage); outline-offset: 3px; }
+.thinking-scale { display: grid; grid-template-columns: repeat(5, 1fr); color: var(--ink-faint); }
+.thinking-scale span { font-size: 9px; text-align: center; }
+.thinking-scale span:first-child { text-align: left; }
+.thinking-scale span:last-child { text-align: right; }
+.thinking-description { margin: 8px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.55; }
+
 .accent-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .accent-choice { position: relative; display: block; width: 30px; height: 30px; }
 .accent-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }

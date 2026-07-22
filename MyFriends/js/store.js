@@ -1,4 +1,4 @@
-import { DEFAULT_LIVE_MODEL, getLiveModelOption } from "./constants.js";
+import { DEFAULT_LIVE_MODEL, getLiveModelOption, getLiveThinkingOption } from "./constants.js";
 
 const DATA_KEY = "myfriends.web.data.v1";
 const API_KEY_LOCAL = "myfriends.web.geminiKey";
@@ -65,7 +65,7 @@ function cleanCharacter(value, index = 0) {
     name,
     description: stringValue(value.description).trim().slice(0, 12000),
     voiceName: stringValue(value.voiceName).slice(0, 80),
-    thinkingLevel: stringValue(value.thinkingLevel).toUpperCase().slice(0, 20),
+    thinkingLevel: getLiveThinkingOption(stringValue(value.thinkingLevel)).id,
     accent: isHexColor(value.accent) ? value.accent : ACCENTS[index % ACCENTS.length],
     createdAt: Number(value.createdAt) || Date.now(),
     updatedAt: Number(value.updatedAt) || Number(value.createdAt) || Date.now(),

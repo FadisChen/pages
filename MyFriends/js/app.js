@@ -14,7 +14,12 @@ import {
   updateCharacter,
   updateMemory,
 } from "./store.js";
-import { LIVE_MODEL_OPTIONS } from "./constants.js";
+import {
+  describeLiveThinking,
+  getLiveThinkingOption,
+  LIVE_MODEL_OPTIONS,
+  LIVE_THINKING_OPTIONS,
+} from "./constants.js";
 import {
   buildSystemPrompt,
   checkModel,
@@ -33,7 +38,6 @@ const VOICES = [
   "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia",
   "Sadaltager", "Sulafat",
 ];
-const THINKING_LEVELS = ["", "OFF", "MINIMAL", "LOW", "MEDIUM", "HIGH"];
 
 const appElement = document.getElementById("app");
 const modal = document.getElementById("modal");
@@ -149,6 +153,7 @@ function emptyHome() {
 
 function friendCard(character) {
   const memories = memoriesFor(character.id);
+  const thinking = getLiveThinkingOption(character.thinkingLevel);
   return `
     <article class="friend-card" style="--friend-accent:${attr(character.accent)}">
       <div class="friend-top">
@@ -163,7 +168,7 @@ function friendCard(character) {
       <p class="friend-description">${html(character.description || "一位還在慢慢認識你的朋友。")}</p>
       <div class="tag-row">
         <span class="tag">♪ ${html(character.voiceName || "預設聲音")}</span>
-        <span class="tag">思考 ${html(character.thinkingLevel || "預設")}</span>
+        <span class="tag">思考 ${html(thinking.label)}</span>
       </div>
       <div class="friend-action">
         <small>⌘ ${memories.length} 條記憶</small>
@@ -179,9 +184,11 @@ function renderCharacterForm() {
     name: "",
     description: "",
     voiceName: "Aoede",
-    thinkingLevel: "LOW",
+    thinkingLevel: "",
     accent: ACCENTS[data.characters.length % ACCENTS.length],
   };
+  const thinking = getLiveThinkingOption(character.thinkingLevel);
+  const thinkingIndex = Math.max(0, LIVE_THINKING_OPTIONS.indexOf(thinking));
   appElement.innerHTML = `
     <div class="page">
       <button class="back-button" type="button" data-action="home">← 返回朋友列表</button>
@@ -208,8 +215,10 @@ function renderCharacterForm() {
             <p class="field-hint">Gemini 提供 30 種預設聲線；實際音色會依模型版本略有差異。</p>
           </div>
           <div class="form-field">
-            <span class="field-label">思考強度 <small>越高，回應延遲通常越長</small></span>
-            <div class="choice-row">${THINKING_LEVELS.map((level) => `<label class="choice-chip"><input type="radio" name="thinkingLevel" value="${level}" ${level === character.thinkingLevel ? "checked" : ""}><span>${level || "預設"}</span></label>`).join("")}</div>
+            <label class="thinking-label" for="thinkingLevel"><span>思考強度 <small>越高，回應延遲通常越長</small></span><output id="thinkingValue" for="thinkingLevel">${html(thinking.label)}</output></label>
+            <input class="thinking-range" id="thinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}">
+            <div class="thinking-scale" aria-hidden="true">${LIVE_THINKING_OPTIONS.map((option) => `<span>${html(option.label)}</span>`).join("")}</div>
+            <p class="thinking-description" id="thinkingHint">${html(describeLiveThinking(data.settings.liveModel, thinking.id))}</p>
           </div>
           <div class="form-field">
             <span class="field-label">代表色</span>
@@ -226,7 +235,7 @@ function renderCharacterForm() {
           <div class="preview-avatar" id="previewAvatar">${html(initial(character.name || "？"))}</div>
           <h3 id="previewName">${html(character.name || "還沒有名字")}</h3>
           <p id="previewDescription">${html(shorten(character.description || "在這裡預覽你們的第一張朋友卡片。", 70))}</p>
-          <div class="preview-meta"><span class="tag" id="previewVoice">♪ ${html(character.voiceName || "預設聲音")}</span><span class="tag" id="previewThinking">${html(character.thinkingLevel || "預設")}</span></div>
+          <div class="preview-meta"><span class="tag" id="previewVoice">♪ ${html(character.voiceName || "預設聲音")}</span><span class="tag" id="previewThinking">思考 ${html(thinking.label)}</span></div>
         </aside>
       </form>
     </div>`;
@@ -243,11 +252,15 @@ function updateCharacterPreview() {
   const name = String(values.get("name") || "").trim();
   const description = String(values.get("description") || "").trim();
   const accent = String(values.get("accent") || ACCENTS[0]);
+  const thinking = selectedThinkingOption();
   document.getElementById("previewName").textContent = name || "還沒有名字";
   document.getElementById("previewAvatar").textContent = initial(name || "？");
   document.getElementById("previewDescription").textContent = shorten(description || "在這裡預覽你們的第一張朋友卡片。", 70);
   document.getElementById("previewVoice").textContent = `♪ ${values.get("voiceName") || "預設聲音"}`;
-  document.getElementById("previewThinking").textContent = String(values.get("thinkingLevel") || "預設");
+  document.getElementById("thinkingValue").value = thinking.label;
+  document.getElementById("thinkingHint").textContent = describeLiveThinking(data.settings.liveModel, thinking.id);
+  document.getElementById("thinkingLevel").setAttribute("aria-valuetext", thinking.label);
+  document.getElementById("previewThinking").textContent = `思考 ${thinking.label}`;
   document.getElementById("characterPreview").style.setProperty("--preview-accent", accent);
 }
 
@@ -259,7 +272,7 @@ function saveCharacterForm(event, existing) {
     name: String(values.get("name") || "").trim(),
     description: String(values.get("description") || "").trim(),
     voiceName: String(values.get("voiceName") || ""),
-    thinkingLevel: String(values.get("thinkingLevel") || ""),
+    thinkingLevel: selectedThinkingOption().id,
     accent: String(values.get("accent") || ACCENTS[0]),
   };
   document.getElementById("nameError").classList.toggle("hidden", Boolean(input.name));
@@ -270,6 +283,11 @@ function saveCharacterForm(event, existing) {
   persist();
   toast(existing ? "角色設定已更新。" : `已建立 ${input.name}，現在可以開始聊天了。`);
   navigate("home");
+}
+
+function selectedThinkingOption() {
+  const slider = document.getElementById("thinkingLevel");
+  return LIVE_THINKING_OPTIONS[Number(slider?.value)] || LIVE_THINKING_OPTIONS[0];
 }
 
 async function optimizeDescription() {

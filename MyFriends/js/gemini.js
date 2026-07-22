@@ -1,9 +1,9 @@
-import { getLiveModelOption } from "./constants.js";
+import { getLiveModelOption, getLiveThinkingOption } from "./constants.js";
+import { toTraditionalChinese } from "./traditional-chinese.js";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 const WS_OPEN = 1;
-const THINKING_BUDGETS = Object.freeze({ OFF: 0, MINIMAL: 512, LOW: 1024, MEDIUM: 4096, HIGH: 8192 });
 
 const LANGUAGE_RULES = `## 語言規則
 使用者是臺灣人。一律使用臺灣繁體中文（zh-TW）交談，詞彙與用字遵循臺灣習慣（例如：影片而非视频、計程車而非出租车）。絕對不要使用簡體字；語音回應請用台灣腔調發音（自然的台灣語調），避免大陸腔或港式廣東腔；除非使用者明確要求，不要切換到其他語言。`;
@@ -295,13 +295,17 @@ export class LiveSession {
     if (character.voiceName) {
       generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } } };
     }
-    const thinkingLevel = String(character.thinkingLevel || "").toUpperCase();
-    if (this.modelOption.asyncToolCalling && thinkingLevel in THINKING_BUDGETS) {
-      generationConfig.thinkingConfig = { thinkingBudget: THINKING_BUDGETS[thinkingLevel] };
-    } else if (!this.modelOption.asyncToolCalling && thinkingLevel === "OFF") {
-      generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    } else if (!this.modelOption.asyncToolCalling && thinkingLevel) {
-      generationConfig.thinkingConfig = { thinkingLevel };
+    const rawThinkingLevel = String(character.thinkingLevel || "").trim().toUpperCase();
+    const thinkingOption = getLiveThinkingOption(rawThinkingLevel);
+    if (rawThinkingLevel === "OFF") {
+      // 相容尚未經 storage migration 的舊角色。2.5 可使用 budget 0；3.1 只能送 level。
+      generationConfig.thinkingConfig = this.modelOption.asyncToolCalling
+        ? { thinkingBudget: 0 }
+        : { thinkingLevel: "MINIMAL" };
+    } else if (thinkingOption.id && this.modelOption.asyncToolCalling) {
+      generationConfig.thinkingConfig = { thinkingBudget: thinkingOption.thinkingBudget };
+    } else if (thinkingOption.id) {
+      generationConfig.thinkingConfig = { thinkingLevel: thinkingOption.id };
     }
 
     const setup = {
@@ -351,7 +355,7 @@ export class LiveSession {
         if (part.inlineData?.data) this.callbacks.onAudio?.(base64ToBytes(part.inlineData.data));
       }
       if (content.modelTurn?.parts?.some((part) => part.inlineData?.data)) this.callbacks.onStatus?.("speaking");
-      const inputText = content.inputTranscription?.text?.trim();
+      const inputText = toTraditionalChinese(content.inputTranscription?.text).trim();
       const outputText = content.outputTranscription?.text?.trim();
       if (inputText) this.callbacks.onUserTranscript?.(inputText);
       if (outputText) this.callbacks.onModelTranscript?.(outputText);
