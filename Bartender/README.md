@@ -1,4 +1,4 @@
-# Bartender — 暮燈酒館
+# Bartender — 陋室
 
 獨立的原生 HTML／CSS／ES Modules 酒館交談遊戲。你扮演酒保，透過 Gemini Live API 與會記得你的奇幻旅人語音／文字交談。正式入口為 `index.html`；`prototype.html` 僅保留為 throwaway 設計比較稿，正式頁面不引用它，也不引用既有 `web` 專案的 JavaScript、CSS、儲存鍵或元件。
 
