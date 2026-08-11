@@ -10,6 +10,14 @@
 - **客人模擬**：`GuestSimulation` 依時間排程角色到場、入座與離開，讓吧檯隨時間自然變化。
 - **簡轉繁**：內建 vendored `opencc-js` 將模型輸出即時轉換為臺灣繁體用字。
 
+## 雙模式故事
+
+「療癒夜話」與「灰燼群像」共用同一套互動引擎（吧檯畫面、`GuestSimulation` 客人到場模擬、對話與記憶整理機制皆相同），差異只在敘事內容與存檔：
+
+- **角色人設**：六位角色的立繪、聲線、姓名不變，但 `personas.js` 為每人準備兩套 `persona` 文字與種子記憶——療癒夜話偏純陪伴、近況閒聊；灰燼群像則讓每位角色捲入「灰燼商隊」失蹤懸案，各自握有需靠信任度逐步透露的線索。
+- **存檔互相獨立**：兩模式使用不同的 localStorage key（見 `store.js` 的 `cozy` / `story`），玩家在角色設定裡的人設修改與新增記憶只影響當前模式，不會互相繼承。
+- **系統提示標註模式**：`gemini.js` 的 `buildSystemInstruction` 會把目前模式寫入 system instruction，讓 AI 維持對應的敘事基調；語氣規則（臺灣繁中、PG-13、不加動作旁白等）則兩模式共用。
+
 ## 技術棧
 
 純原生 HTML／CSS／ES Modules，無框架、無建置步驟；測試使用 Node.js 內建 `node --test`（無外部相依套件）。
@@ -52,3 +60,7 @@ python -m http.server 4173 --directory Bartender
 ```powershell
 node --test Bartender/tests/*.test.mjs
 ```
+
+## Sound assets
+
+The in-game door, tavern chatter, pouring, and ice sounds are from [Taira Komori's free sound effects](https://taira-komori.net/freesoundtw.html). Source categories: [open/close](https://taira-komori.net/openclose01tw.html), [food and drink](https://taira-komori.net/eating01tw.html), and [environment](https://taira-komori.net/enviroment01tw.html).

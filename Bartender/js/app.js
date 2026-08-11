@@ -1,4 +1,4 @@
-import { BrowserAudioEngine } from './audio.js';
+import { BrowserAudioEngine, TavernSoundscape } from './audio.js';
 import { analyzeMemories, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
 import { VOICES } from './personas.js';
 import { GuestSimulation, SEAT_DEPTHS, SEAT_POSITIONS } from './simulation.js';
@@ -21,12 +21,13 @@ const state = {
   settingsTab: 'general',
   editingId: 'friend1',
   textDraft: '',
+  soundscape: null,
 };
 
 app.addEventListener('click', handleClick);
 app.addEventListener('submit', handleSubmit);
 app.addEventListener('input', (event) => { if (event.target.name === 'message') state.textDraft = event.target.value; });
-window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); });
+window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); state.soundscape?.stop(); });
 window.setInterval(updateSimulation, 1000);
 render();
 
@@ -157,12 +158,16 @@ function enterBar() {
   state.save = loadSave(state.mode);
   state.simulation = new GuestSimulation(state.save.characters.map((item) => item.id));
   state.guests = state.simulation.start();
+  state.soundscape = new TavernSoundscape();
+  state.soundscape.start();
   state.screen = 'bar';
   state.historyOpen = false;
   render();
 }
 
 function leaveBar() {
+  state.soundscape?.stop();
+  state.soundscape = null;
   state.screen = 'menu'; state.save = null; state.simulation = null; state.guests = []; state.overlay = null; render();
 }
 

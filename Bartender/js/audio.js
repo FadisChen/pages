@@ -148,6 +148,82 @@ export class BrowserAudioEngine {
   }
 }
 
+export const TAVERN_SOUND_ASSETS = Object.freeze({
+  door: './assets/sounds/door-open.mp3',
+  chatter: './assets/sounds/tavern-chatter.mp3',
+  pourSake: './assets/sounds/pour-sake.mp3',
+  pourWater: './assets/sounds/pour-water.mp3',
+  ice: './assets/sounds/ice-into-glass.mp3',
+});
+
+export class TavernSoundscape {
+  constructor({ createAudio = (src) => new Audio(src), random = Math.random, setTimeoutFn = globalThis.setTimeout.bind(globalThis), clearTimeoutFn = globalThis.clearTimeout.bind(globalThis), onError } = {}) {
+    this.createAudio = createAudio;
+    this.random = random;
+    this.setTimeout = setTimeoutFn;
+    this.clearTimeout = clearTimeoutFn;
+    this.onError = onError;
+    this.running = false;
+    this.ambientAudio = null;
+    this.activeEffects = new Set();
+    this.ambientTimer = null;
+    this.eventTimer = null;
+  }
+
+  start() {
+    this.stop();
+    this.running = true;
+    this.playEffect('door', 0.42);
+    this.ambientTimer = this.setTimeout(() => this.startAmbience(), 650);
+    this.scheduleEvent();
+  }
+
+  startAmbience() {
+    if (!this.running) return;
+    this.ambientAudio = this.createAudio(TAVERN_SOUND_ASSETS.chatter);
+    this.ambientAudio.loop = true;
+    this.ambientAudio.volume = 0.075;
+    void this.ambientAudio.play().catch((error) => this.onError?.(error));
+  }
+
+  scheduleEvent() {
+    if (!this.running) return;
+    const delay = 14000 + Math.round(this.random() * 16000);
+    this.eventTimer = this.setTimeout(() => {
+      if (!this.running) return;
+      const effects = ['pourSake', 'pourWater', 'ice'];
+      const effect = effects[Math.floor(this.random() * effects.length)];
+      this.playEffect(effect, 0.2);
+      this.scheduleEvent();
+    }, delay);
+  }
+
+  playEffect(kind, volume = 0.2) {
+    if (!this.running && kind !== 'door') return;
+    const src = TAVERN_SOUND_ASSETS[kind];
+    if (!src) return;
+    const audio = this.createAudio(src);
+    audio.volume = volume;
+    this.activeEffects.add(audio);
+    audio.addEventListener?.('ended', () => this.activeEffects.delete(audio), { once: true });
+    void audio.play().catch((error) => this.onError?.(error));
+  }
+
+  stop() {
+    this.running = false;
+    if (this.ambientTimer) this.clearTimeout(this.ambientTimer);
+    if (this.eventTimer) this.clearTimeout(this.eventTimer);
+    this.ambientTimer = this.eventTimer = null;
+    this.ambientAudio?.pause();
+    if (this.ambientAudio) this.ambientAudio.currentTime = 0;
+    for (const audio of this.activeEffects) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    this.activeEffects.clear();
+    this.ambientAudio = null;
+  }
+}
 function resample(input, fromRate, toRate) {
   if (fromRate === toRate) return input;
   const ratio = fromRate / toRate;
