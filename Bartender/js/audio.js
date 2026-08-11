@@ -14,8 +14,6 @@ export class BrowserAudioEngine {
     this.running = false;
     this.captureEnabled = true;
     this.cueGeneration = 0;
-    this.micGated = false;
-    this.micGateTimer = null;
   }
 
   async start() {
@@ -38,7 +36,7 @@ export class BrowserAudioEngine {
   }
 
   capture(samples) {
-    if (!this.running || !this.context || !this.captureEnabled || this.micGated) return;
+    if (!this.running || !this.context || !this.captureEnabled) return;
     const pcm = floatToPcm16(resample(samples, this.context.sampleRate, 16000));
     this.onAudioChunk?.(pcm);
     if (this.onLevel) {
@@ -117,14 +115,6 @@ export class BrowserAudioEngine {
     this.captureEnabled = true;
   }
 
-  setMicGated(active) {
-    clearTimeout(this.micGateTimer);
-    if (active) { this.micGated = true; return; }
-    const remainingMs = this.context ? Math.max(0, (this.playbackAt - this.context.currentTime) * 1000) : 0;
-    if (remainingMs <= 0) { this.micGated = false; return; }
-    this.micGateTimer = setTimeout(() => { this.micGated = false; }, remainingMs);
-  }
-
   flushPlayback() {
     for (const source of this.playbackSources) try { source.stop(); } catch { /* already stopped */ }
     this.playbackSources.clear();
@@ -135,8 +125,6 @@ export class BrowserAudioEngine {
     this.running = false;
     this.flushPlayback();
     this.stopSessionCues();
-    clearTimeout(this.micGateTimer);
-    this.micGated = false;
     if (this.processor) this.processor.onaudioprocess = null;
     try { this.processor?.disconnect(); } catch { /* disconnected */ }
     try { this.source?.disconnect(); } catch { /* disconnected */ }
@@ -155,6 +143,121 @@ export const TAVERN_SOUND_ASSETS = Object.freeze({
   pourWater: './assets/sounds/pour-water.mp3',
   ice: './assets/sounds/ice-into-glass.mp3',
 });
+
+export const DEFAULT_BACKGROUND_MUSIC_ID = 'dust-on-my-boots';
+
+export const BACKGROUND_MUSIC_TRACKS = Object.freeze([
+  { id: DEFAULT_BACKGROUND_MUSIC_ID, title: 'Dust On My Boots', src: './assets/bgm/Dust On My Boots.mp3' },
+  { id: 'dust-on-my-boots-2', title: 'Dust On My Boots 2', src: './assets/bgm/Dust On My Boots2.mp3' },
+  { id: 'adventure', title: '中年探險', src: './assets/bgm/中年探險.mp3' },
+  { id: 'edge-of-time', title: '我站在時間的邊緣', src: './assets/bgm/我站在時間的邊緣.mp3' },
+  { id: 'homeward-wind', title: '歸途的風', src: './assets/bgm/歸途的風.mp3' },
+]);
+
+export class BackgroundMusicPlayer {
+  constructor({ tracks = BACKGROUND_MUSIC_TRACKS, createAudio = () => new Audio(), requestFrame = globalThis.requestAnimationFrame.bind(globalThis), fadeDuration = 1200, volume = 0.28 } = {}) {
+    this.tracks = new Map(tracks.map((track) => [track.id, track]));
+    this.createAudio = createAudio;
+    this.requestFrame = requestFrame;
+    this.fadeDuration = fadeDuration;
+    this.volume = volume;
+    this.activeAudios = new Set();
+    this.currentAudio = null;
+    this._selectedId = '';
+    this.generation = 0;
+  }
+
+  get selectedId() {
+    return this._selectedId;
+  }
+
+  async select(trackId = '') {
+    const nextId = String(trackId || '');
+    const track = this.tracks.get(nextId);
+    if (nextId && !track) throw new Error('找不到指定的背景音樂。');
+    if (nextId === this._selectedId && (nextId === '' || this.currentAudio)) return true;
+
+    const generation = ++this.generation;
+    if (!track) {
+      this.currentAudio = null;
+      this._selectedId = '';
+      await this.fade(generation, null);
+      return true;
+    }
+
+    const incoming = this.createAudio();
+    incoming.preload = 'metadata';
+    incoming.loop = true;
+    incoming.volume = 0;
+    // Keep the MP3 as a media URL so the browser can progressively fetch it or use HTTP ranges.
+    incoming.src = track.src;
+    this.activeAudios.add(incoming);
+
+    try {
+      await incoming.play();
+    } catch (error) {
+      this.dispose(incoming);
+      if (generation !== this.generation) return false;
+      await this.fade(generation, this.currentAudio);
+      throw error;
+    }
+
+    if (generation !== this.generation) {
+      this.dispose(incoming);
+      return false;
+    }
+
+    this.currentAudio = incoming;
+    this._selectedId = nextId;
+    await this.fade(generation, incoming);
+    return true;
+  }
+
+  async fade(generation, incoming) {
+    const participants = [...this.activeAudios];
+    if (!participants.length) return;
+    const startVolumes = new Map(participants.map((audio) => [audio, audio.volume]));
+
+    await new Promise((resolve) => {
+      let startedAt = null;
+      const step = (now) => {
+        if (generation !== this.generation) return resolve();
+        if (startedAt === null) startedAt = now;
+        const progress = this.fadeDuration <= 0 ? 1 : Math.min(1, (now - startedAt) / this.fadeDuration);
+        for (const audio of participants) {
+          const from = startVolumes.get(audio);
+          const to = audio === incoming ? this.volume : 0;
+          audio.volume = from + ((to - from) * progress);
+        }
+        if (progress < 1) this.requestFrame(step);
+        else resolve();
+      };
+      this.requestFrame(step);
+    });
+
+    if (generation !== this.generation) return;
+    for (const audio of participants) {
+      if (audio !== incoming) this.dispose(audio);
+    }
+  }
+
+  stop({ fade = true } = {}) {
+    if (fade) return this.select('');
+    this.generation += 1;
+    this.currentAudio = null;
+    this._selectedId = '';
+    for (const audio of [...this.activeAudios]) this.dispose(audio);
+    return Promise.resolve();
+  }
+
+  dispose(audio) {
+    this.activeAudios.delete(audio);
+    audio.pause();
+    try { audio.currentTime = 0; } catch { /* media may not be seekable yet */ }
+    audio.removeAttribute?.('src');
+    audio.load?.();
+  }
+}
 
 export class TavernSoundscape {
   constructor({ createAudio = (src) => new Audio(src), random = Math.random, setTimeoutFn = globalThis.setTimeout.bind(globalThis), clearTimeoutFn = globalThis.clearTimeout.bind(globalThis), onError } = {}) {

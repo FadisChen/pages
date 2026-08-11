@@ -1,4 +1,4 @@
-import { BrowserAudioEngine, TavernSoundscape } from './audio.js';
+import { BACKGROUND_MUSIC_TRACKS, DEFAULT_BACKGROUND_MUSIC_ID, BackgroundMusicPlayer, BrowserAudioEngine, TavernSoundscape } from './audio.js';
 import { analyzeMemories, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
 import { VOICES } from './personas.js';
 import { GuestSimulation, SEAT_DEPTHS, SEAT_POSITIONS } from './simulation.js';
@@ -21,13 +21,16 @@ const state = {
   settingsTab: 'general',
   editingId: 'friend1',
   textDraft: '',
+  backgroundMusic: new BackgroundMusicPlayer(),
   soundscape: null,
+  arrivedGuestIds: new Set(),
 };
 
 app.addEventListener('click', handleClick);
+app.addEventListener('change', handleChange);
 app.addEventListener('submit', handleSubmit);
 app.addEventListener('input', (event) => { if (event.target.name === 'message') state.textDraft = event.target.value; });
-window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); state.soundscape?.stop(); });
+window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); void state.backgroundMusic.stop({ fade: false }); state.soundscape?.stop(); });
 window.setInterval(updateSimulation, 1000);
 render();
 
@@ -40,7 +43,7 @@ function renderMenu() {
     <main class='screen menu-screen'>
       <div class='menu-bg' aria-hidden='true'></div>
       <section class='menu-layout'>
-        <div class='menu-copy'><p class='eyebrow'>The lantern stays lit for you</p><h1>暮燈<em>Bartender</em></h1><p>你站在吧檯這一側，替旅人留一盞燈。有人帶著笑話，有人帶著祕密；今晚，他們會記得你說過的話。</p></div>
+        <div class='menu-copy'><p class='eyebrow'>The lantern stays lit for you</p><h1>陋室<em>Bartender</em></h1><p>你站在吧檯這一側，替旅人留一盞燈。有人帶著笑話，有人帶著祕密；今晚，他們會記得你說過的話。</p></div>
         <div class='menu-card'>
           <p class='eyebrow'>Choose tonight's tale</p><h2>今晚想聽哪一種故事？</h2>
           <div class='mode-list'>${modeCard('cozy', '☕', '療癒夜話', '陪伴、近況與慢慢熟識')}${modeCard('story', '✦', '灰燼群像', '線索、祕密與彼此牽連')}</div>
@@ -64,13 +67,20 @@ function renderBar() {
         <div class='scene-shade'></div>
         ${renderGuests()}
         <img class='scene-layer scene-front' src='./assets/place.png' alt='' aria-hidden='true'>
-        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>暮燈酒館</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'><button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
+        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'><button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
         ${renderCaption()}
         ${renderHistory()}
+        <div class='bgm-dock'>${renderBackgroundMusic()}</div>
         <div class='controls ${state.call ? '' : 'is-idle'}'>${renderControls()}</div>
       </section>
       ${state.overlay ? renderOverlay() : ''}
     </main>`;
+}
+
+function renderBackgroundMusic() {
+  const selectedId = state.backgroundMusic.selectedId;
+  const options = BACKGROUND_MUSIC_TRACKS.map((track) => `<option value='${attr(track.id)}' ${track.id === selectedId ? 'selected' : ''}>${html(track.title)}</option>`).join('');
+  return `<label class='bgm-picker' for='backgroundMusic'><span aria-hidden='true'>♫</span><span class='sr-only'>背景音樂</span><select id='backgroundMusic' data-action='background-music' aria-label='背景音樂'><option value='' ${selectedId ? '' : 'selected'}>背景音樂：關閉</option>${options}</select></label>`;
 }
 
 function renderGuests() {
@@ -80,7 +90,9 @@ function renderGuests() {
     const width = character.displayWidth || 18.5;
     const position = Math.max(width / 2, Math.min(100 - width / 2, SEAT_POSITIONS[guest.seat]));
     const style = `--x:${position}%;--guest-width:${width}%;--depth:${SEAT_DEPTHS[guest.seat]}`;
-    return `<button class='guest-hit ${active ? 'is-active' : ''}' style='${style}' type='button' data-action='talk' data-id='${character.id}' aria-label='與 ${attr(character.name)} 交談'><span class='guest-name'>${html(character.name)}<small>${html(character.role)}</small></span></button><figure class='guest ${active ? 'is-active' : ''}' style='${style};animation-delay:${index * 80}ms'><img src='${character.image}' alt=''></figure>`;
+    const arriving = !state.arrivedGuestIds.has(character.id);
+    state.arrivedGuestIds.add(character.id);
+    return `<button class='guest-hit ${active ? 'is-active' : ''}' style='${style}' type='button' data-action='talk' data-id='${character.id}' aria-label='與 ${attr(character.name)} 交談'><span class='guest-name'>${html(character.name)}<small>${html(character.role)}</small></span></button><figure class='guest ${active ? 'is-active' : ''} ${arriving ? 'is-arriving' : ''}' style='${style};animation-delay:${index * 80}ms'><img src='${character.image}' alt=''></figure>`;
   }).join('');
 }
 
@@ -106,8 +118,8 @@ function renderControls() {
   if (!state.call) return `<div class='session-status'><span class='status'>等待你選一位來客</span></div>`;
   const disabled = ['connecting', 'reconnecting', 'ending'].includes(state.call.status);
   const input = state.settings.inputMode === 'text'
-    ? `<form class='composer' id='composer'><input name='message' maxlength='200' autocomplete='off' value='${attr(state.textDraft)}' placeholder='輸入想說的話…' ${disabled ? 'disabled' : ''}><button type='submit' aria-label='送出'>↑</button></form>`
-    : `<div class='voice-info'><i></i><span>麥克風模式 · 使用者 STT 不顯示</span></div>`;
+    ? `<form class='composer' id='composer'><input name='message' maxlength='200' autocomplete='off' value='${attr(state.textDraft)}' placeholder='輸入想說的話…' ${disabled ? 'disabled' : ''}><button type='submit' aria-label='送出' ${disabled ? 'disabled' : ''}>↑</button></form>`
+    : `<div class='voice-info'><span>麥克風模式</span></div>`;
   return `<div class='session-status'><span id='statusText' class='status ${state.call.status}'>${statusLabel(state.call.status)}</span></div>${input}<div class='control-end'><button class='danger' type='button' data-action='end' ${state.call.status === 'ending' ? 'disabled' : ''}>結束</button></div>`;
 }
 
@@ -154,18 +166,50 @@ async function handleSubmit(event) {
   else if (event.target.id === 'composer') await sendText(event.target);
 }
 
+async function handleChange(event) {
+  const select = event.target.closest?.('[data-action="background-music"]');
+  if (!select) return;
+  select.disabled = true;
+  try {
+    await state.backgroundMusic.select(select.value);
+  } catch (error) {
+    toast(`無法播放背景音樂：${error.message}`);
+  }
+  syncBackgroundMusicControl();
+}
+
+function syncBackgroundMusicControl() {
+  const current = document.getElementById('backgroundMusic');
+  if (current) {
+    current.value = state.backgroundMusic.selectedId;
+    current.disabled = false;
+  }
+}
+
 function enterBar() {
   state.save = loadSave(state.mode);
   state.simulation = new GuestSimulation(state.save.characters.map((item) => item.id));
+  state.arrivedGuestIds = new Set();
   state.guests = state.simulation.start();
   state.soundscape = new TavernSoundscape();
   state.soundscape.start();
   state.screen = 'bar';
   state.historyOpen = false;
   render();
+  const defaultMusic = state.backgroundMusic.select(DEFAULT_BACKGROUND_MUSIC_ID);
+  const control = document.getElementById('backgroundMusic');
+  if (control) {
+    control.value = DEFAULT_BACKGROUND_MUSIC_ID;
+    control.disabled = true;
+  }
+  void defaultMusic.then(syncBackgroundMusicControl).catch((error) => {
+    syncBackgroundMusicControl();
+    toast(`無法播放預設背景音樂：${error.message}`);
+  });
 }
 
 function leaveBar() {
+  void state.backgroundMusic.stop();
   state.soundscape?.stop();
   state.soundscape = null;
   state.screen = 'menu'; state.save = null; state.simulation = null; state.guests = []; state.overlay = null; render();
@@ -191,7 +235,6 @@ async function startCall(characterId) {
       onStatus: (status) => {
         if (state.call !== call) return;
         call.status = status;
-        call.audio.setMicGated(status === 'speaking');
         updateCallDom();
         if (!call.startCuePlayed && (status === 'connected' || status === 'listening')) {
           call.startCuePlayed = true;
@@ -214,7 +257,7 @@ async function startCall(characterId) {
       onUserTranscript: (text) => { if (state.call === call) call.transcript.onVoiceUser(text); },
       onModelTranscript: (text) => { if (state.call !== call) return; call.transcript.onModel(text); updateCaptionDom(); },
       onInterrupted: () => {
-        if (state.settings.inputMode === 'voice') call.audio.flushPlayback();
+        call.audio.flushPlayback();
         call.transcript.onInterrupted();
         render();
       },
@@ -263,8 +306,8 @@ async function sendText(form) {
 function updateCallDom() {
   const status = document.getElementById('statusText');
   if (status && state.call) { status.className = `status ${state.call.status}`; status.textContent = statusLabel(state.call.status); }
-  const textInput = document.querySelector('#composer input[name="message"]');
-  if (textInput && state.call) textInput.disabled = ['connecting', 'reconnecting', 'ending'].includes(state.call.status);
+  const textControls = document.querySelectorAll('#composer input[name="message"], #composer button[type="submit"]');
+  if (state.call) for (const control of textControls) control.disabled = ['connecting', 'reconnecting', 'ending'].includes(state.call.status);
   updateCaptionDom();
 }
 
@@ -276,7 +319,10 @@ function updateCaptionDom() {
 function updateSimulation() {
   if (state.screen !== 'bar' || state.overlay || !state.simulation) return;
   const events = state.simulation.tick();
-  if (events.length) { state.guests = state.simulation.snapshot(); render(); }
+  if (events.length) {
+    for (const event of events) if (event.type === 'left') state.arrivedGuestIds.delete(event.characterId);
+    state.guests = state.simulation.snapshot(); render();
+  }
 }
 
 function saveGeneralForm(form) {
