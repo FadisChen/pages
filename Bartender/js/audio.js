@@ -157,20 +157,29 @@ export const BACKGROUND_MUSIC_TRACKS = Object.freeze([
 ]);
 
 export class BackgroundMusicPlayer {
-  constructor({ tracks = BACKGROUND_MUSIC_TRACKS, createAudio = () => new Audio(), requestFrame = globalThis.requestAnimationFrame.bind(globalThis), fadeDuration = 1200, volume = 0.28 } = {}) {
+  constructor({ tracks = BACKGROUND_MUSIC_TRACKS, createAudio = () => new Audio(), requestFrame = globalThis.requestAnimationFrame.bind(globalThis), fadeDuration = 1200, volume = 0.28, autoPlay = false } = {}) {
     this.tracks = new Map(tracks.map((track) => [track.id, track]));
     this.createAudio = createAudio;
     this.requestFrame = requestFrame;
     this.fadeDuration = fadeDuration;
     this.volume = volume;
+    this.autoPlay = Boolean(autoPlay);
     this.activeAudios = new Set();
+    this.endedHandlers = new Map();
     this.currentAudio = null;
     this._selectedId = '';
     this.generation = 0;
+    this.trackChangeRequest = null;
   }
 
   get selectedId() {
     return this._selectedId;
+  }
+
+  setAutoPlay(enabled) {
+    this.autoPlay = Boolean(enabled);
+    if (this.currentAudio) this.currentAudio.loop = !this.autoPlay;
+    return this.autoPlay;
   }
 
   async select(trackId = '') {
@@ -189,8 +198,11 @@ export class BackgroundMusicPlayer {
 
     const incoming = this.createAudio();
     incoming.preload = 'metadata';
-    incoming.loop = true;
+    incoming.loop = !this.autoPlay;
     incoming.volume = 0;
+    const endedHandler = () => this.handleTrackEnded(incoming);
+    this.endedHandlers.set(incoming, endedHandler);
+    incoming.addEventListener?.('ended', endedHandler);
     // Keep the MP3 as a media URL so the browser can progressively fetch it or use HTTP ranges.
     incoming.src = track.src;
     this.activeAudios.add(incoming);
@@ -213,6 +225,19 @@ export class BackgroundMusicPlayer {
     this._selectedId = nextId;
     await this.fade(generation, incoming);
     return true;
+  }
+
+  handleTrackEnded(audio) {
+    if (!this.autoPlay || audio !== this.currentAudio || this.trackChangeRequest) return;
+    const trackIds = [...this.tracks.keys()];
+    if (!trackIds.length) return;
+    const currentIndex = trackIds.indexOf(this._selectedId);
+    const nextId = trackIds[(currentIndex + 1 + trackIds.length) % trackIds.length];
+    const request = this.select(nextId).catch(() => false);
+    const trackedRequest = request.finally(() => {
+      if (this.trackChangeRequest === trackedRequest) this.trackChangeRequest = null;
+    });
+    this.trackChangeRequest = trackedRequest;
   }
 
   async fade(generation, incoming) {
@@ -254,6 +279,9 @@ export class BackgroundMusicPlayer {
 
   dispose(audio) {
     this.activeAudios.delete(audio);
+    const endedHandler = this.endedHandlers.get(audio);
+    if (endedHandler) audio.removeEventListener?.('ended', endedHandler);
+    this.endedHandlers.delete(audio);
     audio.pause();
     try { audio.currentTime = 0; } catch { /* media may not be seekable yet */ }
     audio.removeAttribute?.('src');

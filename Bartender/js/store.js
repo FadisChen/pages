@@ -16,6 +16,7 @@ export const STORAGE_KEYS = Object.freeze({
 export const DEFAULT_SETTINGS = Object.freeze({
   playerName: '酒保',
   captionsVisible: true,
+  backgroundMusicAutoPlay: false,
   rememberApiKey: false,
   liveModelName: DEFAULT_LIVE_MODEL,
   memoryModelName: DEFAULT_MEMORY_MODEL,
@@ -70,6 +71,7 @@ function cleanSettings(value, migrateLegacyDefault = false) {
     version: SETTINGS_VERSION,
     playerName: String(value?.playerName || DEFAULT_SETTINGS.playerName).trim().slice(0, 40) || DEFAULT_SETTINGS.playerName,
     captionsVisible: value?.captionsVisible !== false,
+    backgroundMusicAutoPlay: Boolean(value?.backgroundMusicAutoPlay),
     rememberApiKey: Boolean(value?.rememberApiKey),
     liveModelName: normalizeModelName(value?.liveModelName, DEFAULT_SETTINGS.liveModelName),
     memoryModelName: shouldMigrateMemoryModel ? DEFAULT_SETTINGS.memoryModelName : memoryModelName,

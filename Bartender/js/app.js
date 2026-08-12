@@ -8,11 +8,12 @@ import { SessionTranscript } from './transcript.js';
 
 const app = document.getElementById('app');
 const toastRegion = document.getElementById('toastRegion');
+const initialSettings = loadSettings();
 
 const state = {
   screen: 'menu',
   mode: 'cozy',
-  settings: loadSettings(),
+  settings: initialSettings,
   save: null,
   simulation: null,
   guests: [],
@@ -22,7 +23,8 @@ const state = {
   characterPreviewId: null,
   settingsTab: 'general',
   editingId: 'friend1',
-  backgroundMusic: new BackgroundMusicPlayer(),
+  backgroundMusic: new BackgroundMusicPlayer({ autoPlay: initialSettings.backgroundMusicAutoPlay }),
+  backgroundMusicTitle: BACKGROUND_MUSIC_TRACKS.find((track) => track.id === DEFAULT_BACKGROUND_MUSIC_ID)?.title || '背景音樂：關閉',
   backgroundMusicRequest: null,
   soundscape: null,
   arrivedGuestIds: new Set(),
@@ -36,6 +38,7 @@ render();
 void ensureHomeBackgroundMusic().catch(() => {});
 
 function render() {
+  document.title = `陋室 - ${state.backgroundMusicTitle}`;
   app.innerHTML = state.screen === 'bar' ? renderBar() : renderMenu();
 }
 
@@ -44,7 +47,7 @@ function renderMenu() {
     <main class='screen menu-screen'>
       <div class='menu-bg' aria-hidden='true'></div>
       <section class='menu-layout'>
-        <div class='menu-copy'><p class='eyebrow'>The lantern stays lit for you</p><h1>陋室<em>Bartender</em></h1><p>你站在吧檯這一側，替旅人留一盞燈。有人帶著笑話，有人帶著祕密；今晚，他們會記得你說過的話。</p></div>
+        <div class='menu-copy'><p class='eyebrow'>The lantern stays lit for you</p><h1>陋室<em>Drifter Loss</em></h1><p>站在吧檯，替旅人留盞燈。<br/>有人帶著笑話，有人帶著祕密。<br/>你有故事，我有酒。</p></div>
         <div class='menu-card'>
           <p class='eyebrow'>Choose tonight's tale</p><h2>今晚想聽哪一種故事？</h2>
           <div class='mode-list'>${modeCard('cozy', '☕', '療癒夜話', '陪伴、近況與慢慢熟識')}${modeCard('story', '✦', '灰燼群像', '線索、祕密與彼此牽連')}</div>
@@ -75,6 +78,10 @@ function renderBar() {
       </section>
       ${state.overlay ? renderOverlay() : ''}
     </main>`;
+}
+
+function backgroundMusicTitle(trackId) {
+  return BACKGROUND_MUSIC_TRACKS.find((track) => track.id === trackId)?.title || '背景音樂：關閉';
 }
 
 function renderBackgroundMusic() {
@@ -133,11 +140,13 @@ function renderOverlay() {
 function renderCharacterPreview() {
   const character = characterById(state.characterPreviewId);
   if (!character) return '';
-  return `<div class='character-preview' role='dialog' aria-modal='true' aria-labelledby='characterPreviewTitle'><button class='character-preview-scrim' type='button' data-action='close-character-preview' aria-label='關閉角色全圖'></button><section class='character-preview-card'><header><div><p class='eyebrow'>Character portrait</p><h2 id='characterPreviewTitle'>${html(character.name)}</h2></div><button class='character-preview-close' type='button' data-action='close-character-preview' aria-label='關閉'>×</button></header><figure><img src='${character.image}' alt='${attr(character.name)} 全身立繪'></figure><small>點擊外側區域關閉</small></section></div>`;
+  const portraitWidth = Number(character.portraitWidth) || 116;
+  const previewScale = Math.max(1, portraitWidth / 165);
+  return `<div class='character-preview' role='dialog' aria-modal='true' aria-labelledby='characterPreviewTitle'><button class='character-preview-scrim' type='button' data-action='close-character-preview' aria-label='關閉角色全圖'></button><section class='character-preview-card'><header><div><p class='eyebrow'>Character portrait</p><h2 id='characterPreviewTitle'>${html(character.name)}</h2></div><button class='character-preview-close' type='button' data-action='close-character-preview' aria-label='關閉'>×</button></header><figure style='--preview-scale:${previewScale.toFixed(2)}'><img src='${character.image}' alt='${attr(character.name)} 全身立繪'></figure><small>點擊外側區域關閉</small></section></div>`;
 }
 
 function renderGeneralSettings() {
-  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示角色單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>整理記憶的 model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
+  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示角色單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel'><h3>背景音樂</h3><div class='switch-row'><div><strong>自動輪播背景音樂</strong><small>開啟後依序換歌；關閉時目前歌曲單曲循環</small></div><label class='switch'><input name='backgroundMusicAutoPlay' type='checkbox' ${state.settings.backgroundMusicAutoPlay ? 'checked' : ''}><span></span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>整理記憶的 model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
 }
 
 function renderCharacterSettings() {
@@ -187,6 +196,7 @@ async function selectBackgroundMusic(trackId, button) {
   if (button) button.disabled = true;
   try {
     await (trackId === DEFAULT_BACKGROUND_MUSIC_ID ? selectDefaultBackgroundMusic() : state.backgroundMusic.select(trackId));
+    state.backgroundMusicTitle = backgroundMusicTitle(trackId);
     render();
   } catch (error) {
     if (button) button.disabled = false;
@@ -202,6 +212,7 @@ function enterBar() {
   state.soundscape = new TavernSoundscape();
   state.soundscape.start();
   state.screen = 'bar';
+  state.backgroundMusicTitle = backgroundMusicTitle(DEFAULT_BACKGROUND_MUSIC_ID);
   state.historyOpen = false;
   render();
   void selectDefaultBackgroundMusic().then(render).catch((error) => {
@@ -385,7 +396,8 @@ function updateSimulation() {
 
 function saveGeneralForm(form) {
   const values = new FormData(form);
-  state.settings = saveSettings({ playerName: values.get('playerName'), captionsVisible: values.get('captionsVisible') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
+  state.settings = saveSettings({ playerName: values.get('playerName'), captionsVisible: values.get('captionsVisible') === 'on', backgroundMusicAutoPlay: values.get('backgroundMusicAutoPlay') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
+  state.backgroundMusic.setAutoPlay(state.settings.backgroundMusicAutoPlay);
   saveApiKey(values.get('apiKey'), state.settings.rememberApiKey); state.overlay = null; render(); toast('設定已儲存。');
 }
 
