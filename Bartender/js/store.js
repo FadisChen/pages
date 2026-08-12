@@ -82,12 +82,12 @@ function cleanSave(value, mode) {
   const defaults = createDefaultCharacters(mode);
   const supplied = Array.isArray(value?.characters) ? value.characters : [];
   const clean = {
-    version: mode === 'story' ? 2 : 1,
+    version: mode === 'story' ? 3 : 1,
     mode,
     characters: defaults.map((fallback) => cleanCharacter(supplied.find((item) => item?.id === fallback.id), fallback)),
     updatedAt: Number(value?.updatedAt) || Date.now(),
   };
-  if (mode === 'story') clean.storyState = normalizeStoryState(value?.storyState);
+  if (mode === 'story') clean.storyState = normalizeStoryState(value?.storyState, supplied);
   return clean;
 }
 

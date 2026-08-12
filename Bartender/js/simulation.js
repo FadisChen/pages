@@ -11,6 +11,10 @@ export class GuestSimulation {
     this.activeId = null;
     this.nextArrivalAt = 0;
     this.arrivalDoorPlayed = false;
+    this.priorityCharacterIds = [];
+    this.priorityWaitMs = 30000;
+    this.priorityKey = '';
+    this.priorityEnabled = false;
   }
 
   start() {
@@ -19,10 +23,22 @@ export class GuestSimulation {
     const count = 1 + Math.floor(this.random() * 2);
     for (let index = 0; index < count; index += 1) this.arrive(this.now());
     this.nextArrivalAt = this.now() + between(this.random, 120000, 240000);
+    if (this.priorityEnabled) this.nextArrivalAt = Math.min(this.nextArrivalAt, this.now() + this.priorityWaitMs);
     return this.snapshot();
   }
 
   setActive(characterId) { this.activeId = characterId || null; }
+
+  setPriorityCharacterIds(characterIds, waitMs = 30000, enabled = true) {
+    const next = [...new Set(Array.isArray(characterIds) ? characterIds : [])].filter((id) => this.characterIds.includes(id));
+    const key = `${next.join('|')}|${waitMs}|${enabled}`;
+    if (key === this.priorityKey) return;
+    this.priorityKey = key;
+    this.priorityCharacterIds = next;
+    this.priorityWaitMs = Math.max(0, Number(waitMs) || 30000);
+    this.priorityEnabled = Boolean(enabled);
+    if (this.priorityEnabled && this.nextArrivalAt > this.now() + this.priorityWaitMs) this.nextArrivalAt = this.now() + this.priorityWaitMs;
+  }
 
   tick(at = this.now()) {
     const events = [];
@@ -43,6 +59,7 @@ export class GuestSimulation {
         if (guest) events.push({ type: 'arrived', characterId: guest.characterId });
       }
       this.nextArrivalAt = at + between(this.random, 120000, 240000);
+      if (this.priorityEnabled && this.guests.length < 4) this.nextArrivalAt = Math.min(this.nextArrivalAt, at + this.priorityWaitMs);
       this.arrivalDoorPlayed = false;
     }
     return events;
@@ -53,7 +70,9 @@ export class GuestSimulation {
     const present = new Set(this.guests.map((item) => item.characterId));
     const candidates = this.characterIds.filter((id) => !present.has(id) && (this.cooldowns.get(id) || 0) <= at);
     if (!candidates.length) return null;
-    const characterId = candidates[Math.floor(this.random() * candidates.length)];
+    const priority = candidates.filter((id) => this.priorityCharacterIds.includes(id));
+    const pool = priority.length ? priority : candidates;
+    const characterId = pool[Math.floor(this.random() * pool.length)];
     const usedSeats = new Set(this.guests.map((item) => item.seat));
     const seats = [0, 1, 2, 3, 4].filter((seat) => !usedSeats.has(seat));
     const seat = seats[Math.floor(this.random() * seats.length)];

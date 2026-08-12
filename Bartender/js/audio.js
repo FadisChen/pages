@@ -157,13 +157,14 @@ export const BACKGROUND_MUSIC_TRACKS = Object.freeze([
 ]);
 
 export class BackgroundMusicPlayer {
-  constructor({ tracks = BACKGROUND_MUSIC_TRACKS, createAudio = () => new Audio(), requestFrame = globalThis.requestAnimationFrame.bind(globalThis), fadeDuration = 1200, volume = 0.28, autoPlay = false } = {}) {
+  constructor({ tracks = BACKGROUND_MUSIC_TRACKS, createAudio = () => new Audio(), requestFrame = globalThis.requestAnimationFrame.bind(globalThis), fadeDuration = 1200, volume = 0.28, autoPlay = false, onTrackChange } = {}) {
     this.tracks = new Map(tracks.map((track) => [track.id, track]));
     this.createAudio = createAudio;
     this.requestFrame = requestFrame;
     this.fadeDuration = fadeDuration;
     this.volume = volume;
     this.autoPlay = Boolean(autoPlay);
+    this.onTrackChange = onTrackChange;
     this.activeAudios = new Set();
     this.endedHandlers = new Map();
     this.currentAudio = null;
@@ -233,7 +234,9 @@ export class BackgroundMusicPlayer {
     if (!trackIds.length) return;
     const currentIndex = trackIds.indexOf(this._selectedId);
     const nextId = trackIds[(currentIndex + 1 + trackIds.length) % trackIds.length];
-    const request = this.select(nextId).catch(() => false);
+    const request = this.select(nextId)
+      .then((success) => { if (success) this.onTrackChange?.(nextId); return success; })
+      .catch(() => false);
     const trackedRequest = request.finally(() => {
       if (this.trackChangeRequest === trackedRequest) this.trackChangeRequest = null;
     });

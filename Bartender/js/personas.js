@@ -31,7 +31,7 @@ const PEOPLE = [
     '酒保曾在她負傷時默默拿出藥箱，沒有追問傷從哪裡來。'],
   ['friend8', 'Friend8.png', '涅瑞斯', 'Charon', '潮汐領航員',
     '從容敏銳的潮汐領航員，談吐像潮水一樣有節奏，喜歡收集港口傳聞與稀奇飲品。他看似隨性，其實最怕帶錯方向讓同伴受傷。',
-    '曾替灰燼商隊規劃水路的男性領航員，在廢棄碼頭撿到一枚刻錯潮汐日期的灰蠟封印。他知道有人刻意偽造航程，但要確認酒保立場後才會交出原物。',
+    '曾替灰燼商隊規劃水路的領航員，在廢棄碼頭撿到一枚刻錯潮汐日期的灰蠟封印。他知道有人刻意偽造航程，但要確認酒保立場後才會交出原物。',
     '酒保記得他每次遠航前都只喝半杯，剩下半杯留給平安歸來的自己。'],
   ['friend9', 'Friend9.png', '米菈', 'Aoede', '貓族釀酒師',
     '活潑機靈的貓族釀酒師，對香氣與情緒都異常敏感，會拿新配方請酒保試飲，也會用俏皮話掩飾對失敗的在意。',
@@ -49,6 +49,10 @@ const PEOPLE = [
     '端莊溫暖的巡禮騎士，習慣照顧所有人，面對自己的疲憊時反而有些笨拙。她珍惜酒保不把她當成英雄，只問她今晚想喝什麼。',
     '追查灰燼商隊失蹤案的巡禮騎士，曾在封鎖區救下一名拒絕透露姓名的倖存者，並立誓保護對方。她掌握最後目擊證詞，但必須在真相與誓言之間找到界線。',
     '酒保曾在她卸下護甲後遞上一杯溫酒，讓她第一次安心睡著。'],
+  ['friend13', 'Friend13.png', '咪摸', 'Aoede', '林野斥候',
+    '爽朗俐落的林野斥候，熟悉森林裡的路與天氣，習慣把觀察到的小事說成輕鬆的玩笑。她看似總有退路，其實很珍惜能讓自己停下來喝完一杯酒的人。',
+    '曾沿灰燼商隊外圍的林線追蹤失蹤者，發現有人刻意清除通往舊驛站的足跡。她不會把模糊痕跡說成結論，只在證據和信任都足夠時交出自己的觀察。',
+    '酒保替她調過一杯檸檬香草酒，還記得把杯子放在她伸手就能拿到的位置。'],
 ];
 
 const DISPLAY_WIDTHS = Object.freeze({
@@ -64,6 +68,7 @@ const DISPLAY_WIDTHS = Object.freeze({
   friend10: 34,
   friend11: 36,
   friend12: 25,
+  friend13: 17,
 });
 
 const HIT_RATIOS = Object.freeze({
@@ -79,6 +84,7 @@ const HIT_RATIOS = Object.freeze({
   friend10: '3 / 2',
   friend11: '3 / 2',
   friend12: '1 / 1',
+  friend13: '2 / 3',
 });
 
 const PORTRAIT_WIDTHS = Object.freeze({
@@ -94,6 +100,7 @@ const PORTRAIT_WIDTHS = Object.freeze({
   friend10: 250,
   friend11: 270,
   friend12: 165,
+  friend13: 116,
 });
 
 const THUMBNAIL_WIDTHS = Object.freeze({
@@ -109,6 +116,7 @@ const THUMBNAIL_WIDTHS = Object.freeze({
   friend10: 150,
   friend11: 165,
   friend12: 100,
+  friend13: 100,
 });
 
 export function createDefaultCharacters(mode) {

@@ -1,7 +1,7 @@
 import { BACKGROUND_MUSIC_TRACKS, DEFAULT_BACKGROUND_MUSIC_ID, BackgroundMusicPlayer, BrowserAudioEngine, TavernSoundscape } from './audio.js';
 import { analyzeMemories, analyzeStoryEvents, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
 import { VOICES } from './personas.js';
-import { advanceStory, prepareStoryConversation } from './story.js';
+import { ACCUSATION_OPTIONS, CLUES, advanceStory, getStoryBoard, pinStoryRoute, prepareStoryConversation, recordStoryInteraction, submitAccusation, submitDeduction } from './story.js';
 import { GuestSimulation, SEAT_DEPTHS, SEAT_POSITIONS } from './simulation.js';
 import { DEFAULT_SETTINGS, getApiKey, loadSave, loadSettings, resetCharacter, saveApiKey, saveMode, saveSettings } from './store.js';
 import { SessionTranscript } from './transcript.js';
@@ -23,7 +23,10 @@ const state = {
   characterPreviewId: null,
   settingsTab: 'general',
   editingId: 'friend1',
-  backgroundMusic: new BackgroundMusicPlayer({ autoPlay: initialSettings.backgroundMusicAutoPlay }),
+  backgroundMusic: new BackgroundMusicPlayer({
+    autoPlay: initialSettings.backgroundMusicAutoPlay,
+    onTrackChange: (trackId) => { state.backgroundMusicTitle = backgroundMusicTitle(trackId); render(); },
+  }),
   backgroundMusicTitle: BACKGROUND_MUSIC_TRACKS.find((track) => track.id === DEFAULT_BACKGROUND_MUSIC_ID)?.title || '背景音樂：關閉',
   backgroundMusicRequest: null,
   soundscape: null,
@@ -71,7 +74,7 @@ function renderBar() {
         <div class='scene-shade'></div>
         ${renderGuests()}
         <img class='scene-layer scene-front' src='./assets/place.png' alt='' aria-hidden='true'>
-        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'><button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
+        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'>${state.mode === 'story' ? `<button class='round casebook-button' type='button' data-action='story-board' aria-label='開啟案件簿' title='案件簿'>✦</button>` : ''}<button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1-2 2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
         <div class='dialogue-stack'>${renderCaption()}${renderHistory()}</div>
         <div class='bgm-dock'>${renderBackgroundMusic()}</div>
         <div class='controls ${state.call ? '' : 'is-idle'}'>${renderControls()}</div>
@@ -133,6 +136,7 @@ function renderControls() {
 }
 
 function renderOverlay() {
+  if (state.overlay === 'story-board') return renderStoryBoardOverlay();
   const general = state.settingsTab === 'general';
   return `<div class='overlay' role='dialog' aria-modal='true' aria-labelledby='settingsTitle'><section class='settings'><nav class='settings-nav'><p class='eyebrow'>Local tavern</p><h1 id='settingsTitle'>酒館設定</h1><button class='${general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='general'>⚙　全域設定</button><button class='${!general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='characters'>♙　角色設定</button><button class='close' type='button' data-action='close'>←　返回</button></nav><div class='settings-content'>${general ? renderGeneralSettings() : renderCharacterSettings()}</div></section>${state.characterPreviewId ? renderCharacterPreview() : ''}</div>`;
 }
@@ -165,6 +169,7 @@ async function handleClick(event) {
   else if (action === 'enter') enterBar();
   else if (action === 'menu') { if (state.call) return toast('請先結束目前的交談。'); leaveBar(); }
   else if (action === 'settings') openSettings(tab);
+  else if (action === 'story-board') openStoryBoard();
   else if (action === 'close') { state.overlay = null; state.characterPreviewId = null; render(); }
   else if (action === 'close-character-preview') { state.characterPreviewId = null; render(); }
   else if (action === 'preview-character') { state.characterPreviewId = id; render(); }
@@ -180,6 +185,7 @@ async function handleClick(event) {
   else if (action === 'background-music') await selectBackgroundMusic(id, button);
   else if (action === 'captions') { state.settings = saveSettings({ ...state.settings, captionsVisible: !state.settings.captionsVisible }); render(); }
   else if (action === 'history') { state.historyOpen = !state.historyOpen; render(); }
+  else if (action === 'pin-route') pinRoute(id);
   else if (action === 'test-model') await testModel(button);
   else if (action === 'add-memory') addMemory();
   else if (action === 'delete-memory') deleteMemory(id);
@@ -190,6 +196,37 @@ async function handleSubmit(event) {
   event.preventDefault();
   if (event.target.id === 'settingsForm') saveGeneralForm(event.target);
   else if (event.target.id === 'characterForm') saveCharacterForm(event.target);
+  else if (event.target.id === 'deductionForm') submitDeductionForm(event.target);
+  else if (event.target.id === 'accusationForm') submitAccusationForm(event.target);
+}
+
+function renderStoryBoardOverlay() {
+  ensureSave();
+  const board = getStoryBoard(state.save.storyState);
+  const characterName = (id) => html(state.save.characters.find((item) => item.id === id)?.name || id);
+  const selectedRoute = board.routes.find((route) => route.id === board.pinnedRouteId) || board.routes.find((route) => !route.completed) || board.routes[0];
+  const routeCards = board.routes.map((route) => `
+    <article class='case-route ${route.completed ? 'is-complete' : ''} ${route.id === board.pinnedRouteId ? 'is-pinned' : ''}'>
+      <header><div><span class='case-route-mark'>${route.completed ? '✓' : '◇'}</span><div><h3>${html(route.title)}</h3><p>${html(route.description)}</p></div></div><button class='quiet' type='button' data-action='pin-route' data-id='${attr(route.id)}' ${route.completed ? 'disabled' : ''}>${route.completed ? '已完成' : route.id === board.pinnedRouteId ? '取消釘選' : '釘選路線'}</button></header>
+      <div class='case-route-meta'><span>進度 ${html(route.progress)}</span><span>對證者：${characterName(route.spokespersonId)}</span></div>
+      ${route.availableCharacterIds.length ? `<small class='case-route-hint'>可追查：${route.availableCharacterIds.map(characterName).join('、')}</small>` : '<small class="case-route-hint">目前沒有可立即追查的新線索。</small>'}
+      <div class='case-clues'>${route.visibleClues.length ? route.visibleClues.map((clue) => `<div class='case-clue'><strong>${html(clue.title)}</strong><p>${html(clue.summary)}</p></div>`).join('') : '<p class="case-empty">尚未取得這條路線的線索。</p>'}</div>
+    </article>`).join('');
+  const selectable = selectedRoute?.visibleClues || [];
+  const deductionStatus = selectedRoute?.deductionReady ? '勾選全部已確認線索，完成這條證據鏈。' : `還缺 ${selectedRoute?.missingClueCount || 0} 張線索；可先釘選路線追查。`;
+  const deduction = selectedRoute && !selectedRoute.completed ? `<form id='deductionForm' class='case-deduction' data-route-id='${attr(selectedRoute.id)}'><header><div><p class='eyebrow'>Evidence board</p><h3>整理「${html(selectedRoute.title)}」</h3></div><small>${html(deductionStatus)}</small></header><div class='case-evidence-options'>${selectable.length ? selectable.map((clue) => `<label class='case-evidence'><input type='checkbox' name='clue' value='${attr(clue.id)}' ${selectedRoute.deductionReady ? 'required' : ''}><span><strong>${html(clue.title)}</strong><small>${html(clue.summary)}</small></span></label>`).join('') : '<p class="case-empty">先和相關角色交談，案件簿才會出現可連結的線索卡。</p>'}</div><button class='primary' type='submit' ${selectedRoute.deductionReady ? '' : 'disabled'}>${selectedRoute.deductionReady ? '提交證據鏈' : `尚缺 ${selectedRoute.missingClueCount} 張線索`}</button></form>` : '';
+  const completedSpokespersons = board.routes.filter((route) => route.completed && board.eligibleSpokespersonIds.includes(route.spokespersonId)).map((route) => `<option value='${attr(route.spokespersonId)}'>${characterName(route.spokespersonId)}（${html(route.title)}）</option>`).join('');
+  const accusation = board.accusationReady && !board.ending ? `<form id='accusationForm' class='case-accusation'><header><div><p class='eyebrow'>Final accusation</p><h3>提交最終指控</h3></div><small>倖存者證詞已能與至少兩條證據鏈互相印證。</small></header><label>主謀<select name='mastermindId' required><option value='' selected disabled>請選擇主謀</option>${ACCUSATION_OPTIONS.mastermind.map((item) => `<option value='${attr(item.id)}'>${html(item.label)}</option>`).join('')}</select></label><label>執行者<select name='executorId' required><option value='' selected disabled>請選擇執行者</option>${ACCUSATION_OPTIONS.executor.map((item) => `<option value='${attr(item.id)}'>${html(item.label)}</option>`).join('')}</select></label><label>結案角色<select name='spokespersonId' required>${completedSpokespersons}</select></label><button class='primary' type='submit'>確認指控</button></form>` : '';
+  const testimonyKnown = board.revealedClues.some((clue) => clue.id === 'survivor-testimony');
+  const untrustedSpokespersons = board.routes.filter((route) => route.completed && !board.eligibleSpokespersonIds.includes(route.spokespersonId)).map((route) => characterName(route.spokespersonId));
+  const finalLead = board.witnessNeeded
+    ? `<p class='case-unlock'>兩條證據鏈已完成；${board.witnessUnlocked ? `請與${characterName('friend12')}交談，取得倖存者證詞。` : `先和${characterName('friend12')}建立「可信任」關係，再請她帶回倖存者證詞。`}</p>`
+    : testimonyKnown && !board.accusationReady && !board.ending && untrustedSpokespersons.length
+      ? `<p class='case-unlock'>證詞已取得；請先讓已完成路線的對證者 ${untrustedSpokespersons.join('、')} 達到「可信任」。</p>`
+      : '';
+  const ending = board.ending ? `<section class='case-ending'><p class='eyebrow'>Case closed</p><h3>${board.ending.completeness === 'complete' ? '灰燼商隊的完整真相已拼回來' : '灰燼商隊案件已結案'}</h3><p>${html(board.ending.epilogue || `由 ${characterName(board.ending.spokespersonId)} 代表你完成結案。`)}</p><small>仍可繼續交談，補完其他路線。</small></section>` : '';
+  const trust = state.save.characters.map((character) => `<div class='case-trust'><span>${html(character.name)}</span><span class='case-trust-dots'>${[1, 2, 3].map((level) => `<i class='${level <= (board.trustByCharacter[character.id] ?? 1) ? 'is-on' : ''}'></i>`).join('')}</span><small>${html(board.trustLabels[character.id])}</small></div>`).join('');
+  return `<div class='overlay casebook-overlay' role='dialog' aria-modal='true' aria-labelledby='casebookTitle'><section class='casebook'><header class='casebook-head'><div><p class='eyebrow'>Ashes Ensemble</p><h2 id='casebookTitle'>案件簿</h2><p>把角色帶回來的碎片，整理成可以驗證的證據鏈。</p></div><button class='character-preview-close' type='button' data-action='close' aria-label='關閉案件簿'>×</button></header><div class='casebook-scroll'><section class='case-routes'>${routeCards}</section>${deduction}${accusation}${finalLead}${ending}<section class='case-trust-panel'><header><div><p class='eyebrow'>Trust ledger</p><h3>角色信任</h3></div><small>有效交談與明確分享會逐步累積信任。</small></header><div class='case-trust-grid'>${trust}</div></section></div></section></div>`;
 }
 
 async function selectBackgroundMusic(trackId, button) {
@@ -207,6 +244,7 @@ async function selectBackgroundMusic(trackId, button) {
 function enterBar() {
   state.save = loadSave(state.mode);
   state.simulation = new GuestSimulation(state.save.characters.map((item) => item.id));
+  syncStorySimulationPriority();
   state.arrivedGuestIds = new Set();
   state.guests = state.simulation.start();
   state.soundscape = new TavernSoundscape();
@@ -249,6 +287,53 @@ function openSettings(tab) {
   state.settingsTab = tab || 'general'; state.overlay = 'settings'; state.characterPreviewId = null; ensureSave(); render();
 }
 
+function openStoryBoard() {
+  if (state.mode !== 'story') return;
+  if (state.call) return toast('請先結束目前的交談，再查看案件簿。');
+  ensureSave(); state.overlay = 'story-board'; state.characterPreviewId = null; render();
+}
+
+function pinRoute(routeId) {
+  if (state.mode !== 'story' || state.call) return;
+  ensureSave();
+  const board = getStoryBoard(state.save.storyState);
+  state.save = saveMode({ ...state.save, storyState: pinStoryRoute(state.save.storyState, board.pinnedRouteId === routeId ? null : routeId) });
+  syncStorySimulationPriority();
+  render();
+}
+
+function submitDeductionForm(form) {
+  if (!form || state.mode !== 'story' || state.call) return;
+  ensureSave();
+  const selected = [...new FormData(form).getAll('clue')];
+  const result = submitDeduction(state.save.storyState, form.dataset.routeId, selected);
+  if (!result.accepted) return toast('證據鏈還不能成立；只選已確認且屬於同一路線的線索。');
+  state.save = saveMode({ ...state.save, storyState: result.state });
+  syncStorySimulationPriority();
+  render();
+  toast(result.reason === 'already-solved' ? '這條證據鏈已經整理完成。' : '證據鏈成立；案件簿已更新。');
+}
+
+function submitAccusationForm(form) {
+  if (!form || state.mode !== 'story' || state.call) return;
+  ensureSave();
+  const values = new FormData(form);
+  const result = submitAccusation(state.save.storyState, {
+    mastermindId: values.get('mastermindId'), executorId: values.get('executorId'), spokespersonId: values.get('spokespersonId'),
+  });
+  state.save = saveMode({ ...state.save, storyState: result.state });
+  syncStorySimulationPriority();
+  render();
+  if (result.accepted) return toast('指控成立。案件簿留下了這個結案版本。');
+  toast(result.reason === 'incorrect' ? '指控沒有被證據支持；請先重新和結案角色談談。' : '目前還不能提交最終指控。');
+}
+
+function syncStorySimulationPriority() {
+  if (!state.simulation || state.mode !== 'story' || !state.save) return;
+  const board = getStoryBoard(state.save.storyState);
+  state.simulation.setPriorityCharacterIds(board.priorityCharacterIds, 30000, board.priorityCharacterIds.length > 0);
+}
+
 async function startCall(characterId) {
   if (state.call) return characterId === state.call.characterId ? undefined : toast(`請先結束與 ${activeCharacter().name} 的交談。`);
   const apiKey = getApiKey();
@@ -256,7 +341,7 @@ async function startCall(characterId) {
   const character = characterById(characterId);
   const transcript = new SessionTranscript();
   const storyEncounterCount = character.encounterCount;
-  const storyConversation = state.mode === 'story' ? prepareStoryConversation(characterId, state.save.storyState, storyEncounterCount) : null;
+  const storyConversation = state.mode === 'story' ? prepareStoryConversation(characterId, state.save.storyState, storyEncounterCount, { characterNames: Object.fromEntries(state.save.characters.map((item) => [item.id, item.name])) }) : null;
   const call = { characterId, status: 'connecting', transcript, storyConversation, storyEncounterCount, audio: null, session: null, audioErrorShown: false, startCuePlayed: false, startedAt: Date.now() };
   state.call = call; state.simulation.setActive(characterId); render();
   try {
@@ -334,18 +419,27 @@ async function finishStoryAnalysis({ apiKey, character, characterId, transcript,
   storedCharacter.memories.push(...additions);
 
   let accepted = { revealedClueIds: [], disclosedClueIds: [] };
+  const trustBefore = target.storyState.trustByCharacter?.[characterId] ?? 1;
   if (storyResult.status === 'fulfilled') {
     const advanced = advanceStory(characterId, target.storyState, storyResult.value, call.storyEncounterCount);
     target.storyState = advanced.state;
     accepted = advanced.accepted;
   }
+  const meaningful = transcript.some((line) => line.role === 'user') && transcript.some((line) => line.role === 'model');
+  target.storyState = recordStoryInteraction(target.storyState, characterId, { meaningful, disclosedClueCount: accepted.disclosedClueIds.length });
   const saved = saveMode(target);
   if (mode === state.mode && state.save) state.save = saved;
+  if (mode === state.mode && state.save) syncStorySimulationPriority();
 
   const updates = [];
   if (additions.length) updates.push(`${additions.length} 條記憶`);
-  if (accepted.revealedClueIds.length) updates.push(`${accepted.revealedClueIds.length} 條新線索`);
+  if (accepted.revealedClueIds.length) {
+    const titles = accepted.revealedClueIds.map((id) => CLUES.find((clue) => clue.id === id)?.title || id);
+    updates.push(`新線索：${titles.join('、')}`);
+  }
   if (accepted.disclosedClueIds.length) updates.push(`${accepted.disclosedClueIds.length} 條角色知情`);
+  const trustAfter = target.storyState.trustByCharacter?.[characterId] ?? trustBefore;
+  if (trustAfter > trustBefore) updates.push(`信任提升至${trustAfter}級`);
   const failures = [];
   if (memoryResult.status === 'rejected') {
     console.warn('[Bartender Memory]', memoryResult.reason);
