@@ -9,8 +9,7 @@ export function mergePartial(current, incoming) {
 }
 
 export class SessionTranscript {
-  constructor(inputMode) {
-    this.inputMode = inputMode;
+  constructor() {
     this.analysisLines = [];
     this.visibleLines = [];
     this.userBuffer = '';
@@ -18,7 +17,6 @@ export class SessionTranscript {
   }
 
   onVoiceUser(text) { this.flushModel(); this.userBuffer = mergePartial(this.userBuffer, text); }
-  onTextUser(text) { this.flushModel(); this.flushUser(); this.analysisLines.push({ role: 'user', text: String(text).trim() }); this.visibleLines.push({ role: 'user', text: String(text).trim() }); }
   onModel(text) { this.flushUser(); this.modelBuffer = mergePartial(this.modelBuffer, text); }
   onInterrupted() { this.flushModel(); }
   onTurnComplete() { this.flushUser(); this.flushModel(); }
@@ -39,7 +37,7 @@ export class SessionTranscript {
   }
 
   currentModel() { return this.modelBuffer.trim() || [...this.visibleLines].reverse().find((line) => line.role === 'model')?.text || ''; }
-  visibleHistory() { this.flushModel(); return this.visibleLines.filter((line) => this.inputMode === 'text' || line.role === 'model').slice(-10); }
+  visibleHistory() { this.flushModel(); return this.visibleLines.filter((line) => line.role === 'model').slice(-10); }
   snapshotForAnalysis() { this.flushUser(); this.flushModel(); return this.analysisLines.map((line) => ({ ...line })); }
   clear() { this.analysisLines = []; this.visibleLines = []; this.userBuffer = ''; this.modelBuffer = ''; }
 }

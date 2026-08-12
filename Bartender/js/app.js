@@ -1,6 +1,7 @@
 import { BACKGROUND_MUSIC_TRACKS, DEFAULT_BACKGROUND_MUSIC_ID, BackgroundMusicPlayer, BrowserAudioEngine, TavernSoundscape } from './audio.js';
-import { analyzeMemories, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
+import { analyzeMemories, analyzeStoryEvents, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
 import { VOICES } from './personas.js';
+import { advanceStory, prepareStoryConversation } from './story.js';
 import { GuestSimulation, SEAT_DEPTHS, SEAT_POSITIONS } from './simulation.js';
 import { DEFAULT_SETTINGS, getApiKey, loadSave, loadSettings, resetCharacter, saveApiKey, saveMode, saveSettings } from './store.js';
 import { SessionTranscript } from './transcript.js';
@@ -20,7 +21,6 @@ const state = {
   overlay: null,
   settingsTab: 'general',
   editingId: 'friend1',
-  textDraft: '',
   backgroundMusic: new BackgroundMusicPlayer(),
   soundscape: null,
   arrivedGuestIds: new Set(),
@@ -29,7 +29,6 @@ const state = {
 app.addEventListener('click', handleClick);
 app.addEventListener('change', handleChange);
 app.addEventListener('submit', handleSubmit);
-app.addEventListener('input', (event) => { if (event.target.name === 'message') state.textDraft = event.target.value; });
 window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); void state.backgroundMusic.stop({ fade: false }); state.soundscape?.stop(); });
 window.setInterval(updateSimulation, 1000);
 render();
@@ -90,9 +89,10 @@ function renderGuests() {
     const width = character.displayWidth || 18.5;
     const position = Math.max(width / 2, Math.min(100 - width / 2, SEAT_POSITIONS[guest.seat]));
     const style = `--x:${position}%;--guest-width:${width}%;--depth:${SEAT_DEPTHS[guest.seat]}`;
+    const hitStyle = `${style};--hit-ratio:${character.hitRatio || '2 / 3'}`;
     const arriving = !state.arrivedGuestIds.has(character.id);
     state.arrivedGuestIds.add(character.id);
-    return `<button class='guest-hit ${active ? 'is-active' : ''}' style='${style}' type='button' data-action='talk' data-id='${character.id}' aria-label='與 ${attr(character.name)} 交談'><span class='guest-name'>${html(character.name)}<small>${html(character.role)}</small></span></button><figure class='guest ${active ? 'is-active' : ''} ${arriving ? 'is-arriving' : ''}' style='${style};animation-delay:${index * 80}ms'><img src='${character.image}' alt=''></figure>`;
+    return `<button class='guest-hit ${active ? 'is-active' : ''}' style='${hitStyle}' type='button' data-action='talk' data-id='${character.id}' aria-label='與 ${attr(character.name)} 交談'><span class='guest-name'>${html(character.name)}<small>${html(character.role)}</small></span></button><figure class='guest ${active ? 'is-active' : ''} ${arriving ? 'is-arriving' : ''}' style='${style};animation-delay:${index * 80}ms'><img src='${character.image}' alt=''></figure>`;
   }).join('');
 }
 
@@ -110,17 +110,13 @@ function renderCaption() {
 
 function renderHistory() {
   if (!state.historyOpen) return '';
-  const lines = state.call?.transcript.visibleHistory() || [];
-  return `<section class='history'><header><h2>本次最近五次來回</h2><button type='button' data-action='history'>關閉</button></header>${lines.length ? lines.map((line) => `<div class='history-row'><strong>${line.role === 'user' ? '你' : html(activeCharacter()?.name || '顧客')}</strong><p>${html(line.text)}</p></div>`).join('') : `<p class='history-empty'>交談開始後，內容會暫時出現在這裡。</p>`}</section>`;
+  const lines = (state.call?.transcript.visibleHistory() || []).filter((line) => line.role === 'model');
+  return `<section class='history'><header><h2>本次最近回覆</h2><button type='button' data-action='history'>關閉</button></header>${lines.length ? lines.map((line) => `<div class='history-row'><strong>${html(activeCharacter()?.name || '顧客')}</strong><p>${html(line.text)}</p></div>`).join('') : `<p class='history-empty'>交談開始後，角色回覆會暫時出現在這裡。</p>`}</section>`;
 }
 
 function renderControls() {
-  if (!state.call) return `<div class='session-status'><span class='status'>等待你選一位來客</span></div>`;
-  const disabled = ['connecting', 'reconnecting', 'ending'].includes(state.call.status);
-  const input = state.settings.inputMode === 'text'
-    ? `<form class='composer' id='composer'><input name='message' maxlength='200' autocomplete='off' value='${attr(state.textDraft)}' placeholder='輸入想說的話…' ${disabled ? 'disabled' : ''}><button type='submit' aria-label='送出' ${disabled ? 'disabled' : ''}>↑</button></form>`
-    : `<div class='voice-info'><span>麥克風模式</span></div>`;
-  return `<div class='session-status'><span id='statusText' class='status ${state.call.status}'>${statusLabel(state.call.status)}</span></div>${input}<div class='control-end'><button class='danger' type='button' data-action='end' ${state.call.status === 'ending' ? 'disabled' : ''}>結束</button></div>`;
+  if (!state.call) return `<div class='session-status'><span class='status'>想和誰聊聊</span></div>`;
+  return `<div class='session-status'><span id='statusText' class='status ${state.call.status}'>${statusLabel(state.call.status)}</span></div><div class='control-end'><button class='danger' type='button' data-action='end' ${state.call.status === 'ending' ? 'disabled' : ''}>結束</button></div>`;
 }
 
 function renderOverlay() {
@@ -129,13 +125,14 @@ function renderOverlay() {
 }
 
 function renderGeneralSettings() {
-  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel'><h3>輸入方式</h3><div class='choices'><label class='choice'><input type='radio' name='inputMode' value='voice' ${state.settings.inputMode === 'voice' ? 'checked' : ''}><span>麥克風</span></label><label class='choice'><input type='radio' name='inputMode' value='text' ${state.settings.inputMode === 'text' ? 'checked' : ''}><span>文字</span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音與文字即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>整理記憶的 model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
+  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示角色單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>整理記憶的 model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
 }
 
 function renderCharacterSettings() {
   ensureSave();
   const character = characterById(state.editingId) || state.save.characters[0];
-  return `<header class='settings-head'><div><p class='eyebrow'>${modeLabel()} · independent save</p><h2>角色設定</h2></div><p>立繪固定；資料只影響目前模式。</p></header><div class='character-layout'><nav class='character-list'>${state.save.characters.map((item) => `<button class='${item.id === character.id ? 'is-active' : ''}' type='button' data-action='edit-character' data-id='${item.id}'><img src='${item.image}' alt=''><span><strong>${html(item.name)}</strong><small>${html(item.role)}</small></span></button>`).join('')}</nav><form id='characterForm'><input type='hidden' name='id' value='${character.id}'><div class='character-top'><div><div class='field'><label>顧客名稱</label><input name='name' maxlength='40' value='${attr(character.name)}'></div><div class='field'><label>聲線</label><select name='voice'>${VOICES.map((voice) => `<option ${voice === character.voice ? 'selected' : ''}>${voice}</option>`).join('')}</select></div></div><div class='portrait'><img src='${character.image}' alt='${attr(character.name)}'></div></div><div class='field'><label>固定人設</label><textarea name='persona' maxlength='4000'>${html(character.persona)}</textarea></div><div class='memories'>${character.memories.map((memory) => `<div class='memory'><label class='memory-lock' title='鎖定記憶'><input type='checkbox' name='memory-lock-${memory.id}' ${memory.locked ? 'checked' : ''}><span aria-hidden='true'>${memory.locked ? '◆' : '◇'}</span><span class='sr-only'>鎖定</span></label><input name='memory-${memory.id}' maxlength='500' value='${attr(memory.content)}' aria-label='記憶內容'><label class='memory-importance'><span>重要度</span><select name='memory-importance-${memory.id}' aria-label='記憶重要度'>${[1,2,3,4,5].map((level) => `<option value='${level}' ${level === memory.importance ? 'selected' : ''}>${level}</option>`).join('')}</select></label><button type='button' data-action='delete-memory' data-id='${memory.id}' aria-label='刪除'>×</button></div>`).join('')}</div><div class='field' style='margin-top:10px'><label>新增記憶</label><div style='display:flex;gap:8px'><input id='newMemory' maxlength='500' placeholder='值得長期記住的內容'><button class='secondary' type='button' data-action='add-memory'>新增</button></div></div><div class='form-actions'><button class='danger' type='button' data-action='reset-character'>重設此角色</button><button class='primary' type='submit'>儲存角色</button></div></form></div>`;
+  const portraitWidth = Number(character.portraitWidth) || 116;
+  return `<header class='settings-head'><div><p class='eyebrow'>${modeLabel()} · independent save</p><h2>角色設定</h2></div><p>立繪固定；資料只影響目前模式。</p></header><div class='character-layout'><nav class='character-list'>${state.save.characters.map((item) => `<button class='${item.id === character.id ? 'is-active' : ''}' type='button' data-action='edit-character' data-id='${item.id}'><span class='character-thumb'><img style='--thumb-width:${Number(item.thumbnailWidth) || 100}%' src='${item.image}' alt=''></span><span><strong>${html(item.name)}</strong><small>${html(item.role)}</small></span></button>`).join('')}</nav><form id='characterForm'><input type='hidden' name='id' value='${character.id}'><div class='character-top'><div><div class='field'><label>顧客名稱</label><input name='name' maxlength='40' value='${attr(character.name)}'></div><div class='field'><label>聲線</label><select name='voice'>${VOICES.map((voice) => `<option ${voice === character.voice ? 'selected' : ''}>${voice}</option>`).join('')}</select></div></div><div class='portrait'><img style='--portrait-width:${portraitWidth}%' src='${character.image}' alt='${attr(character.name)}'></div></div><div class='field'><label>固定人設</label><textarea name='persona' maxlength='4000'>${html(character.persona)}</textarea></div><div class='memories'>${character.memories.map((memory) => `<div class='memory'><label class='memory-lock' title='鎖定記憶'><input type='checkbox' name='memory-lock-${memory.id}' ${memory.locked ? 'checked' : ''}><span aria-hidden='true'>${memory.locked ? '◆' : '◇'}</span><span class='sr-only'>鎖定</span></label><input name='memory-${memory.id}' maxlength='500' value='${attr(memory.content)}' aria-label='記憶內容'><label class='memory-importance'><span>重要度</span><select name='memory-importance-${memory.id}' aria-label='記憶重要度'>${[1,2,3,4,5].map((level) => `<option value='${level}' ${level === memory.importance ? 'selected' : ''}>${level}</option>`).join('')}</select></label><button type='button' data-action='delete-memory' data-id='${memory.id}' aria-label='刪除'>×</button></div>`).join('')}</div><div class='field' style='margin-top:10px'><label>新增記憶</label><div style='display:flex;gap:8px'><input id='newMemory' maxlength='500' placeholder='值得長期記住的內容'><button class='secondary' type='button' data-action='add-memory'>新增</button></div></div><div class='form-actions'><button class='danger' type='button' data-action='reset-character'>重設此角色</button><button class='primary' type='submit'>儲存角色</button></div></form></div>`;
 }
 
 async function handleClick(event) {
@@ -148,7 +145,12 @@ async function handleClick(event) {
   else if (action === 'settings') openSettings(tab);
   else if (action === 'close') { state.overlay = null; render(); }
   else if (action === 'tab') { state.settingsTab = tab; render(); }
-  else if (action === 'edit-character') { state.editingId = id; render(); }
+  else if (action === 'edit-character') {
+    const scrollTop = button.closest('.character-list')?.scrollTop || 0;
+    state.editingId = id; render();
+    const list = app.querySelector('.character-list');
+    if (list) list.scrollTop = scrollTop;
+  }
   else if (action === 'talk') await startCall(id);
   else if (action === 'end') await endCall();
   else if (action === 'captions') { state.settings = saveSettings({ ...state.settings, captionsVisible: !state.settings.captionsVisible }); render(); }
@@ -163,7 +165,6 @@ async function handleSubmit(event) {
   event.preventDefault();
   if (event.target.id === 'settingsForm') saveGeneralForm(event.target);
   else if (event.target.id === 'characterForm') saveCharacterForm(event.target);
-  else if (event.target.id === 'composer') await sendText(event.target);
 }
 
 async function handleChange(event) {
@@ -225,13 +226,15 @@ async function startCall(characterId) {
   const apiKey = getApiKey();
   if (!apiKey) { toast('請先在設定輸入 Gemini API key。'); return openSettings('general'); }
   const character = characterById(characterId);
-  const transcript = new SessionTranscript(state.settings.inputMode);
-  const call = { characterId, status: 'connecting', transcript, audio: null, session: null, audioErrorShown: false, startCuePlayed: false, startedAt: Date.now() };
-  state.call = call; state.simulation.setActive(characterId); state.textDraft = ''; render();
+  const transcript = new SessionTranscript();
+  const storyEncounterCount = character.encounterCount;
+  const storyConversation = state.mode === 'story' ? prepareStoryConversation(characterId, state.save.storyState, storyEncounterCount) : null;
+  const call = { characterId, status: 'connecting', transcript, storyConversation, storyEncounterCount, audio: null, session: null, audioErrorShown: false, startCuePlayed: false, startedAt: Date.now() };
+  state.call = call; state.simulation.setActive(characterId); render();
   try {
-    call.audio = new BrowserAudioEngine({ capture: state.settings.inputMode === 'voice', onAudioChunk: (bytes) => call.session?.sendAudio(bytes) });
+    call.audio = new BrowserAudioEngine({ capture: true, onAudioChunk: (bytes) => call.session?.sendAudio(bytes) });
     await call.audio.start();
-    call.session = new LiveSession({ apiKey, liveModelName: state.settings.liveModelName, inputMode: state.settings.inputMode, voice: character.voice, systemInstruction: buildSystemInstruction(character, selectMemories(character.memories), state.settings.playerName, state.mode) }, {
+    call.session = new LiveSession({ apiKey, liveModelName: state.settings.liveModelName, voice: character.voice, systemInstruction: buildSystemInstruction(character, selectMemories(character.memories), state.settings.playerName, state.mode, storyConversation?.instruction) }, {
       onStatus: (status) => {
         if (state.call !== call) return;
         call.status = status;
@@ -281,6 +284,7 @@ async function endCall() {
   state.call = null; state.simulation.setActive(null); state.historyOpen = false; render();
   if (!transcript.some((line) => line.role === 'user')) return toast('交談已結束，本次沒有足夠內容可整理。');
   toast('交談已結束，正在整理高信心記憶…');
+  if (mode === 'story') return finishStoryAnalysis({ apiKey, character, characterId, transcript, call, mode });
   try {
     const additions = await analyzeMemories(apiKey, character, transcript, character.memories, state.settings.memoryModelName);
     const target = mode === state.mode && state.save ? state.save : loadSave(mode);
@@ -291,23 +295,45 @@ async function endCall() {
   } catch (error) { toast(`記憶整理失敗：${error.message}`); }
 }
 
-async function sendText(form) {
-  const text = String(new FormData(form).get('message') || '').trim();
-  const call = state.call;
-  if (!text || !call?.session.ready) return;
-  try { await call.audio.preparePlayback(); }
-  catch (error) { return toast(`無法播放角色聲音：${error.message}`); }
-  if (state.call !== call || !call.session.ready) return;
-  call.audio.flushPlayback();
-  if (!call.session.sendText(text)) return;
-  call.transcript.onTextUser(text); state.textDraft = ''; render();
+async function finishStoryAnalysis({ apiKey, character, characterId, transcript, call, mode }) {
+  const [memoryResult, storyResult] = await Promise.allSettled([
+    analyzeMemories(apiKey, character, transcript, character.memories, state.settings.memoryModelName, { mode: 'story' }),
+    analyzeStoryEvents(apiKey, character, transcript, call.storyConversation, state.settings.memoryModelName),
+  ]);
+  const target = mode === state.mode && state.save ? state.save : loadSave(mode);
+  const storedCharacter = target.characters.find((item) => item.id === characterId);
+  const additions = memoryResult.status === 'fulfilled' ? memoryResult.value : [];
+  storedCharacter.memories.push(...additions);
+
+  let accepted = { revealedClueIds: [], disclosedClueIds: [] };
+  if (storyResult.status === 'fulfilled') {
+    const advanced = advanceStory(characterId, target.storyState, storyResult.value, call.storyEncounterCount);
+    target.storyState = advanced.state;
+    accepted = advanced.accepted;
+  }
+  const saved = saveMode(target);
+  if (mode === state.mode && state.save) state.save = saved;
+
+  const updates = [];
+  if (additions.length) updates.push(`${additions.length} 條記憶`);
+  if (accepted.revealedClueIds.length) updates.push(`${accepted.revealedClueIds.length} 條新線索`);
+  if (accepted.disclosedClueIds.length) updates.push(`${accepted.disclosedClueIds.length} 條角色知情`);
+  const failures = [];
+  if (memoryResult.status === 'rejected') {
+    console.warn('[Bartender Memory]', memoryResult.reason);
+    failures.push('關係記憶整理失敗');
+  }
+  if (storyResult.status === 'rejected') {
+    console.warn('[Bartender Story]', storyResult.reason);
+    failures.push('故事事件整理失敗');
+  }
+  if (failures.length) return toast(`${updates.length ? `已保存${updates.join('、')}；` : ''}${failures.join('、')}。`);
+  toast(updates.length ? `已為 ${storedCharacter.name} 保存${updates.join('、')}。` : '本次沒有新增長期記憶或故事進度。');
 }
 
 function updateCallDom() {
   const status = document.getElementById('statusText');
   if (status && state.call) { status.className = `status ${state.call.status}`; status.textContent = statusLabel(state.call.status); }
-  const textControls = document.querySelectorAll('#composer input[name="message"], #composer button[type="submit"]');
-  if (state.call) for (const control of textControls) control.disabled = ['connecting', 'reconnecting', 'ending'].includes(state.call.status);
   updateCaptionDom();
 }
 
@@ -327,7 +353,7 @@ function updateSimulation() {
 
 function saveGeneralForm(form) {
   const values = new FormData(form);
-  state.settings = saveSettings({ playerName: values.get('playerName'), inputMode: values.get('inputMode'), captionsVisible: values.get('captionsVisible') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
+  state.settings = saveSettings({ playerName: values.get('playerName'), captionsVisible: values.get('captionsVisible') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
   saveApiKey(values.get('apiKey'), state.settings.rememberApiKey); state.overlay = null; render(); toast('設定已儲存。');
 }
 
@@ -367,7 +393,7 @@ function characterById(id) { ensureSave(); return state.save.characters.find((ch
 function activeCharacter() { return state.call ? characterById(state.call.characterId) : null; }
 function modeLabel() { return state.mode === 'story' ? '灰燼群像' : '療癒夜話'; }
 function selectMemories(memories) { let used=0; return [...memories].sort((a,b)=>Number(b.locked)-Number(a.locked)||b.importance-a.importance||b.createdAt-a.createdAt).filter((memory)=>{const cost=memory.content.length;if(used+cost>3000)return false;used+=cost;return true;}); }
-function statusLabel(status) { return ({connecting:'正在連線…',reconnecting:'重新連線中…',connected:'文字連線中',listening:'正在聽你說',speaking:`${activeCharacter()?.name || '顧客'} 回應中`,failed:'連線失敗',ending:'正在結束…'})[status] || status; }
+function statusLabel(status) { return ({connecting:'正在連線…',reconnecting:'重新連線中…',connected:'語音連線中',listening:'正在聽你說',speaking:`${activeCharacter()?.name || '顧客'} 回應中`,failed:'連線失敗',ending:'正在結束…'})[status] || status; }
 function toast(message) { const element=document.createElement('div');element.className='toast';element.textContent=message;toastRegion.appendChild(element);setTimeout(()=>element.remove(),4200); }
 function html(value) { return String(value??'').replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]); }
 function attr(value) { return html(value).replace(/'/g,'&#39;'); }

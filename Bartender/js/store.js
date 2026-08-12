@@ -1,5 +1,6 @@
 import { createDefaultCharacters, defaultCharacter, VOICES } from './personas.js';
 import { DEFAULT_LIVE_MODEL, DEFAULT_MEMORY_MODEL, normalizeModelName } from './models.js';
+import { normalizeStoryState } from './story.js';
 
 const LEGACY_DEFAULT_MEMORY_MODEL = 'gemini-3.5-flash-lite';
 const SETTINGS_VERSION = 2;
@@ -14,7 +15,6 @@ export const STORAGE_KEYS = Object.freeze({
 
 export const DEFAULT_SETTINGS = Object.freeze({
   playerName: '酒保',
-  inputMode: 'voice',
   captionsVisible: true,
   rememberApiKey: false,
   liveModelName: DEFAULT_LIVE_MODEL,
@@ -69,7 +69,6 @@ function cleanSettings(value, migrateLegacyDefault = false) {
   return {
     version: SETTINGS_VERSION,
     playerName: String(value?.playerName || DEFAULT_SETTINGS.playerName).trim().slice(0, 40) || DEFAULT_SETTINGS.playerName,
-    inputMode: value?.inputMode === 'text' ? 'text' : 'voice',
     captionsVisible: value?.captionsVisible !== false,
     rememberApiKey: Boolean(value?.rememberApiKey),
     liveModelName: normalizeModelName(value?.liveModelName, DEFAULT_SETTINGS.liveModelName),
@@ -80,12 +79,14 @@ function cleanSettings(value, migrateLegacyDefault = false) {
 function cleanSave(value, mode) {
   const defaults = createDefaultCharacters(mode);
   const supplied = Array.isArray(value?.characters) ? value.characters : [];
-  return {
-    version: 1,
+  const clean = {
+    version: mode === 'story' ? 2 : 1,
     mode,
     characters: defaults.map((fallback) => cleanCharacter(supplied.find((item) => item?.id === fallback.id), fallback)),
     updatedAt: Number(value?.updatedAt) || Date.now(),
   };
+  if (mode === 'story') clean.storyState = normalizeStoryState(value?.storyState);
+  return clean;
 }
 
 function cleanCharacter(value, fallback) {
