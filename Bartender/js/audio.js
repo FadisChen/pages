@@ -141,6 +141,8 @@ export const TAVERN_SOUND_ASSETS = Object.freeze({
   chatter: './assets/sounds/tavern-chatter.mp3',
   pourSake: './assets/sounds/pour-sake.mp3',
   pourWater: './assets/sounds/pour-water.mp3',
+  shake: './assets/sounds/coffee_with_a_spoon.mp3',
+  clinking: './assets/sounds/clinking.mp3',
   ice: './assets/sounds/ice-into-glass.mp3',
 });
 
@@ -285,7 +287,7 @@ export class TavernSoundscape {
     if (!this.running) return;
     this.ambientAudio = this.createAudio(TAVERN_SOUND_ASSETS.chatter);
     this.ambientAudio.loop = true;
-    this.ambientAudio.volume = 0.075;
+    this.ambientAudio.volume = 0.12;
     void this.ambientAudio.play().catch((error) => this.onError?.(error));
   }
 
@@ -294,7 +296,7 @@ export class TavernSoundscape {
     const delay = 14000 + Math.round(this.random() * 16000);
     this.eventTimer = this.setTimeout(() => {
       if (!this.running) return;
-      const effects = ['pourSake', 'pourWater', 'ice'];
+      const effects = ['pourSake', 'pourWater', 'shake', 'clinking', 'ice'];
       const effect = effects[Math.floor(this.random() * effects.length)];
       this.playEffect(effect, 0.2);
       this.scheduleEvent();

@@ -19,19 +19,21 @@ const state = {
   call: null,
   historyOpen: false,
   overlay: null,
+  characterPreviewId: null,
   settingsTab: 'general',
   editingId: 'friend1',
   backgroundMusic: new BackgroundMusicPlayer(),
+  backgroundMusicRequest: null,
   soundscape: null,
   arrivedGuestIds: new Set(),
 };
 
 app.addEventListener('click', handleClick);
-app.addEventListener('change', handleChange);
 app.addEventListener('submit', handleSubmit);
 window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); void state.backgroundMusic.stop({ fade: false }); state.soundscape?.stop(); });
 window.setInterval(updateSimulation, 1000);
 render();
+void ensureHomeBackgroundMusic().catch(() => {});
 
 function render() {
   app.innerHTML = state.screen === 'bar' ? renderBar() : renderMenu();
@@ -67,8 +69,7 @@ function renderBar() {
         ${renderGuests()}
         <img class='scene-layer scene-front' src='./assets/place.png' alt='' aria-hidden='true'>
         <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'><button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
-        ${renderCaption()}
-        ${renderHistory()}
+        <div class='dialogue-stack'>${renderCaption()}${renderHistory()}</div>
         <div class='bgm-dock'>${renderBackgroundMusic()}</div>
         <div class='controls ${state.call ? '' : 'is-idle'}'>${renderControls()}</div>
       </section>
@@ -78,8 +79,13 @@ function renderBar() {
 
 function renderBackgroundMusic() {
   const selectedId = state.backgroundMusic.selectedId;
-  const options = BACKGROUND_MUSIC_TRACKS.map((track) => `<option value='${attr(track.id)}' ${track.id === selectedId ? 'selected' : ''}>${html(track.title)}</option>`).join('');
-  return `<label class='bgm-picker' for='backgroundMusic'><span aria-hidden='true'>♫</span><span class='sr-only'>背景音樂</span><select id='backgroundMusic' data-action='background-music' aria-label='背景音樂'><option value='' ${selectedId ? '' : 'selected'}>背景音樂：關閉</option>${options}</select></label>`;
+  const selectedTrack = BACKGROUND_MUSIC_TRACKS.find((track) => track.id === selectedId);
+  const selectedTitle = selectedTrack?.title || '背景音樂：關閉';
+  const options = [
+    { id: '', title: '背景音樂：關閉' },
+    ...BACKGROUND_MUSIC_TRACKS,
+  ].map((track) => `<button class='bgm-option ${track.id === selectedId ? 'is-selected' : ''}' type='button' role='option' aria-selected='${track.id === selectedId}' data-action='background-music' data-id='${attr(track.id)}'>${html(track.title)}</button>`).join('');
+  return `<details class='bgm-picker'><summary><span aria-hidden='true'>♫</span><span class='sr-only'>背景音樂</span><span class='bgm-current'>${html(selectedTitle)}</span><span class='bgm-chevron' aria-hidden='true'>⌄</span></summary><div class='bgm-options' role='listbox' aria-label='背景音樂'>${options}</div></details>`;
 }
 
 function renderGuests() {
@@ -121,7 +127,13 @@ function renderControls() {
 
 function renderOverlay() {
   const general = state.settingsTab === 'general';
-  return `<div class='overlay' role='dialog' aria-modal='true' aria-labelledby='settingsTitle'><section class='settings'><nav class='settings-nav'><p class='eyebrow'>Local tavern</p><h1 id='settingsTitle'>酒館設定</h1><button class='${general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='general'>⚙　全域設定</button><button class='${!general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='characters'>♙　角色設定</button><button class='close' type='button' data-action='close'>←　返回</button></nav><div class='settings-content'>${general ? renderGeneralSettings() : renderCharacterSettings()}</div></section></div>`;
+  return `<div class='overlay' role='dialog' aria-modal='true' aria-labelledby='settingsTitle'><section class='settings'><nav class='settings-nav'><p class='eyebrow'>Local tavern</p><h1 id='settingsTitle'>酒館設定</h1><button class='${general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='general'>⚙　全域設定</button><button class='${!general ? 'is-active' : ''}' type='button' data-action='tab' data-tab='characters'>♙　角色設定</button><button class='close' type='button' data-action='close'>←　返回</button></nav><div class='settings-content'>${general ? renderGeneralSettings() : renderCharacterSettings()}</div></section>${state.characterPreviewId ? renderCharacterPreview() : ''}</div>`;
+}
+
+function renderCharacterPreview() {
+  const character = characterById(state.characterPreviewId);
+  if (!character) return '';
+  return `<div class='character-preview' role='dialog' aria-modal='true' aria-labelledby='characterPreviewTitle'><button class='character-preview-scrim' type='button' data-action='close-character-preview' aria-label='關閉角色全圖'></button><section class='character-preview-card'><header><div><p class='eyebrow'>Character portrait</p><h2 id='characterPreviewTitle'>${html(character.name)}</h2></div><button class='character-preview-close' type='button' data-action='close-character-preview' aria-label='關閉'>×</button></header><figure><img src='${character.image}' alt='${attr(character.name)} 全身立繪'></figure><small>點擊外側區域關閉</small></section></div>`;
 }
 
 function renderGeneralSettings() {
@@ -132,27 +144,31 @@ function renderCharacterSettings() {
   ensureSave();
   const character = characterById(state.editingId) || state.save.characters[0];
   const portraitWidth = Number(character.portraitWidth) || 116;
-  return `<header class='settings-head'><div><p class='eyebrow'>${modeLabel()} · independent save</p><h2>角色設定</h2></div><p>立繪固定；資料只影響目前模式。</p></header><div class='character-layout'><nav class='character-list'>${state.save.characters.map((item) => `<button class='${item.id === character.id ? 'is-active' : ''}' type='button' data-action='edit-character' data-id='${item.id}'><span class='character-thumb'><img style='--thumb-width:${Number(item.thumbnailWidth) || 100}%' src='${item.image}' alt=''></span><span><strong>${html(item.name)}</strong><small>${html(item.role)}</small></span></button>`).join('')}</nav><form id='characterForm'><input type='hidden' name='id' value='${character.id}'><div class='character-top'><div><div class='field'><label>顧客名稱</label><input name='name' maxlength='40' value='${attr(character.name)}'></div><div class='field'><label>聲線</label><select name='voice'>${VOICES.map((voice) => `<option ${voice === character.voice ? 'selected' : ''}>${voice}</option>`).join('')}</select></div></div><div class='portrait'><img style='--portrait-width:${portraitWidth}%' src='${character.image}' alt='${attr(character.name)}'></div></div><div class='field'><label>固定人設</label><textarea name='persona' maxlength='4000'>${html(character.persona)}</textarea></div><div class='memories'>${character.memories.map((memory) => `<div class='memory'><label class='memory-lock' title='鎖定記憶'><input type='checkbox' name='memory-lock-${memory.id}' ${memory.locked ? 'checked' : ''}><span aria-hidden='true'>${memory.locked ? '◆' : '◇'}</span><span class='sr-only'>鎖定</span></label><input name='memory-${memory.id}' maxlength='500' value='${attr(memory.content)}' aria-label='記憶內容'><label class='memory-importance'><span>重要度</span><select name='memory-importance-${memory.id}' aria-label='記憶重要度'>${[1,2,3,4,5].map((level) => `<option value='${level}' ${level === memory.importance ? 'selected' : ''}>${level}</option>`).join('')}</select></label><button type='button' data-action='delete-memory' data-id='${memory.id}' aria-label='刪除'>×</button></div>`).join('')}</div><div class='field' style='margin-top:10px'><label>新增記憶</label><div style='display:flex;gap:8px'><input id='newMemory' maxlength='500' placeholder='值得長期記住的內容'><button class='secondary' type='button' data-action='add-memory'>新增</button></div></div><div class='form-actions'><button class='danger' type='button' data-action='reset-character'>重設此角色</button><button class='primary' type='submit'>儲存角色</button></div></form></div>`;
+  return `<header class='settings-head'><div><p class='eyebrow'>${modeLabel()} · independent save</p><h2>角色設定</h2></div><p>立繪固定；資料只影響目前模式。</p></header><div class='character-layout'><nav class='character-list'>${state.save.characters.map((item) => `<button class='${item.id === character.id ? 'is-active' : ''}' type='button' data-action='edit-character' data-id='${item.id}'><span class='character-thumb'><img style='--thumb-width:${Number(item.thumbnailWidth) || 100}%' src='${item.image}' alt=''></span><span><strong>${html(item.name)}</strong><small>${html(item.role)}</small></span></button>`).join('')}</nav><form id='characterForm'><input type='hidden' name='id' value='${character.id}'><div class='character-top'><div><div class='field'><label>顧客名稱</label><input name='name' maxlength='40' value='${attr(character.name)}'></div><div class='field'><label>聲線</label><select name='voice'>${VOICES.map((voice) => `<option ${voice === character.voice ? 'selected' : ''}>${voice}</option>`).join('')}</select></div></div><button class='portrait' type='button' data-action='preview-character' data-id='${character.id}' aria-label='查看 ${attr(character.name)} 全圖'><img style='--portrait-width:${portraitWidth}%' src='${character.image}' alt='${attr(character.name)}'></button></div><div class='field'><label>固定人設</label><textarea name='persona' maxlength='4000'>${html(character.persona)}</textarea></div><div class='memories'>${character.memories.map((memory) => `<div class='memory'><label class='memory-lock' title='鎖定記憶'><input type='checkbox' name='memory-lock-${memory.id}' ${memory.locked ? 'checked' : ''}><span aria-hidden='true'>${memory.locked ? '◆' : '◇'}</span><span class='sr-only'>鎖定</span></label><input name='memory-${memory.id}' maxlength='500' value='${attr(memory.content)}' aria-label='記憶內容'><label class='memory-importance'><span>重要度</span><select name='memory-importance-${memory.id}' aria-label='記憶重要度'>${[1,2,3,4,5].map((level) => `<option value='${level}' ${level === memory.importance ? 'selected' : ''}>${level}</option>`).join('')}</select></label><button type='button' data-action='delete-memory' data-id='${memory.id}' aria-label='刪除'>×</button></div>`).join('')}</div><div class='field' style='margin-top:10px'><label>新增記憶</label><div style='display:flex;gap:8px'><input id='newMemory' maxlength='500' placeholder='值得長期記住的內容'><button class='secondary' type='button' data-action='add-memory'>新增</button></div></div><div class='form-actions'><button class='danger' type='button' data-action='reset-character'>重設此角色</button><button class='primary' type='submit'>儲存角色</button></div></form></div>`;
 }
 
 async function handleClick(event) {
   const button = event.target.closest('[data-action]');
   if (!button) return;
+  if (state.screen === 'menu') void ensureHomeBackgroundMusic().catch(() => {});
   const { action, mode, tab, id } = button.dataset;
   if (action === 'mode') { state.mode = mode; state.editingId = 'friend1'; render(); }
   else if (action === 'enter') enterBar();
   else if (action === 'menu') { if (state.call) return toast('請先結束目前的交談。'); leaveBar(); }
   else if (action === 'settings') openSettings(tab);
-  else if (action === 'close') { state.overlay = null; render(); }
-  else if (action === 'tab') { state.settingsTab = tab; render(); }
+  else if (action === 'close') { state.overlay = null; state.characterPreviewId = null; render(); }
+  else if (action === 'close-character-preview') { state.characterPreviewId = null; render(); }
+  else if (action === 'preview-character') { state.characterPreviewId = id; render(); }
+  else if (action === 'tab') { state.settingsTab = tab; state.characterPreviewId = null; render(); }
   else if (action === 'edit-character') {
     const scrollTop = button.closest('.character-list')?.scrollTop || 0;
-    state.editingId = id; render();
+    state.editingId = id; state.characterPreviewId = null; render();
     const list = app.querySelector('.character-list');
     if (list) list.scrollTop = scrollTop;
   }
   else if (action === 'talk') await startCall(id);
   else if (action === 'end') await endCall();
+  else if (action === 'background-music') await selectBackgroundMusic(id, button);
   else if (action === 'captions') { state.settings = saveSettings({ ...state.settings, captionsVisible: !state.settings.captionsVisible }); render(); }
   else if (action === 'history') { state.historyOpen = !state.historyOpen; render(); }
   else if (action === 'test-model') await testModel(button);
@@ -167,23 +183,14 @@ async function handleSubmit(event) {
   else if (event.target.id === 'characterForm') saveCharacterForm(event.target);
 }
 
-async function handleChange(event) {
-  const select = event.target.closest?.('[data-action="background-music"]');
-  if (!select) return;
-  select.disabled = true;
+async function selectBackgroundMusic(trackId, button) {
+  if (button) button.disabled = true;
   try {
-    await state.backgroundMusic.select(select.value);
+    await (trackId === DEFAULT_BACKGROUND_MUSIC_ID ? selectDefaultBackgroundMusic() : state.backgroundMusic.select(trackId));
+    render();
   } catch (error) {
+    if (button) button.disabled = false;
     toast(`無法播放背景音樂：${error.message}`);
-  }
-  syncBackgroundMusicControl();
-}
-
-function syncBackgroundMusicControl() {
-  const current = document.getElementById('backgroundMusic');
-  if (current) {
-    current.value = state.backgroundMusic.selectedId;
-    current.disabled = false;
   }
 }
 
@@ -197,28 +204,38 @@ function enterBar() {
   state.screen = 'bar';
   state.historyOpen = false;
   render();
-  const defaultMusic = state.backgroundMusic.select(DEFAULT_BACKGROUND_MUSIC_ID);
-  const control = document.getElementById('backgroundMusic');
-  if (control) {
-    control.value = DEFAULT_BACKGROUND_MUSIC_ID;
-    control.disabled = true;
-  }
-  void defaultMusic.then(syncBackgroundMusicControl).catch((error) => {
-    syncBackgroundMusicControl();
+  void selectDefaultBackgroundMusic().then(render).catch((error) => {
+    render();
     toast(`無法播放預設背景音樂：${error.message}`);
   });
 }
 
+function ensureHomeBackgroundMusic() {
+  if (state.screen !== 'menu') return Promise.resolve(false);
+  return selectDefaultBackgroundMusic();
+}
+
+function selectDefaultBackgroundMusic() {
+  if (state.backgroundMusic.selectedId === DEFAULT_BACKGROUND_MUSIC_ID && state.backgroundMusic.currentAudio) return Promise.resolve(true);
+  if (state.backgroundMusicRequest) return state.backgroundMusicRequest;
+  const request = state.backgroundMusic.select(DEFAULT_BACKGROUND_MUSIC_ID);
+  const trackedRequest = request.finally(() => {
+    if (state.backgroundMusicRequest === trackedRequest) state.backgroundMusicRequest = null;
+  });
+  state.backgroundMusicRequest = trackedRequest;
+  return trackedRequest;
+}
+
 function leaveBar() {
-  void state.backgroundMusic.stop();
+  void selectDefaultBackgroundMusic().catch(() => {});
   state.soundscape?.stop();
   state.soundscape = null;
-  state.screen = 'menu'; state.save = null; state.simulation = null; state.guests = []; state.overlay = null; render();
+  state.screen = 'menu'; state.save = null; state.simulation = null; state.guests = []; state.overlay = null; state.characterPreviewId = null; render();
 }
 
 function openSettings(tab) {
   if (state.call) return toast('請先結束目前的交談再調整設定。');
-  state.settingsTab = tab || 'general'; state.overlay = 'settings'; ensureSave(); render();
+  state.settingsTab = tab || 'general'; state.overlay = 'settings'; state.characterPreviewId = null; ensureSave(); render();
 }
 
 async function startCall(characterId) {
@@ -346,8 +363,23 @@ function updateSimulation() {
   if (state.screen !== 'bar' || state.overlay || !state.simulation) return;
   const events = state.simulation.tick();
   if (events.length) {
-    for (const event of events) if (event.type === 'left') state.arrivedGuestIds.delete(event.characterId);
-    state.guests = state.simulation.snapshot(); render();
+    let shouldRender = false;
+    for (const event of events) {
+      if (event.type === 'arrival-door') {
+        state.soundscape?.playEffect('door', 0.42);
+        continue;
+      }
+      if (event.type === 'left') {
+        state.arrivedGuestIds.delete(event.characterId);
+        state.soundscape?.playEffect('door', 0.42);
+        shouldRender = true;
+        continue;
+      }
+      if (event.type === 'arrived') shouldRender = true;
+    }
+    if (shouldRender) {
+      state.guests = state.simulation.snapshot(); render();
+    }
   }
 }
 

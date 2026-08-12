@@ -10,10 +10,12 @@ export class GuestSimulation {
     this.cooldowns = new Map();
     this.activeId = null;
     this.nextArrivalAt = 0;
+    this.arrivalDoorPlayed = false;
   }
 
   start() {
     this.guests = [];
+    this.arrivalDoorPlayed = false;
     const count = 1 + Math.floor(this.random() * 2);
     for (let index = 0; index < count; index += 1) this.arrive(this.now());
     this.nextArrivalAt = this.now() + between(this.random, 120000, 240000);
@@ -31,12 +33,17 @@ export class GuestSimulation {
         events.push({ type: 'left', characterId: guest.characterId });
       }
     }
+    if (!this.arrivalDoorPlayed && at >= this.nextArrivalAt - 2000 && at < this.nextArrivalAt && this.guests.length < 4) {
+      this.arrivalDoorPlayed = true;
+      events.push({ type: 'arrival-door' });
+    }
     if (at >= this.nextArrivalAt) {
       if (this.guests.length < 4) {
         const guest = this.arrive(at);
         if (guest) events.push({ type: 'arrived', characterId: guest.characterId });
       }
       this.nextArrivalAt = at + between(this.random, 120000, 240000);
+      this.arrivalDoorPlayed = false;
     }
     return events;
   }
