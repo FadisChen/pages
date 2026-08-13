@@ -151,6 +151,8 @@ export const DEFAULT_BACKGROUND_MUSIC_ID = 'dust-on-my-boots';
 export const BACKGROUND_MUSIC_TRACKS = Object.freeze([
   { id: DEFAULT_BACKGROUND_MUSIC_ID, title: 'Dust On My Boots', src: './assets/bgm/Dust On My Boots.mp3' },
   { id: 'dust-on-my-boots-2', title: 'Dust On My Boots 2', src: './assets/bgm/Dust On My Boots2.mp3' },
+  { id: 'Lanterns-at-the-Inn', title: 'Lanterns at the Inn', src: './assets/bgm/Lanterns at the Inn.mp3' },
+  { id: 'Roadside-Inn-Ballad', title: 'Roadside Inn Ballad', src: './assets/bgm/Roadside Inn Ballad.mp3' },
   { id: 'adventure', title: '中年探險', src: './assets/bgm/中年探險.mp3' },
   { id: 'edge-of-time', title: '我站在時間的邊緣', src: './assets/bgm/我站在時間的邊緣.mp3' },
   { id: 'homeward-wind', title: '歸途的風', src: './assets/bgm/歸途的風.mp3' },
