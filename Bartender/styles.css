@@ -91,7 +91,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dialogue-stack { position:absolute; z-index:16; display:grid; width:min(720px,calc(100% - 170px)); gap:8px; top:clamp(18px,7%,68px); left:50%; transform:translateX(-50%); pointer-events:none; }
 .dialogue-stack > * { pointer-events:auto; }
 .caption { position:relative; z-index:13; width:100%; padding:13px 48px 13px 20px; border:1px solid rgba(255,220,158,.22); border-radius:18px; background:linear-gradient(90deg,rgba(19,9,6,.62),rgba(50,24,14,.46)); box-shadow:0 14px 40px rgba(0,0,0,.24); backdrop-filter:blur(11px) saturate(1.08); }
-.caption p { margin:0; font-size:clamp(11px,1.2vw,16px); line-height:1.55; overflow-wrap:anywhere; text-align:center; }
+.caption p { display:grid; grid-template-columns:auto 1fr; gap:0 9px; margin:0; font-size:clamp(11px,1.2vw,16px); line-height:1.55; overflow-wrap:anywhere; text-align:left; }
+.caption p strong { white-space:nowrap; }
 .caption p.is-muted { color: rgba(246,231,200,.62); font-style: italic; }
 .caption strong { color: var(--gold); }
 .caption-actions { position: absolute; display: flex; top: 6px; right: 7px; }

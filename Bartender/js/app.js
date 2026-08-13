@@ -121,7 +121,7 @@ function renderCaption() {
     text = state.call.status === 'connecting' || state.call.status === 'reconnecting' ? '正在連上另一端的聲音…' : state.call.transcript.currentModel() || '今晚想從哪裡開始聊？';
     muted = state.call.status === 'connecting' || state.call.status === 'reconnecting';
   }
-  return `<div class='caption'><p class='${muted ? 'is-muted' : ''}'>${character ? `<strong>${html(character.name)}　</strong>` : ''}<span id='captionText'>${html(text)}</span></p><div class='caption-actions'><button type='button' data-action='history' aria-label='回看最近五次'>☷</button></div></div>`;
+  return `<div class='caption'><p class='${muted ? 'is-muted' : ''}'><strong>${character ? html(character.name) : ''}</strong><span id='captionText'>${html(text)}</span></p><div class='caption-actions'><button type='button' data-action='history' aria-label='回看最近五次'>☷</button></div></div>`;
 }
 
 function renderHistory() {
@@ -194,10 +194,11 @@ async function handleClick(event) {
 
 async function handleSubmit(event) {
   event.preventDefault();
-  if (event.target.id === 'settingsForm') saveGeneralForm(event.target);
-  else if (event.target.id === 'characterForm') saveCharacterForm(event.target);
-  else if (event.target.id === 'deductionForm') submitDeductionForm(event.target);
-  else if (event.target.id === 'accusationForm') submitAccusationForm(event.target);
+  const formId = event.target.getAttribute('id');
+  if (formId === 'settingsForm') saveGeneralForm(event.target);
+  else if (formId === 'characterForm') saveCharacterForm(event.target);
+  else if (formId === 'deductionForm') submitDeductionForm(event.target);
+  else if (formId === 'accusationForm') submitAccusationForm(event.target);
 }
 
 function renderStoryBoardOverlay() {
