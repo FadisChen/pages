@@ -3,7 +3,7 @@ import { DEFAULT_LIVE_MODEL, DEFAULT_MEMORY_MODEL, normalizeModelName } from './
 import { normalizeStoryState } from './story.js';
 
 const LEGACY_DEFAULT_MEMORY_MODEL = 'gemini-3.5-flash-lite';
-const SETTINGS_VERSION = 2;
+const SETTINGS_VERSION = 3;
 
 export const STORAGE_KEYS = Object.freeze({
   settings: 'myfriends.bartender.settings.v1',
@@ -15,6 +15,7 @@ export const STORAGE_KEYS = Object.freeze({
 
 export const DEFAULT_SETTINGS = Object.freeze({
   playerName: '酒保',
+  interactionMode: 'voice',
   captionsVisible: true,
   backgroundMusicAutoPlay: false,
   rememberApiKey: false,
@@ -70,6 +71,7 @@ function cleanSettings(value, migrateLegacyDefault = false) {
   return {
     version: SETTINGS_VERSION,
     playerName: String(value?.playerName || DEFAULT_SETTINGS.playerName).trim().slice(0, 40) || DEFAULT_SETTINGS.playerName,
+    interactionMode: value?.interactionMode === 'text' ? 'text' : DEFAULT_SETTINGS.interactionMode,
     captionsVisible: value?.captionsVisible !== false,
     backgroundMusicAutoPlay: Boolean(value?.backgroundMusicAutoPlay),
     rememberApiKey: Boolean(value?.rememberApiKey),

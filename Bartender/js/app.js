@@ -1,5 +1,5 @@
 import { BACKGROUND_MUSIC_TRACKS, DEFAULT_BACKGROUND_MUSIC_ID, BackgroundMusicPlayer, BrowserAudioEngine, TavernSoundscape } from './audio.js';
-import { analyzeMemories, analyzeStoryEvents, buildSystemInstruction, checkModel, LiveSession } from './gemini.js';
+import { analyzeMemories, analyzeStoryEvents, buildSystemInstruction, checkModel, LiveSession, TextSession } from './gemini.js';
 import { VOICES } from './personas.js';
 import { ACCUSATION_OPTIONS, CLUES, advanceStory, getStoryBoard, pinStoryRoute, prepareStoryConversation, recordStoryInteraction, submitAccusation, submitDeduction } from './story.js';
 import { GuestSimulation, SEAT_DEPTHS, SEAT_POSITIONS } from './simulation.js';
@@ -18,6 +18,7 @@ const state = {
   simulation: null,
   guests: [],
   call: null,
+  textDraft: '',
   historyOpen: false,
   overlay: null,
   characterPreviewId: null,
@@ -35,7 +36,9 @@ const state = {
 
 app.addEventListener('click', handleClick);
 app.addEventListener('submit', handleSubmit);
-window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio.stop(); void state.backgroundMusic.stop({ fade: false }); state.soundscape?.stop(); });
+app.addEventListener('input', handleInput);
+app.addEventListener('keydown', handleKeydown);
+window.addEventListener('beforeunload', () => { state.call?.session.stop(false); void state.call?.audio?.stop(); void state.backgroundMusic.stop({ fade: false }); state.soundscape?.stop(); });
 window.setInterval(updateSimulation, 1000);
 render();
 void ensureHomeBackgroundMusic().catch(() => {});
@@ -54,13 +57,17 @@ function renderMenu() {
         <div class='menu-card'>
           <p class='eyebrow'>Choose tonight's tale</p><h2>今晚想聽哪一種故事？</h2>
           <div class='mode-list'>${modeCard('cozy', '☕', '療癒夜話', '陪伴、近況與慢慢熟識')}${modeCard('story', '✦', '灰燼群像', '線索、祕密與彼此牽連')}</div>
-          <div class='menu-actions'><button class='primary' type='button' data-action='enter'>推開酒館的門　→</button><button class='secondary' type='button' data-action='settings' data-tab='general'>設定</button><button class='secondary' type='button' data-action='settings' data-tab='characters'>角色</button></div>
+          <div class='menu-actions'><button class='primary' type='button' data-action='enter'>推開酒館的門　→</button><button class='secondary' type='button' data-action='settings' data-tab='characters'>角色</button><button class='secondary' type='button' data-action='settings' data-tab='general'>設定</button></div>
         </div>
       </section>
       ${state.overlay ? renderOverlay() : ''}
     </main>`;
 }
 
+function renderCaptionControl() {
+  if (state.settings.interactionMode === 'text') return '';
+  return `<button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button>`;
+}
 function modeCard(id, symbol, title, description) {
   return `<button class='mode-card ${state.mode === id ? 'is-selected' : ''}' type='button' data-action='mode' data-mode='${id}'><span>${symbol}</span><span><strong>${title}</strong><small>${description}</small></span><b>${state.mode === id ? '✓' : ''}</b></button>`;
 }
@@ -74,8 +81,8 @@ function renderBar() {
         <div class='scene-shade'></div>
         ${renderGuests()}
         <img class='scene-layer scene-front' src='./assets/place.png' alt='' aria-hidden='true'>
-        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'>${state.mode === 'story' ? `<button class='round casebook-button' type='button' data-action='story-board' aria-label='開啟案件簿' title='案件簿'>✦</button>` : ''}<button class='round caption-hud ${state.settings.captionsVisible ? '' : 'is-off'}' type='button' data-action='captions' aria-label='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}' title='${state.settings.captionsVisible ? '隱藏字幕' : '顯示字幕'}'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M5 6.5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1-2 2Z'/><path d='M7 11h3m4 0h3M7 14h5m2 0h3'/>${state.settings.captionsVisible ? '' : `<path class='caption-slash' d='m4 4 16 16'/>`}</svg></button><button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
-        <div class='dialogue-stack'>${renderCaption()}${renderHistory()}</div>
+        <header class='hud'><div class='identity'><button class='round' type='button' data-action='menu' aria-label='返回主選單'>←</button><div><strong>陋室</strong><small>${modeLabel()} · ${html(state.settings.playerName)}</small></div></div><div class='hud-actions'>${state.mode === 'story' ? `<button class='round casebook-button' type='button' data-action='story-board' aria-label='開啟案件簿' title='案件簿'>✦</button>` : ''}${renderCaptionControl()}<button class='round' type='button' data-action='settings' data-tab='general' aria-label='設定'>⚙</button></div></header>
+        <div class='dialogue-stack'>${state.call?.interactionMode === 'text' ? renderTextConversation() : `${renderCaption()}${renderHistory()}`}</div>
         <div class='bgm-dock'>${renderBackgroundMusic()}</div>
         <div class='controls ${state.call ? '' : 'is-idle'}'>${renderControls()}</div>
       </section>
@@ -130,11 +137,38 @@ function renderHistory() {
   return `<section class='history'><header><h2>本次最近回覆</h2><button type='button' data-action='history'>關閉</button></header>${lines.length ? lines.map((line) => `<div class='history-row'><strong>${html(activeCharacter()?.name || '顧客')}</strong><p>${html(line.text)}</p></div>`).join('') : `<p class='history-empty'>交談開始後，角色回覆會暫時出現在這裡。</p>`}</section>`;
 }
 
-function renderControls() {
-  if (!state.call) return `<div class='session-status'><span class='status'>想和誰聊聊</span></div>`;
-  return `<div class='session-status'><span id='statusText' class='status ${state.call.status}'>${statusLabel(state.call.status)}</span></div><div class='control-end'><button class='danger' type='button' data-action='end' ${state.call.status === 'ending' ? 'disabled' : ''}>結束</button></div>`;
+function renderTextConversation() {
+  const expanded = state.historyOpen;
+  return `<section class='text-conversation ${expanded ? 'is-expanded' : 'is-collapsed'}' id='textConversation' data-action='history' role='button' tabindex='0' aria-live='polite' aria-expanded='${expanded}' aria-label='${expanded ? '收合文字交談紀錄' : '展開文字交談紀錄'}'>${renderTextConversationContent()}${expanded ? `<small class='conversation-toggle'>點擊收合對話歷史</small>` : ''}</section>`;
 }
 
+function renderTextConversationContent() {
+  const character = activeCharacter();
+  const lines = state.call?.transcript.conversationHistory() || [];
+  const shownLines = state.historyOpen
+    ? lines
+    : [...lines].reverse().find((line) => line.role === 'model');
+  if (shownLines && !Array.isArray(shownLines)) {
+    return `<article class='conversation-row is-model'><strong>${html(character?.name || '顧客')}</strong><p>${html(shownLines.text)}</p></article>`;
+  }
+  if (Array.isArray(shownLines) && shownLines.length) {
+    return shownLines.map((line) => `<article class='conversation-row ${line.role === 'user' ? 'is-user' : 'is-model'}'><strong>${html(line.role === 'user' ? state.settings.playerName : character?.name || '顧客')}</strong><p>${html(line.text)}</p></article>`).join('');
+  }
+  const waiting = state.call?.transcript.textStreaming ? '角色正在回應…' : '輸入一句話，讓今晚的交談開始。';
+  return `<p class='conversation-empty'>${waiting}</p>`;
+}
+
+function renderControls() {
+  if (!state.call) return `<div class='session-status'><span class='status'>想和誰聊聊</span></div>`;
+  const ending = state.call.status === 'ending';
+  const textMode = state.call.interactionMode === 'text';
+  const disabled = ending || (textMode && state.call.status !== 'connected');
+  const endButton = `<button class='danger composer-end' type='button' data-action='end' ${ending ? 'disabled' : ''}>結束</button>`;
+  const composer = textMode
+    ? `<form class='composer' id='composer'><input name='message' maxlength='1000' autocomplete='off' value='${attr(state.textDraft)}' placeholder='輸入想說的話…' ${disabled ? 'disabled' : ''}>${endButton}</form>`
+    : '';
+  return `<div class='session-status'><span id='statusText' class='status ${state.call.status}'>${statusLabel(state.call.status)}</span></div>${textMode ? composer : `<div class='control-end'>${endButton}</div>`}`;
+}
 function renderOverlay() {
   if (state.overlay === 'story-board') return renderStoryBoardOverlay();
   const general = state.settingsTab === 'general';
@@ -150,9 +184,8 @@ function renderCharacterPreview() {
 }
 
 function renderGeneralSettings() {
-  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示角色單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel'><h3>背景音樂</h3><div class='switch-row'><div><strong>自動輪播背景音樂</strong><small>開啟後依序換歌；關閉時目前歌曲單曲循環</small></div><label class='switch'><input name='backgroundMusicAutoPlay' type='checkbox' ${state.settings.backgroundMusicAutoPlay ? 'checked' : ''}><span></span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>整理記憶的 model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
+  return `<form id='settingsForm'><header class='settings-head'><div><p class='eyebrow'>Shared between both ledgers</p><h2>全域設定</h2></div><p>角色與記憶只留在這台瀏覽器。</p></header><div class='settings-grid'><section class='panel'><h3>酒保身份</h3><div class='field'><label for='playerName'>角色稱呼</label><input id='playerName' name='playerName' maxlength='40' value='${attr(state.settings.playerName)}'></div><div class='switch-row'><div><strong>顯示角色單句字幕</strong><small>遊戲中仍可隨時關閉</small></div><label class='switch'><input name='captionsVisible' type='checkbox' ${state.settings.captionsVisible ? 'checked' : ''}><span></span></label></div></section><section class='panel'><h3>互動模式</h3><div class='choices'><label class='choice'><input type='radio' name='interactionMode' value='voice' ${state.settings.interactionMode === 'voice' ? 'checked' : ''}><span>語音</span></label><label class='choice'><input type='radio' name='interactionMode' value='text' ${state.settings.interactionMode === 'text' ? 'checked' : ''}><span>文字</span></label></div><small class='settings-note'>文字模式使用「整理記憶的 model name」進行串流回覆。</small></section><section class='panel full'><h3>背景音樂</h3><div class='switch-row'><div><strong>自動輪播背景音樂</strong><small>開啟後依序換歌；關閉時目前歌曲單曲循環</small></div><label class='switch'><input name='backgroundMusicAutoPlay' type='checkbox' ${state.settings.backgroundMusicAutoPlay ? 'checked' : ''}><span></span></label></div></section><section class='panel full'><h3>Gemini API</h3><div class='field'><label for='apiKey'>API key</label><input id='apiKey' name='apiKey' type='password' autocomplete='off' value='${attr(getApiKey())}' placeholder='AIza…'></div><div class='model-fields'><div class='field'><label for='liveModelName'>Live model name</label><input id='liveModelName' name='liveModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.liveModelName)}' placeholder='gemini-3.1-flash-live-preview'><small>語音即時交談使用</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='liveModelName' data-model-kind='Live'>測試 Live 模型</button></div><div class='field'><label for='memoryModelName'>Text model name</label><input id='memoryModelName' name='memoryModelName' maxlength='160' spellcheck='false' value='${attr(state.settings.memoryModelName)}' placeholder='gemini-3.1-flash-lite'><small>文字互動及交談結束後萃取長期記憶</small><button class='secondary model-test' type='button' data-action='test-model' data-model-input='memoryModelName' data-model-kind='記憶'>測試記憶模型</button></div></div><div class='switch-row'><div><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到工作階段結束</small></div><label class='switch'><input name='rememberApiKey' type='checkbox' ${state.settings.rememberApiKey ? 'checked' : ''}><span></span></label></div></section></div><div class='form-actions'><button class='secondary' type='button' data-action='close'>取消</button><button class='primary' type='submit'>儲存設定</button></div></form>`;
 }
-
 function renderCharacterSettings() {
   ensureSave();
   const character = characterById(state.editingId) || state.save.characters[0];
@@ -199,8 +232,19 @@ async function handleSubmit(event) {
   else if (formId === 'characterForm') saveCharacterForm(event.target);
   else if (formId === 'deductionForm') submitDeductionForm(event.target);
   else if (formId === 'accusationForm') submitAccusationForm(event.target);
+  else if (formId === 'composer') await sendText(event.target);
 }
 
+function handleKeydown(event) {
+  const trigger = event.target.closest?.('[data-action="history"]');
+  if (!trigger || trigger.tagName === 'BUTTON' || !['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  state.historyOpen = !state.historyOpen;
+  render();
+}
+function handleInput(event) {
+  if (event.target.matches('#composer input[name="message"]')) state.textDraft = event.target.value;
+}
 function renderStoryBoardOverlay() {
   ensureSave();
   const board = getStoryBoard(state.save.storyState);
@@ -340,15 +384,53 @@ async function startCall(characterId) {
   const apiKey = getApiKey();
   if (!apiKey) { toast('請先在設定輸入 Gemini API key。'); return openSettings('general'); }
   const character = characterById(characterId);
+  const interactionMode = state.settings.interactionMode;
   const transcript = new SessionTranscript();
   const storyEncounterCount = character.encounterCount;
   const storyConversation = state.mode === 'story' ? prepareStoryConversation(characterId, state.save.storyState, storyEncounterCount, { characterNames: Object.fromEntries(state.save.characters.map((item) => [item.id, item.name])) }) : null;
-  const call = { characterId, status: 'connecting', transcript, storyConversation, storyEncounterCount, audio: null, session: null, audioErrorShown: false, startCuePlayed: false, startedAt: Date.now() };
-  state.call = call; state.simulation.setActive(characterId); render();
+  const systemInstruction = buildSystemInstruction(character, selectMemories(character.memories), state.settings.playerName, state.mode, storyConversation?.instruction, interactionMode);
+  const call = { characterId, interactionMode, status: 'connecting', transcript, storyConversation, storyEncounterCount, audio: null, session: null, textSession: null, audioErrorShown: false, startCuePlayed: false, startedAt: Date.now() };
+  state.call = call;
+  state.textDraft = '';
+  state.simulation.setActive(characterId);
+  render();
+
+  if (interactionMode === 'text') {
+    call.textSession = new TextSession({ apiKey, modelName: state.settings.memoryModelName, systemInstruction }, {
+      onStatus: (status) => {
+        if (state.call !== call) return;
+        call.status = status;
+        updateCallDom();
+      },
+      onModelTranscript: (text) => {
+        if (state.call !== call) return;
+        call.transcript.setTextModel(text);
+        updateTextConversationDom();
+        updateCaptionDom();
+      },
+      onTurnComplete: () => {
+        if (state.call !== call) return;
+        call.transcript.finishTextModel();
+        render();
+      },
+      onError: (error, userText) => {
+        if (state.call !== call) return;
+        call.transcript.rollbackTextModel();
+        state.textDraft = userText;
+        call.status = 'connected';
+        render();
+        toast(`文字回覆失敗：${error.message}`);
+      },
+    });
+    call.session = call.textSession;
+    call.textSession.start();
+    return;
+  }
+
   try {
     call.audio = new BrowserAudioEngine({ capture: true, onAudioChunk: (bytes) => call.session?.sendAudio(bytes) });
     await call.audio.start();
-    call.session = new LiveSession({ apiKey, liveModelName: state.settings.liveModelName, voice: character.voice, systemInstruction: buildSystemInstruction(character, selectMemories(character.memories), state.settings.playerName, state.mode, storyConversation?.instruction) }, {
+    call.session = new LiveSession({ apiKey, liveModelName: state.settings.liveModelName, voice: character.voice, systemInstruction }, {
       onStatus: (status) => {
         if (state.call !== call) return;
         call.status = status;
@@ -384,10 +466,31 @@ async function startCall(characterId) {
     });
     call.session.start();
   } catch (error) {
-    await call.audio?.stop(); state.call = null; state.simulation.setActive(null); render(); toast(`無法開始交談：${error.message}`);
+    await call.audio?.stop();
+    state.call = null;
+    state.simulation.setActive(null);
+    render();
+    toast(`無法開始交談：${error.message}`);
   }
 }
 
+async function sendText(form) {
+  const text = String(new FormData(form).get('message') || '').trim();
+  const call = state.call;
+  if (!text || !call?.textSession || call.status !== 'connected') return;
+  if (!call.transcript.onTextUser(text)) return;
+  call.transcript.startTextModel();
+  state.textDraft = '';
+  call.status = 'speaking';
+  render();
+  const sent = await call.textSession.sendText(text);
+  if (!sent && state.call === call && call.transcript.textStreaming) {
+    call.transcript.rollbackTextModel();
+    state.textDraft = text;
+    call.status = 'connected';
+    render();
+  }
+}
 async function endCall() {
   const call = state.call;
   if (!call || call.status === 'ending') return;
@@ -457,14 +560,27 @@ async function finishStoryAnalysis({ apiKey, character, characterId, transcript,
 function updateCallDom() {
   const status = document.getElementById('statusText');
   if (status && state.call) { status.className = `status ${state.call.status}`; status.textContent = statusLabel(state.call.status); }
+  const textInput = document.querySelector('#composer input[name="message"]');
+  if (textInput && state.call) {
+    const disabled = state.call.status !== 'connected';
+    textInput.disabled = disabled;
+  }
   updateCaptionDom();
 }
 
 function updateCaptionDom() {
+  if (state.call?.interactionMode === 'text') return updateTextConversationDom();
   const element = document.getElementById('captionText');
-  if (element && state.call) element.textContent = state.call.transcript.currentModel() || (['connecting','reconnecting'].includes(state.call.status) ? '正在連上另一端的聲音…' : '正在聽你說…');
+  if (element && state.call) element.textContent = state.call.transcript.currentModel() || (['connecting', 'reconnecting'].includes(state.call.status) ? '正在連上另一端的聲音…' : '正在聽你說…');
 }
 
+function updateTextConversationDom() {
+  const element = document.getElementById('textConversation');
+  if (!element || !state.call) return;
+  const wasAtBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+  element.innerHTML = renderTextConversationContent();
+  if (wasAtBottom) element.scrollTop = element.scrollHeight;
+}
 function updateSimulation() {
   if (state.screen !== 'bar' || state.overlay || !state.simulation) return;
   const events = state.simulation.tick();
@@ -491,7 +607,7 @@ function updateSimulation() {
 
 function saveGeneralForm(form) {
   const values = new FormData(form);
-  state.settings = saveSettings({ playerName: values.get('playerName'), captionsVisible: values.get('captionsVisible') === 'on', backgroundMusicAutoPlay: values.get('backgroundMusicAutoPlay') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
+  state.settings = saveSettings({ playerName: values.get('playerName'), interactionMode: values.get('interactionMode'), captionsVisible: values.get('captionsVisible') === 'on', backgroundMusicAutoPlay: values.get('backgroundMusicAutoPlay') === 'on', rememberApiKey: values.get('rememberApiKey') === 'on', liveModelName: values.get('liveModelName'), memoryModelName: values.get('memoryModelName') });
   state.backgroundMusic.setAutoPlay(state.settings.backgroundMusicAutoPlay);
   saveApiKey(values.get('apiKey'), state.settings.rememberApiKey); state.overlay = null; render(); toast('設定已儲存。');
 }
@@ -532,7 +648,7 @@ function characterById(id) { ensureSave(); return state.save.characters.find((ch
 function activeCharacter() { return state.call ? characterById(state.call.characterId) : null; }
 function modeLabel() { return state.mode === 'story' ? '灰燼群像' : '療癒夜話'; }
 function selectMemories(memories) { let used=0; return [...memories].sort((a,b)=>Number(b.locked)-Number(a.locked)||b.importance-a.importance||b.createdAt-a.createdAt).filter((memory)=>{const cost=memory.content.length;if(used+cost>3000)return false;used+=cost;return true;}); }
-function statusLabel(status) { return ({connecting:'正在連線…',reconnecting:'重新連線中…',connected:'語音連線中',listening:'正在聽你說',speaking:`${activeCharacter()?.name || '顧客'} 回應中`,failed:'連線失敗',ending:'正在結束…'})[status] || status; }
+function statusLabel(status) { return ({connecting:'正在連線…',reconnecting:'重新連線中…',connected:state.call?.interactionMode === 'text' ? '文字連線中' : '語音連線中',listening:'正在聽你說',speaking:`${activeCharacter()?.name || '顧客'} 回應中`,failed:'連線失敗',ending:'正在結束…'})[status] || status; }
 function toast(message) { const element=document.createElement('div');element.className='toast';element.textContent=message;toastRegion.appendChild(element);setTimeout(()=>element.remove(),4200); }
 function html(value) { return String(value??'').replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]); }
 function attr(value) { return html(value).replace(/'/g,'&#39;'); }
