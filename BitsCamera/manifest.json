@@ -1,0 +1,31 @@
+{
+  "id": "./",
+  "name": "BitsCamera 點陣相機",
+  "short_name": "BitsCamera",
+  "description": "即時將相機畫面轉換成黑白灰點陣效果（Floyd-Steinberg、Bayer、網點半色調、色階馬賽克）並可拍照存檔。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

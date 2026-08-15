@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BitsCamera</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#0b0b0d" />
+<meta name="color-scheme" content="dark" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="BitsCamera" />
+<meta name="format-detection" content="telephone=no" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar" id="styleTabs">
+      <button class="tab active" data-style="floyd">Floyd-Steinberg</button>
+      <button class="tab" data-style="bayer">Bayer</button>
+      <button class="tab" data-style="halftone">網點半色調</button>
+      <button class="tab" data-style="posterize">色階馬賽克</button>
+    </header>
+
+    <main class="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="display"></canvas>
+
+      <div class="overlay" id="overlay">
+        <p id="overlayText">正在請求相機權限…</p>
+        <button id="retryBtn" class="retry-btn hidden">重試</button>
+      </div>
+    </main>
+
+    <footer class="bottombar">
+      <button id="flipBtn" class="icon-btn hidden" title="切換鏡頭">⟲</button>
+      <button id="captureBtn" class="shutter-btn" title="拍照存檔"></button>
+      <button id="settingsBtn" class="icon-btn" title="參數設定">⚙</button>
+    </footer>
+
+    <div class="param-panel" id="paramPanel">
+      <div class="param-panel-header">
+        <span id="paramPanelTitle">Floyd-Steinberg</span>
+        <button id="paramPanelClose" class="panel-close-btn" title="關閉">✕</button>
+      </div>
+      <div class="param-panel-body" id="paramPanelBody"></div>
+    </div>
+  </div>
+
+  <canvas id="offscreen" class="hidden-canvas"></canvas>
+
+  <script src="script.js"></script>
+</body>
+</html>
