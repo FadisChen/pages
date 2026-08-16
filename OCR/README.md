@@ -9,19 +9,26 @@
 - `index_mobile_ocr_auto_v2.html`：目前最終版單檔網頁（已加入 OpenCV hard timeout / fast path / fallback）
 - `README.md`：本文件
 
-### 目前版本重點（v2）
+### 目前版本重點（v3）
 
-上一版曾出現手機停在「正在自動偵測文件四角」的情況。v2 已將這個問題列為流程可靠性問題處理，而不是單純要求使用者等待：
+v2 曾試圖用 `setTimeout` hard timeout 解決「選照片後卡住」的問題，但實際上完全沒用：`OPENCV_URL`
+（`docs.opencv.org/4.x/opencv.js`）是一支 10MB+ 的單檔腳本，瀏覽器在主執行緒同步解析／初始化它時，
+本來就會整個卡住畫面 —— 而只要主執行緒卡住，連 `setTimeout` 的 callback 都排不進事件迴圈，
+所謂的「hard timeout」自然永遠不會觸發。這也是實測中「選取照片後會卡住」這個回報的真正成因：
+只要照片沒有幾乎滿版（多數真實手機照片都是如此），流程就會落到需要載入 OpenCV.js 的分支，
+畫面就直接凍結，等多久都不會恢復。
 
-- 固定版型滿版照片先走 **零下載 fast path**，符合條件時不等待 OpenCV.js。
-- 使用者按「拍照 / 選圖」時會在背景預熱 OpenCV.js，利用使用者拍照或挑圖的時間下載。
-- `<script>` 載入加入 **hard timeout**。
-- `window.cv` / OpenCV Runtime 初始化加入 **hard timeout**。
-- OpenCV 整體自動偵測等待上限約 **14 秒**，逾時立即 fallback，不再無限卡住。
-- OpenCV 載入失敗後，後續透視校正不會再次阻塞等待；直接使用 JavaScript Homography 備援。
-- 固定版型已幾乎填滿畫面時，直接使用瀏覽器原生 Canvas resize，省略不必要的逐像素 Homography。
-- 使用者仍可在四角編輯器按「自動找四角」主動重新嘗試 OpenCV。
-- Tesseract.js script 與 Worker 初始化也增加 timeout，避免 OCR 初始化永久等待。
+v3 的修正方式是把 OpenCV.js 的載入與所有運算都搬進獨立的 **Web Worker**：
+
+- OpenCV.js 一律在 Worker 內 `importScripts` 並執行，不論它要花多久（甚至卡住），都不會影響主執行緒與畫面互動。
+- Worker 與主執行緒之間透過 `postMessage` 傳遞 `ImageData`（用 Transferable 傳輸，不需要複製），
+  取代原本直接操作 `<canvas>` 的 `cv.imread` / `cv.imshow`。
+- 主執行緒對每個 Worker 呼叫仍設有 timeout；逾時後會直接 `terminate()` 該 Worker 並丟棄，
+  下次重新建立乾淨的 Worker 再試 —— 這次 timeout 是真的有效，因為主執行緒本身從未被卡住過。
+- 固定版型滿版照片仍先走 **零下載 fast path**，符合條件時完全不需要 OpenCV.js。
+- OpenCV 逾時或失敗後，透視校正、水平傾斜校正會分別 fallback 為 JavaScript Homography 備援 / 略過。
+- 使用者仍可在四角編輯器按「自動找四角」主動重新嘗試 OpenCV（會重新建立 Worker）。
+- Tesseract.js script 與 Worker 初始化也維持原本的 timeout，避免 OCR 初始化永久等待。
 
 ---
 
@@ -121,9 +128,9 @@ v2 同時替 Tesseract.js script 載入與 Worker 初始化加上 timeout，避�
 https://docs.opencv.org/4.x/opencv.js
 ```
 
-OpenCV.js 仍採延遲載入，但 v2 會在使用者按下「拍照 / 選圖」時背景預熱，盡量把下載時間藏在拍照或挑圖流程內。若手機啟用了 Data Saver，則不主動預熱。
+OpenCV.js 仍採延遲載入，使用者按下「拍照 / 選圖」時會背景預熱，盡量把下載時間藏在拍照或挑圖流程內。若手機啟用了 Data Saver，則不主動預熱。
 
-同時加入 hard timeout 與 fallback；OpenCV 是「自動校正增強能力」，不再是整個 OCR 流程的 single point of failure。
+v3 起 OpenCV.js 一律在獨立 **Web Worker** 內載入與執行（詳見第 16 節），搭配 timeout 與 fallback；OpenCV 是「自動校正增強能力」，不再是整個 OCR 流程的 single point of failure，也不會再拖住主執行緒。
 
 ---
 
@@ -503,173 +510,38 @@ OCR 完成後不直接當成最終資料。
 
 ---
 
-# 16. 「正在自動偵測文件四角」卡住問題：v2 已修正
+# 16. 「選取照片後會卡住」：v2 的 hard timeout 其實無效，v3 改用 Web Worker 才真正修正
 
-## 原因
+## 原因：v2 的診斷不完整
 
-上一版第一次自動偵測需要延遲載入 OpenCV.js，因此第一次本來就可能比後續慢，但程式另外存在兩個真正的可靠性風險：
+v2 認為問題出在「`<script>` 載入沒有 hard timeout」與「`window.cv` pending 時 while/deadline 無法中斷 await」，因此加上一系列 `setTimeout` 為基礎的 hard timeout（script load timeout、runtime timeout、總計 timeout）。
 
-1. `<script>` 載入只等待 `load/error`，沒有 hard timeout。
-2. `window.cv` 若是長時間 pending 的 Promise，原本的 while/deadline 無法中斷那個 `await`。
+2026-08-16 實測（Playwright + headless Chromium）證實這個診斷不完整，也是「選取照片後會卡住」這個回報在 v2 之後仍然發生的真正原因：
 
-因此在行動網路、CDN、DNS、WebView 或 OpenCV Runtime 異常時，UI 可能長時間停在：
+`OPENCV_URL`（`docs.opencv.org/4.x/opencv.js`）是一支 **10MB+ 的單檔腳本**。`<script>` 標籤載入它時，瀏覽器必須在**主執行緒**同步解析並執行這支腳本（含內嵌的 WASM 初始化）。JavaScript 是單執行緒的：**只要主執行緒還在同步執行這段程式，連 `setTimeout` 的 callback 都排不進事件迴圈**。也就是說，v2 所有的「hard timeout」只能防住「網路遲遲沒有回應」，完全防不住「腳本已經下載完成、正在執行、但這段同步執行本身要很久」——而負責觸發 fallback 的正是這些 `setTimeout`，它們自己也被卡住，永遠沒有機會執行。
 
-```text
-正在自動偵測文件四角…
-```
+用 Playwright 實測重現：選一張文件沒有幾乎滿版（例如背景可見桌面/邊框）的照片，流程會落到需要載入 OpenCV.js 的分支；主執行緒直接整個凍結，`page.evaluate()` 之類的操作全部卡住，即使等待數分鐘、遠超過原本設定的 14 秒總計 timeout，也完全沒有觸發 fallback 或錯誤訊息。
 
-這不是正常的「第一次比較慢」，而是流程可能被外部元件阻塞。
+這就是「選取照片後會卡住」的根本原因，而且幾乎所有真實手機照片（只要文件沒有精準裁到滿版）都會踩到這個分支，並非罕見 edge case。
 
 ---
 
-## v2 的處理策略
+## v3 的修正：把 OpenCV.js 整個搬進 Web Worker
 
-### 1. 固定版型 fast path 先於 OpenCV
+Timeout 機制成立的前提是「主執行緒本身沒有被卡住」，所以唯一真正有效的做法是**讓 OpenCV.js 完全不在主執行緒執行**：
 
-程式會先用純 Canvas / JavaScript 檢查：
+- OpenCV.js 一律在獨立的 Web Worker 內 `importScripts` 並執行所有 cv 運算（contour 偵測、透視校正、水平傾斜校正、旋轉）。不論這段執行要花多久（甚至卡住），主執行緒與畫面都維持可互動、可操作。
+- 主執行緒與 Worker 之間改用 `postMessage` 傳遞 `ImageData`（透過 Transferable ArrayBuffer 傳輸、不複製整份像素資料），取代原本直接對 `<canvas>` 操作的 `cv.imread` / `cv.imshow`。
+- 主執行緒對每個 Worker RPC 呼叫仍設有 timeout；這次逾時後會直接 `worker.terminate()` 整個 Worker 並丟棄，下次重新建立乾淨的 Worker 再試。因為主執行緒從未被卡住，這個 timeout **是真的會被觸發**、真的能取消掉一個卡住中的 Worker。
+- 固定版型滿版照片仍先走零下載 fast path，完全不需要 OpenCV.js（多數情況適用，也是唯一不受此問題影響的路徑）。
+- OpenCV 逾時、失敗、或 Worker 被終止時，透視校正 fallback 為 JavaScript Homography（`warpPerspectiveJS`），水平傾斜校正則直接略過；使用者仍可透過人工四角編輯器完成 OCR。
+- 拍照 / 選圖、以及編輯器內「自動找四角」，行為不變，只是背後改成建立 / 重用 Worker 而非直接 `<script>` 載入。
 
-- 文件是否為直式固定比例。
-- 表格上方是否存在夠強的長水平線。
-- 文件是否幾乎填滿整張照片。
-
-若信心高於：
-
-```js
-const TEMPLATE_FAST_PATH_CONFIDENCE = 0.84;
-```
-
-就直接判定為固定版型滿版照片，不等待 OpenCV。
-
-這對目前實際樣本非常重要，因為許多手機照片本來就已經把紙張邊緣裁在畫面外；這時即使載入 OpenCV，也未必能找到完整紙張輪廓。
-
----
-
-### 2. 拍照 / 選圖時背景預熱 OpenCV
-
-使用者按下：
-
-```text
-開啟相機拍照
-從手機選取照片
-```
-
-時就會呼叫：
-
-```js
-warmOpenCVInBackground();
-```
-
-它不會阻塞 UI。使用者在拍照或相簿挑圖的幾秒鐘內，OpenCV 可以先下載與初始化。
-
-若：
-
-```js
-navigator.connection?.saveData === true
-```
-
-則不做背景預熱，尊重行動數據節省設定。
-
----
-
-### 3. 外部 script hard timeout
-
-現在 `loadExternalScript()` 有真正的 timer；如果 CDN 長時間沒有回應，會移除停在半載入狀態的 `<script>` 並 reject。
-
-目前設定：
-
-```js
-const SCRIPT_LOAD_TIMEOUT_MS = 12000;
-```
-
-因此不會永遠只等 `load/error`。
-
----
-
-### 4. OpenCV Runtime hard timeout
-
-`window.cv` 若本身是 Promise，也會用 `Promise.race()` 包住：
-
-```js
-withTimeout(candidate, OPENCV_RUNTIME_TIMEOUT_MS, ...);
-```
-
-目前設定：
-
-```js
-const OPENCV_RUNTIME_TIMEOUT_MS = 9000;
-const OPENCV_TOTAL_TIMEOUT_MS = 14000;
-```
-
-所以初次自動偵測真正會阻塞使用者的最大時間是有限的，而不是理論上的 while deadline。
-
----
-
-### 5. OpenCV 失敗立即 fallback
-
-若 OpenCV 載入或初始化失敗：
-
-```text
-OpenCV timeout / error
-        ↓
-固定版型候選可用？
-   ├─ 是 → 使用固定版型
-   └─ 否 → 開啟人工四角編輯器
-```
-
-人工調整四角後，透視變形仍可使用純 JavaScript Homography，因此不會因 OpenCV 不可用而完全無法 OCR。
-
----
-
-### 6. 校正階段不再第二次等待 OpenCV
-
-上一版的另一個 UX 風險是：即使自動偵測階段 OpenCV 已經失敗，後面的校正階段又可能再次呼叫 `ensureOpenCV()`。
-
-v2 改成：
-
-```js
-const cv = cvApi?.Mat ? cvApi : null;
-```
-
-也就是「已經就緒才用」，否則直接 fallback，不再讓使用者第二次等待。
-
----
-
-### 7. 滿版固定文件不做昂貴 Homography
-
-若 fast path 判定四角就是整張影像邊界，透視矩陣其實接近單純 resize。
-
-因此 v2 使用原生 Canvas：
-
-```js
-ctx.drawImage(source, 0, 0, outW, outH);
-```
-
-取代 JavaScript 逐像素 Homography。
-
-這對手機效能差異很大，因為標準化文件約有數百萬像素；能交給瀏覽器原生影像管線處理就不要在 JavaScript 逐 pixel 內插。
-
----
-
-## v2 後應如何判斷「第一次較慢」
-
-合理情況：
-
-- 第一次使用 OpenCV contour detection 時可能需要數秒下載與初始化。
-- 第二次通常因 runtime / browser cache 已存在而較快。
-- Tesseract `chi_tra` 第一次初始化也會比後續慢。
-
-不再合理的情況：
-
-- 永久停在「正在自動偵測文件四角」。
-- OpenCV CDN 掛掉後整個 OCR 都不能使用。
-
-v2 在 OpenCV 最長等待超過設定上限後會自動進入備援流程。
-
----
+實測結果（同一張會讓 v2 卡住的照片）：主執行緒全程維持每 100ms 的心跳不中斷；OpenCV worker 若逾時，14 秒內會自動切換到人工四角編輯器，畫面全程可互動，即使 worker 內部實際卡住數分鐘也不影響。
 
 ## 正式環境仍建議 self-host
 
-雖然 hard timeout 解決「卡死」，正式環境仍建議將 OpenCV.js 與 Tesseract 相關資源改成自家 CDN / static assets：
+雖然 Worker 化解決了「主執行緒被卡死」的問題，正式環境仍建議將 OpenCV.js 與 Tesseract 相關資源改成自家 CDN / static assets：
 
 - 固定版本。
 - 可設定長效 cache。
@@ -833,9 +705,10 @@ mat.delete();
 
 ### 已完成：OpenCV 載入卡住修正
 
-- [x] script hard timeout
-- [x] runtime hard timeout
-- [x] timeout 後立即 fallback
+- [x] ~~script hard timeout（v2，實測無效，見第 16 節）~~
+- [x] ~~runtime hard timeout（v2，實測無效，見第 16 節）~~
+- [x] OpenCV.js 搬進獨立 Web Worker 執行（v3，真正解決主執行緒卡住）
+- [x] Worker 逾時後 terminate 並 fallback
 - [x] 固定版型 fast path
 - [x] 拍照 / 選圖期間背景預熱
 - [x] 校正階段不重複等待 OpenCV

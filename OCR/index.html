@@ -57,8 +57,7 @@
         <label for="documentInput">文件名稱</label>
         <input id="documentInput" autocomplete="off" />
       </div>
-      <div class="grid-2">
-        <div class="field">
+      <div class="field">
           <label for="dateInput">拍賣日期</label>
           <input id="dateInput" inputmode="text" autocomplete="off" />
         </div>
@@ -66,7 +65,6 @@
           <label for="dealerNumberInput">承銷人編號</label>
           <input id="dealerNumberInput" inputmode="numeric" autocomplete="off" />
         </div>
-      </div>
       <div class="field">
         <label for="dealerNameInput">承銷人姓名</label>
         <input id="dealerNameInput" autocomplete="off" />
@@ -139,16 +137,22 @@
 
   // 外部大型引擎一律設 hard timeout，避免手機網路/CDN 異常時 UI 永久卡住。
   const SCRIPT_LOAD_TIMEOUT_MS = 12000;
-  const OPENCV_TOTAL_TIMEOUT_MS = 14000;
-  const OPENCV_RUNTIME_TIMEOUT_MS = 9000;
   const TESSERACT_WORKER_TIMEOUT_MS = 45000;
+  // OpenCV.js 檔案高達 10MB+，主執行緒同步解析／初始化該腳本本身就可能卡住 UI 好幾秒到數分鐘，
+  // 且一旦開始同步執行，setTimeout 之類的 timer 完全無法搶回主執行緒。因此 OpenCV 一律在
+  // Web Worker 中載入與執行，這裡的 timeout 只用來判斷「該不該放棄並改用 JS 備援」，
+  // 不需要再擔心逾時機制本身失效。
+  const CV_WORKER_INIT_TIMEOUT_MS = 14000;
+  const CV_WORKER_CALL_TIMEOUT_MS = 20000;
 
   const ROI = {
-    market:       { x1: 0.075, y1: 0.022, x2: 0.925, y2: 0.070, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 1200 },
+    // market / dealerName 皆為無固定字典可比對的自由文字，OCR 誤判率明顯較高；
+    // 透過 verify 函式標記，讓 recognizeTile 對這兩欄啟用低信心重跑機制（見下方）。
+    market:       { x1: 0.075, y1: 0.022, x2: 0.925, y2: 0.070, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 1200, verify: (t) => extractMarket(t) },
     document:     { x1: 0.245, y1: 0.067, x2: 0.755, y2: 0.103, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 900 },
     date:         { x1: 0.165, y1: 0.101, x2: 0.375, y2: 0.122, psm: 'SINGLE_LINE', type: 'date', pad: 0.0015, targetWidth: 800 },
     dealerNumber: { x1: 0.175, y1: 0.123, x2: 0.285, y2: 0.140, psm: 'SINGLE_LINE', type: 'number', pad: 0.001, targetWidth: 520 },
-    dealerName:   { x1: 0.170, y1: 0.143, x2: 0.355, y2: 0.161, psm: 'SINGLE_LINE', type: 'name', pad: 0.001, targetWidth: 700 },
+    dealerName:   { x1: 0.170, y1: 0.143, x2: 0.355, y2: 0.161, psm: 'SINGLE_LINE', type: 'name', pad: 0.004, targetWidth: 900, verify: (t) => extractName(t) },
     codesLeft:    { x1: 0.285, y1: 0.188, x2: 0.525, y2: 0.715, psm: 'SPARSE_TEXT', type: 'codes', pad: 0.002, targetWidth: 900 },
     codesRight:   { x1: 0.705, y1: 0.188, x2: 0.990, y2: 0.715, psm: 'SPARSE_TEXT', type: 'codes', pad: 0.002, targetWidth: 900 }
   };
@@ -207,9 +211,12 @@
   let worker = null;
   let workerPromise = null;
   let tesseractScriptPromise = null;
-  let opencvPromise = null;
-  let cvApi = null;
-  let opencvFailure = null;
+  let cvWorker = null;
+  let cvWorkerReadyPromise = null;
+  let cvWorkerFailure = null;
+  let cvWorkerIsReady = false;
+  let cvWorkerReqSeq = 0;
+  const cvWorkerPending = new Map();
   let isBusy = false;
   let activeHandle = -1;
   let drawTransform = { scale: 1, ox: 0, oy: 0, cssW: 0, cssH: 0 };
@@ -335,71 +342,425 @@
     return tesseractScriptPromise;
   }
 
-  async function waitForOpenCVRuntime() {
-    let candidate = window.cv;
-    if (candidate && typeof candidate.then === 'function') {
-      candidate = await withTimeout(
-        candidate,
-        OPENCV_RUNTIME_TIMEOUT_MS,
-        'OpenCV.js Runtime 初始化逾時。'
-      );
-      window.cv = candidate;
-    }
+  // OpenCV.js 一律在獨立的 Web Worker 內載入與執行。
+  // 這個腳本本身高達 10MB+，若在主執行緒同步解析／初始化，會直接卡住整個頁面，
+  // 且該卡住期間連 setTimeout 都排不進事件迴圈，先前僅靠 hard timeout 的做法完全防不了這種情況。
+  // 搬進 Worker 後，不論該腳本載入或執行要花多久，主執行緒與畫面都維持可互動，
+  // 逾時時也才真正能夠取消（terminate worker）並切換 JS 備援。
+  const CV_WORKER_SOURCE = `
+'use strict';
+let cvReadyPromise = null;
 
-    const deadline = Date.now() + OPENCV_RUNTIME_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      candidate = window.cv;
-      if (candidate?.Mat && candidate?.imread && candidate?.findContours) {
-        cvApi = candidate;
-        return candidate;
+function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
+
+function orderQuad(points) {
+  const pts = points.map((p) => ({ x: Number(p.x), y: Number(p.y) }));
+  if (pts.length !== 4) return pts;
+  const sums = pts.map((p) => p.x + p.y);
+  const diffs = pts.map((p) => p.y - p.x);
+  const pick = (arr, fn) => arr.reduce((best, v, i) => fn(v, arr[best]) ? i : best, 0);
+  const tl = pts[pick(sums, (a, b) => a < b)];
+  const br = pts[pick(sums, (a, b) => a > b)];
+  const tr = pts[pick(diffs, (a, b) => a < b)];
+  const bl = pts[pick(diffs, (a, b) => a > b)];
+  const ordered = [tl, tr, br, bl];
+  if (new Set(ordered.map((p) => p.x + ',' + p.y)).size === 4) return ordered;
+  const byY = pts.slice().sort((a, b) => a.y - b.y);
+  const top = byY.slice(0, 2).sort((a, b) => a.x - b.x);
+  const bottom = byY.slice(2).sort((a, b) => a.x - b.x);
+  return [top[0], top[1], bottom[1], bottom[0]];
+}
+
+function quadMetrics(pts) {
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const top = d(pts[0], pts[1]);
+  const right = d(pts[1], pts[2]);
+  const bottom = d(pts[2], pts[3]);
+  const left = d(pts[3], pts[0]);
+  const width = (top + bottom) / 2;
+  const height = (left + right) / 2;
+  return { width, height, aspect: Math.min(width, height) / Math.max(width, height) };
+}
+
+function matFromImageData(cv, imageData) {
+  const mat = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
+  mat.data.set(imageData.data);
+  return mat;
+}
+function matToImageData(mat) {
+  return new ImageData(new Uint8ClampedArray(mat.data), mat.cols, mat.rows);
+}
+
+function detectDocument(cv, imageData, formAspect) {
+  let small, gray, blurred, edges, closed, contours, hierarchy, kernel;
+  try {
+    small = matFromImageData(cv, imageData);
+    gray = new cv.Mat();
+    blurred = new cv.Mat();
+    edges = new cv.Mat();
+    closed = new cv.Mat();
+    cv.cvtColor(small, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+    cv.Canny(blurred, edges, 45, 150);
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
+    contours = new cv.MatVector();
+    hierarchy = new cv.Mat();
+    cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    const imageArea = small.cols * small.rows;
+    let best = null;
+    const epsilons = [0.015, 0.02, 0.025, 0.03, 0.04];
+    for (let i = 0; i < contours.size(); i++) {
+      const cnt = contours.get(i);
+      try {
+        const contourArea = Math.abs(cv.contourArea(cnt, false));
+        const areaRatio = contourArea / imageArea;
+        if (areaRatio < 0.18) continue;
+        const perimeter = cv.arcLength(cnt, true);
+        for (const eps of epsilons) {
+          const approx = new cv.Mat();
+          try {
+            cv.approxPolyDP(cnt, approx, eps * perimeter, true);
+            if (approx.rows !== 4 || (cv.isContourConvex && !cv.isContourConvex(approx))) continue;
+            const data = approx.data32S;
+            const raw = [];
+            for (let j = 0; j < 4; j++) raw.push({ x: data[j * 2], y: data[j * 2 + 1] });
+            let ordered = orderQuad(raw);
+            const metrics = quadMetrics(ordered);
+            const aspectScore = clamp01(1 - Math.abs(metrics.aspect - formAspect) / 0.30);
+            const areaScore = clamp01((areaRatio - 0.18) / 0.62);
+            const cx = ordered.reduce((sum, p) => sum + p.x, 0) / 4;
+            const cy = ordered.reduce((sum, p) => sum + p.y, 0) / 4;
+            const centerDist = Math.hypot(cx - small.cols / 2, cy - small.rows / 2) / Math.hypot(small.cols / 2, small.rows / 2);
+            const centerScore = clamp01(1 - centerDist);
+            let confidence = clamp01(0.56 * areaScore + 0.30 * aspectScore + 0.14 * centerScore);
+            let quarterTurn = false;
+            if (metrics.width > metrics.height) {
+              ordered = [ordered[1], ordered[2], ordered[3], ordered[0]];
+              quarterTurn = true;
+              confidence = Math.min(confidence, 0.68);
+            }
+            if (!best || confidence > best.confidence) {
+              best = {
+                method: 'contour', confidence, quarterTurn,
+                corners: ordered.map((p) => ({ x: p.x, y: p.y })),
+                detail: '文件輪廓覆蓋 ' + Math.round(areaRatio * 100) + '%，比例相似度 ' + Math.round(aspectScore * 100) + '%'
+              };
+            }
+            break;
+          } finally {
+            approx.delete();
+          }
+        }
+      } finally {
+        cnt.delete();
       }
-      await sleep(80);
     }
-    throw new Error('OpenCV.js Runtime 初始化逾時。');
+    return best;
+  } finally {
+    [small, gray, blurred, edges, closed, contours, hierarchy, kernel].forEach((m) => {
+      try { if (m && typeof m.delete === 'function') m.delete(); } catch (e) {}
+    });
+  }
+}
+
+function warpPerspective(cv, imageData, corners, outW, outH) {
+  let srcMat, dstMat, srcPts, dstPts, transform;
+  try {
+    srcMat = matFromImageData(cv, imageData);
+    dstMat = new cv.Mat();
+    srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      corners[0].x, corners[0].y,
+      corners[1].x, corners[1].y,
+      corners[2].x, corners[2].y,
+      corners[3].x, corners[3].y
+    ]);
+    dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      0, 0, outW - 1, 0, outW - 1, outH - 1, 0, outH - 1
+    ]);
+    transform = cv.getPerspectiveTransform(srcPts, dstPts);
+    cv.warpPerspective(
+      srcMat, dstMat, transform, new cv.Size(outW, outH),
+      cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255)
+    );
+    return matToImageData(dstMat);
+  } finally {
+    [srcMat, dstMat, srcPts, dstPts, transform].forEach((m) => {
+      try { if (m && typeof m.delete === 'function') m.delete(); } catch (e) {}
+    });
+  }
+}
+
+function estimateHorizontalSkew(cv, imageData) {
+  let src, gray, binary, horizontal, lines, kernel;
+  try {
+    src = matFromImageData(cv, imageData);
+    gray = new cv.Mat();
+    binary = new cv.Mat();
+    horizontal = new cv.Mat();
+    lines = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.threshold(gray, binary, 150, 255, cv.THRESH_BINARY_INV);
+    const kernelWidth = Math.max(25, Math.round(imageData.width * 0.035));
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(kernelWidth, 1));
+    cv.morphologyEx(binary, horizontal, cv.MORPH_OPEN, kernel);
+    cv.HoughLinesP(
+      horizontal, lines, 1, Math.PI / 1800, 45,
+      Math.round(imageData.width * 0.42), Math.round(imageData.width * 0.06)
+    );
+    const angles = [];
+    const data = lines.data32S || [];
+    for (let i = 0; i + 3 < data.length; i += 4) {
+      const x1 = data[i], y1 = data[i + 1], x2 = data[i + 2], y2 = data[i + 3];
+      const ym = (y1 + y2) / 2;
+      if (ym < imageData.height * 0.12 || ym > imageData.height * 0.31) continue;
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      if (length < imageData.width * 0.42) continue;
+      const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      if (Math.abs(angle) <= 5) angles.push(angle);
+    }
+    if (!angles.length) return 0;
+    angles.sort((a, b) => a - b);
+    const mid = Math.floor(angles.length / 2);
+    return angles.length % 2 ? angles[mid] : (angles[mid - 1] + angles[mid]) / 2;
+  } catch (err) {
+    return 0;
+  } finally {
+    [src, gray, binary, horizontal, lines, kernel].forEach((m) => {
+      try { if (m && typeof m.delete === 'function') m.delete(); } catch (e) {}
+    });
+  }
+}
+
+function rotateImage(cv, imageData, angleDeg) {
+  if (Math.abs(angleDeg) < 0.08) return imageData;
+  let src, dst, matrix;
+  try {
+    src = matFromImageData(cv, imageData);
+    dst = new cv.Mat();
+    matrix = cv.getRotationMatrix2D(new cv.Point(src.cols / 2, src.rows / 2), angleDeg, 1);
+    cv.warpAffine(
+      src, dst, matrix, new cv.Size(src.cols, src.rows),
+      cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255)
+    );
+    return matToImageData(dst);
+  } finally {
+    [src, dst, matrix].forEach((m) => { try { if (m && typeof m.delete === 'function') m.delete(); } catch (e) {} });
+  }
+}
+
+function ensureCvReady(url) {
+  if (!cvReadyPromise) {
+    cvReadyPromise = new Promise((resolve, reject) => {
+      try {
+        importScripts(url);
+      } catch (err) {
+        reject(err);
+        return;
+      }
+      const check = () => {
+        const c = self.cv;
+        if (c && c.Mat && c.findContours) { resolve(c); return; }
+        setTimeout(check, 30);
+      };
+      if (self.cv && typeof self.cv.then === 'function') {
+        // OpenCV.js 的 cv 是自製的 thenable，.then() 回傳值不一定支援再 .catch()，
+        // 因此改用 then() 的雙參數形式，不依賴鏈式呼叫。
+        self.cv.then((c) => { self.cv = c; check(); }, reject);
+      } else {
+        check();
+      }
+    }).catch((err) => { cvReadyPromise = null; throw err; });
+  }
+  return cvReadyPromise;
+}
+
+self.onmessage = async (ev) => {
+  const { id, cmd, payload } = ev.data || {};
+  try {
+    if (cmd === 'init') {
+      await ensureCvReady(payload.url);
+      self.postMessage({ id, ok: true });
+      return;
+    }
+    const cv = await cvReadyPromise;
+    if (!cv) throw new Error('OpenCV worker 尚未初始化。');
+    if (cmd === 'detect') {
+      const result = detectDocument(cv, payload.imageData, payload.formAspect);
+      self.postMessage({ id, ok: true, result });
+      return;
+    }
+    if (cmd === 'warp') {
+      const out = warpPerspective(cv, payload.imageData, payload.corners, payload.outW, payload.outH);
+      self.postMessage({ id, ok: true, imageData: out }, [out.data.buffer]);
+      return;
+    }
+    if (cmd === 'skew') {
+      const angle = estimateHorizontalSkew(cv, payload.imageData);
+      self.postMessage({ id, ok: true, angle });
+      return;
+    }
+    if (cmd === 'rotate') {
+      const out = rotateImage(cv, payload.imageData, payload.angleDeg);
+      self.postMessage({ id, ok: true, imageData: out }, [out.data.buffer]);
+      return;
+    }
+    throw new Error('Unknown worker command: ' + cmd);
+  } catch (err) {
+    self.postMessage({ id, ok: false, error: (err && err.message) || String(err) });
+  }
+};
+`;
+
+  function createCvWorker() {
+    const blob = new Blob([CV_WORKER_SOURCE], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const w = new Worker(url);
+    URL.revokeObjectURL(url);
+    w.onmessage = (ev) => {
+      const { id } = ev.data || {};
+      const pending = cvWorkerPending.get(id);
+      if (!pending) return;
+      cvWorkerPending.delete(id);
+      clearTimeout(pending.timer);
+      if (ev.data.ok) pending.resolve(ev.data);
+      else pending.reject(new Error(ev.data.error || 'OpenCV worker 錯誤。'));
+    };
+    w.onerror = () => {
+      // Worker 本身掛掉：讓所有尚未完成的請求直接失敗，避免無限等待一個已死的執行緒。
+      const err = new Error('OpenCV worker 發生非預期錯誤。');
+      for (const [, pending] of cvWorkerPending) {
+        clearTimeout(pending.timer);
+        pending.reject(err);
+      }
+      cvWorkerPending.clear();
+      cvWorkerFailure = err;
+      cvWorkerReadyPromise = null;
+      cvWorkerIsReady = false;
+      cvWorker = null;
+    };
+    return w;
   }
 
-  async function ensureOpenCV({ forceRetry = false } = {}) {
-    if (cvApi?.Mat) return cvApi;
-    if (forceRetry) {
-      opencvFailure = null;
-      opencvPromise = null;
-      const old = document.getElementById('opencv-js');
-      if (old && old.dataset.loaded !== '1') old.remove();
+  function terminateCvWorker() {
+    if (cvWorker) {
+      try { cvWorker.terminate(); } catch {}
     }
-    if (opencvFailure && !forceRetry) throw opencvFailure;
-    if (opencvPromise) return opencvPromise;
+    cvWorker = null;
+    cvWorkerReadyPromise = null;
+    cvWorkerIsReady = false;
+    for (const [, pending] of cvWorkerPending) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('OpenCV worker 已被終止。'));
+    }
+    cvWorkerPending.clear();
+  }
 
-    const bootstrap = (async () => {
-      await loadExternalScript(OPENCV_URL, 'opencv-js', SCRIPT_LOAD_TIMEOUT_MS);
-      return waitForOpenCVRuntime();
-    })();
+  function callCvWorker(cmd, payload, transferables = [], timeoutMs = CV_WORKER_CALL_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+      if (!cvWorker) { reject(new Error('OpenCV worker 尚未建立。')); return; }
+      const id = ++cvWorkerReqSeq;
+      const timer = setTimeout(() => {
+        cvWorkerPending.delete(id);
+        // 該次呼叫逾時：直接終止並丟棄整個 worker，避免殘留一個可能仍在忙碌的執行緒，
+        // 下次會重新建立乾淨的 worker 再試。
+        terminateCvWorker();
+        reject(new Error(`OpenCV worker 處理逾時（${cmd}）。`));
+      }, timeoutMs);
+      cvWorkerPending.set(id, { resolve, reject, timer });
+      try {
+        cvWorker.postMessage({ id, cmd, payload }, transferables);
+      } catch (err) {
+        clearTimeout(timer);
+        cvWorkerPending.delete(id);
+        reject(err);
+      }
+    });
+  }
 
-    opencvPromise = withTimeout(
-      bootstrap,
-      OPENCV_TOTAL_TIMEOUT_MS,
-      'OpenCV.js 載入或初始化逾時，已改用備援流程。'
-    )
-      .then((cv) => {
-        cvApi = cv;
-        opencvFailure = null;
-        return cv;
-      })
+  async function ensureCvWorker({ forceRetry = false } = {}) {
+    if (cvWorkerIsReady && !forceRetry) return true;
+    if (forceRetry) {
+      terminateCvWorker();
+      cvWorkerFailure = null;
+    }
+    if (cvWorkerFailure && !forceRetry) throw cvWorkerFailure;
+    if (cvWorkerReadyPromise) return cvWorkerReadyPromise;
+
+    cvWorker = createCvWorker();
+    cvWorkerReadyPromise = callCvWorker('init', { url: OPENCV_URL }, [], CV_WORKER_INIT_TIMEOUT_MS)
+      .then(() => { cvWorkerIsReady = true; return true; })
       .catch((err) => {
-        opencvFailure = err instanceof Error ? err : new Error(String(err));
-        opencvPromise = null;
-        throw opencvFailure;
+        cvWorkerFailure = err instanceof Error ? err : new Error(String(err));
+        cvWorkerReadyPromise = null;
+        cvWorkerIsReady = false;
+        throw cvWorkerFailure;
       });
-
-    return opencvPromise;
+    return cvWorkerReadyPromise;
   }
 
   function warmOpenCVInBackground() {
-    if (cvApi?.Mat || opencvPromise || opencvFailure) return;
+    if (cvWorkerIsReady || cvWorkerReadyPromise || cvWorkerFailure) return;
     if (navigator.connection?.saveData) return;
-    ensureOpenCV().catch((err) => {
+    ensureCvWorker().catch((err) => {
       // 預熱失敗不打擾使用者；真正處理照片時會直接 fallback。
       console.warn('OpenCV background warm-up unavailable:', err);
     });
+  }
+
+  async function detectDocumentViaWorker() {
+    const scale = Math.min(1, DETECT_LONG_SIDE / Math.max(sourceCanvas.width, sourceCanvas.height));
+    const smallW = Math.max(1, Math.round(sourceCanvas.width * scale));
+    const smallH = Math.max(1, Math.round(sourceCanvas.height * scale));
+    const small = resizeCanvasFast(sourceCanvas, smallW, smallH);
+    const smallCtx = small.getContext('2d', { willReadFrequently: true });
+    const imageData = smallCtx.getImageData(0, 0, smallW, smallH);
+    small.width = 1; small.height = 1;
+
+    const { result } = await callCvWorker('detect', { imageData, formAspect: FORM_ASPECT }, [imageData.data.buffer]);
+    if (!result) return null;
+    return {
+      ...result,
+      corners: result.corners.map((p) => ({ x: p.x / scale, y: p.y / scale }))
+    };
+  }
+
+  async function warpPerspectiveViaWorker(source, pts, outW, outH) {
+    if (!validateCorners(pts)) throw new Error('四角範圍太小或交叉，請重新調整文件四角。');
+    const sctx = source.getContext('2d', { willReadFrequently: true });
+    const imageData = sctx.getImageData(0, 0, source.width, source.height);
+    const corners = pts.map((p) => ({ x: p.x, y: p.y }));
+    const { imageData: outData } = await callCvWorker('warp', { imageData, corners, outW, outH }, [imageData.data.buffer]);
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = outW;
+    outCanvas.height = outH;
+    outCanvas.getContext('2d', { alpha: false }).putImageData(outData, 0, 0);
+    return outCanvas;
+  }
+
+  async function estimateHorizontalSkewViaWorker(canvas) {
+    try {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const { angle } = await callCvWorker('skew', { imageData }, [imageData.data.buffer]);
+      return angle || 0;
+    } catch (err) {
+      console.warn('Deskew estimation failed:', err);
+      return 0;
+    }
+  }
+
+  async function rotateCanvasViaWorker(canvas, angleDeg) {
+    if (Math.abs(angleDeg) < 0.08) return canvas;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const { imageData: outData } = await callCvWorker('rotate', { imageData, angleDeg }, [imageData.data.buffer]);
+    const out = document.createElement('canvas');
+    out.width = canvas.width;
+    out.height = canvas.height;
+    out.getContext('2d').putImageData(outData, 0, 0);
+    return out;
   }
 
   async function getWorker() {
@@ -492,36 +853,6 @@
     return Math.abs(sum) / 2;
   }
 
-  function orderQuad(points) {
-    const pts = points.map((p) => ({ x: Number(p.x), y: Number(p.y) }));
-    if (pts.length !== 4) return pts;
-    const sums = pts.map((p) => p.x + p.y);
-    const diffs = pts.map((p) => p.y - p.x);
-    const pick = (arr, fn) => arr.reduce((best, v, i) => fn(v, arr[best]) ? i : best, 0);
-    const tl = pts[pick(sums, (a, b) => a < b)];
-    const br = pts[pick(sums, (a, b) => a > b)];
-    const tr = pts[pick(diffs, (a, b) => a < b)];
-    const bl = pts[pick(diffs, (a, b) => a > b)];
-    const ordered = [tl, tr, br, bl];
-    if (new Set(ordered.map((p) => `${p.x},${p.y}`)).size === 4) return ordered;
-
-    const byY = pts.slice().sort((a, b) => a.y - b.y);
-    const top = byY.slice(0, 2).sort((a, b) => a.x - b.x);
-    const bottom = byY.slice(2).sort((a, b) => a.x - b.x);
-    return [top[0], top[1], bottom[1], bottom[0]];
-  }
-
-  function quadMetrics(pts) {
-    const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-    const top = d(pts[0], pts[1]);
-    const right = d(pts[1], pts[2]);
-    const bottom = d(pts[2], pts[3]);
-    const left = d(pts[3], pts[0]);
-    const width = (top + bottom) / 2;
-    const height = (left + right) / 2;
-    return { width, height, aspect: Math.min(width, height) / Math.max(width, height) };
-  }
-
   function strongestDarkRow(canvas, y1Ratio, y2Ratio) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const y1 = Math.max(0, Math.floor(canvas.height * y1Ratio));
@@ -571,84 +902,6 @@
     };
   }
 
-  function detectDocumentWithOpenCV(cv) {
-    let src, small, gray, blurred, edges, closed, contours, hierarchy, kernel;
-    try {
-      src = cv.imread(sourceCanvas);
-      const scale = Math.min(1, DETECT_LONG_SIDE / Math.max(src.cols, src.rows));
-      small = new cv.Mat();
-      cv.resize(src, small, new cv.Size(Math.max(1, Math.round(src.cols * scale)), Math.max(1, Math.round(src.rows * scale))), 0, 0, cv.INTER_AREA);
-      gray = new cv.Mat();
-      blurred = new cv.Mat();
-      edges = new cv.Mat();
-      closed = new cv.Mat();
-      cv.cvtColor(small, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-      cv.Canny(blurred, edges, 45, 150);
-      kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-      cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
-      contours = new cv.MatVector();
-      hierarchy = new cv.Mat();
-      cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-      const imageArea = small.cols * small.rows;
-      let best = null;
-      const epsilons = [0.015, 0.02, 0.025, 0.03, 0.04];
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        try {
-          const contourArea = Math.abs(cv.contourArea(cnt, false));
-          const areaRatio = contourArea / imageArea;
-          if (areaRatio < 0.18) continue;
-          const perimeter = cv.arcLength(cnt, true);
-          for (const eps of epsilons) {
-            const approx = new cv.Mat();
-            try {
-              cv.approxPolyDP(cnt, approx, eps * perimeter, true);
-              if (approx.rows !== 4 || (cv.isContourConvex && !cv.isContourConvex(approx))) continue;
-              const data = approx.data32S;
-              const raw = [];
-              for (let j = 0; j < 4; j++) raw.push({ x: data[j * 2], y: data[j * 2 + 1] });
-              let ordered = orderQuad(raw);
-              const metrics = quadMetrics(ordered);
-              const aspectScore = clamp01(1 - Math.abs(metrics.aspect - FORM_ASPECT) / 0.30);
-              const areaScore = clamp01((areaRatio - 0.18) / 0.62);
-              const cx = ordered.reduce((sum, p) => sum + p.x, 0) / 4;
-              const cy = ordered.reduce((sum, p) => sum + p.y, 0) / 4;
-              const centerDist = Math.hypot(cx - small.cols / 2, cy - small.rows / 2) / Math.hypot(small.cols / 2, small.rows / 2);
-              const centerScore = clamp01(1 - centerDist);
-              let confidence = clamp01(0.56 * areaScore + 0.30 * aspectScore + 0.14 * centerScore);
-              let quarterTurn = false;
-              if (metrics.width > metrics.height) {
-                // 讓輸出保持直式。方向可能仍差 180 度，因此降低信心並要求人工確認。
-                ordered = [ordered[1], ordered[2], ordered[3], ordered[0]];
-                quarterTurn = true;
-                confidence = Math.min(confidence, 0.68);
-              }
-              if (!best || confidence > best.confidence) {
-                best = {
-                  method: 'contour', confidence, quarterTurn,
-                  corners: ordered.map((p) => ({ x: p.x / scale, y: p.y / scale })),
-                  detail: `文件輪廓覆蓋 ${Math.round(areaRatio * 100)}%，比例相似度 ${Math.round(aspectScore * 100)}%`
-                };
-              }
-              break;
-            } finally {
-              approx.delete();
-            }
-          }
-        } finally {
-          cnt.delete();
-        }
-      }
-      return best;
-    } finally {
-      [src, small, gray, blurred, edges, closed, contours, hierarchy, kernel].forEach((m) => {
-        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
-      });
-    }
-  }
-
   async function autoDetectDocument({ keepEditorOpen = false, forceOpenCVRetry = false } = {}) {
     // 先跑零下載成本的固定版型快速判斷。大量實際照片本來就幾乎填滿畫面，
     // 這條 fast path 可直接避開 OpenCV.js 首次載入成本。
@@ -671,11 +924,11 @@
       setProcessingStatus(
         '正在載入文件偵測引擎…',
         0.30,
-        `首次使用需下載 OpenCV.js；最長等待約 ${Math.round(OPENCV_TOTAL_TIMEOUT_MS / 1000)} 秒，逾時會自動切換備援流程。`
+        `首次使用需下載 OpenCV.js；最長等待約 ${Math.round(CV_WORKER_INIT_TIMEOUT_MS / 1000)} 秒，逾時會自動切換備援流程（不會卡住畫面）。`
       );
-      const cv = await ensureOpenCV({ forceRetry: forceOpenCVRetry });
+      await ensureCvWorker({ forceRetry: forceOpenCVRetry });
       setProcessingStatus('正在分析文件邊界…', 0.33, '已載入 OpenCV.js，正在搜尋紙張輪廓。');
-      cvCandidate = detectDocumentWithOpenCV(cv);
+      cvCandidate = await detectDocumentViaWorker();
     } catch (err) {
       cvError = err;
       console.warn('OpenCV auto detection unavailable:', err);
@@ -954,122 +1207,6 @@
     return out;
   }
 
-  function warpPerspectiveOpenCV(cv, source, pts, outW, outH) {
-    if (!validateCorners(pts)) throw new Error('四角範圍太小或交叉，請重新調整文件四角。');
-    const srcMat = cv.imread(source);
-    const dstMat = new cv.Mat();
-    const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      pts[0].x, pts[0].y,
-      pts[1].x, pts[1].y,
-      pts[2].x, pts[2].y,
-      pts[3].x, pts[3].y
-    ]);
-    const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      0, 0,
-      outW - 1, 0,
-      outW - 1, outH - 1,
-      0, outH - 1
-    ]);
-    const transform = cv.getPerspectiveTransform(srcPts, dstPts);
-    const out = document.createElement('canvas');
-    out.width = outW;
-    out.height = outH;
-    try {
-      cv.warpPerspective(
-        srcMat,
-        dstMat,
-        transform,
-        new cv.Size(outW, outH),
-        cv.INTER_LINEAR,
-        cv.BORDER_CONSTANT,
-        new cv.Scalar(255, 255, 255, 255)
-      );
-      cv.imshow(out, dstMat);
-      return out;
-    } finally {
-      srcMat.delete();
-      dstMat.delete();
-      srcPts.delete();
-      dstPts.delete();
-      transform.delete();
-    }
-  }
-
-  function estimateHorizontalSkew(cv, canvas) {
-    let src, gray, binary, horizontal, lines, kernel;
-    try {
-      src = cv.imread(canvas);
-      gray = new cv.Mat();
-      binary = new cv.Mat();
-      horizontal = new cv.Mat();
-      lines = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.threshold(gray, binary, 150, 255, cv.THRESH_BINARY_INV);
-      const kernelWidth = Math.max(25, Math.round(canvas.width * 0.035));
-      kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(kernelWidth, 1));
-      cv.morphologyEx(binary, horizontal, cv.MORPH_OPEN, kernel);
-      cv.HoughLinesP(
-        horizontal,
-        lines,
-        1,
-        Math.PI / 1800,
-        45,
-        Math.round(canvas.width * 0.42),
-        Math.round(canvas.width * 0.06)
-      );
-      const angles = [];
-      const data = lines.data32S || [];
-      for (let i = 0; i + 3 < data.length; i += 4) {
-        const x1 = data[i], y1 = data[i + 1], x2 = data[i + 2], y2 = data[i + 3];
-        const ym = (y1 + y2) / 2;
-        if (ym < canvas.height * 0.12 || ym > canvas.height * 0.31) continue;
-        const length = Math.hypot(x2 - x1, y2 - y1);
-        if (length < canvas.width * 0.42) continue;
-        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
-        if (Math.abs(angle) <= 5) angles.push(angle);
-      }
-      if (!angles.length) return 0;
-      angles.sort((a, b) => a - b);
-      const mid = Math.floor(angles.length / 2);
-      return angles.length % 2 ? angles[mid] : (angles[mid - 1] + angles[mid]) / 2;
-    } catch (err) {
-      console.warn('Deskew estimation failed:', err);
-      return 0;
-    } finally {
-      [src, gray, binary, horizontal, lines, kernel].forEach((m) => {
-        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
-      });
-    }
-  }
-
-  function rotateCanvasOpenCV(cv, canvas, angleDeg) {
-    if (Math.abs(angleDeg) < 0.08) return canvas;
-    let src, dst, matrix;
-    try {
-      src = cv.imread(canvas);
-      dst = new cv.Mat();
-      matrix = cv.getRotationMatrix2D(new cv.Point(src.cols / 2, src.rows / 2), angleDeg, 1);
-      cv.warpAffine(
-        src,
-        dst,
-        matrix,
-        new cv.Size(src.cols, src.rows),
-        cv.INTER_LINEAR,
-        cv.BORDER_CONSTANT,
-        new cv.Scalar(255, 255, 255, 255)
-      );
-      const out = document.createElement('canvas');
-      out.width = canvas.width;
-      out.height = canvas.height;
-      cv.imshow(out, dst);
-      return out;
-    } finally {
-      [src, dst, matrix].forEach((m) => {
-        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
-      });
-    }
-  }
-
   function cropRatio(source,r,padding=r.pad ?? 0.003) {
     const x1=Math.max(0,r.x1-padding), y1=Math.max(0,r.y1-padding);
     const x2=Math.min(1,r.x2+padding), y2=Math.min(1,r.y2+padding);
@@ -1147,13 +1284,28 @@
     let result=await w.recognize(tile);
     let best={ text:result.data.text||'', confidence:Number(result.data.confidence)||0 };
 
-    // 中文姓名若第一輪低信心，再用灰階高對比重跑一次，避免二值化吃掉細筆畫。
-    if (region.type==='name' && (best.confidence<62 || !extractName(best.text))) {
+    // 市場名稱／承銷人姓名是無固定字典可比對的自由文字，實測發現二值化即使信心分數不低
+    // 仍常誤判外觀相近的字（如 鳳→還、會→賤、場→埸），且誤判後的文字有時仍剛好包含
+    // 「市場」等關鍵字，靠信心門檻或格式驗證判斷「要不要重跑」並不可靠。
+    // 因此這兩欄一律改用灰階高對比、放大留白再多跑一輪，兩輪都通過格式驗證時，取信心較高者。
+    if (region.verify) {
       tile=cropRatio(correctedCanvas,{...region,pad:Math.max(region.pad||0,0.004)});
       preprocessForOCR(tile,false);
       result=await w.recognize(tile);
       const alt={text:result.data.text||'',confidence:Number(result.data.confidence)||0};
-      if (extractName(alt.text) && (!extractName(best.text) || alt.confidence>=best.confidence-8)) best=alt;
+      if (region.verify(alt.text) && (!region.verify(best.text) || alt.confidence>best.confidence)) best=alt;
+    } else if (region.type==='codes' && !extractCodes(best.text).length) {
+      // 拍賣編號欄位若只有零星幾筆，整欄大片留白加上拍照常見的邊緣光影漸層，
+      // 會讓「整張裁切區共用一個 Otsu 閾值」算壞，把大片背景誤判成前景黑塊雜訊，
+      // 導致整欄辨識失敗（實測信心值僅個位數）。第一輪抓不到任何編號時，
+      // 改用灰階高對比重跑一次，兩輪文字合併後交給 extractCodes 解析（內部已會去重）。
+      // 注意：這裡刻意不放大留白（不同於市場名稱／承銷人姓名的重跑）——右欄本就貼近
+      // 頁面邊緣，實測放大留白反而多納入陰影，讓辨識更差。
+      tile=cropRatio(correctedCanvas,region);
+      preprocessForOCR(tile,false);
+      result=await w.recognize(tile);
+      const alt={text:result.data.text||'',confidence:Number(result.data.confidence)||0};
+      if (extractCodes(alt.text).length) best={text:`${best.text}\n${alt.text}`, confidence:Math.max(best.confidence,alt.confidence)};
     }
     tile.width=1; tile.height=1;
     return best;
@@ -1165,9 +1317,13 @@
   function cleanChineseLine(s) {
     return cleanText(s).replace(/\s+/g,'').replace(/^[^\p{Script=Han}A-Za-z0-9（(]+/u,'').replace(/[^\p{Script=Han}A-Za-z0-9）)]+$/u,'');
   }
+  function hanCharCount(s) { return (String(s||'').match(/[\p{Script=Han}]/gu)||[]).length; }
   function extractMarket(raw) {
     const lines=String(raw||'').split(/\n+/).map(cleanChineseLine).filter(Boolean);
-    const c=lines.find(x=>/市場/u.test(x)) || lines.sort((a,b)=>b.length-a.length)[0] || '';
+    // 至少要有 2 個中文字才視為可能的市場名稱候選，過濾雜訊/符號行。
+    const candidates=lines.filter(x=>hanCharCount(x)>=2);
+    // 備援改挑「中文字數最多」而非「字串最長」，避免雜訊字符把長度拉長而選錯。
+    const c=candidates.find(x=>/市場/u.test(x)) || candidates.sort((a,b)=>hanCharCount(b)-hanCharCount(a))[0] || '';
     return c.replace(/毛豬採購證明單.*$/u,'');
   }
   function extractDocument(raw) {
@@ -1189,8 +1345,11 @@
   }
   function extractName(raw) {
     const s=String(raw||'').replace(/\s+/g,'');
-    const candidates=s.match(/[\p{Script=Han}]{2,5}/gu)||[];
-    return candidates.find(x=>!/(承銷|號碼|編號|日期|拍賣|市場|證明|豬單|項數|頭數)/u.test(x)) || '';
+    const banned=/(承銷|號碼|編號|日期|拍賣|市場|證明|豬單|項數|頭數|姓名)/u;
+    // 表格框線或印章雜訊常被誤讀成同一字元重複，先去除候選字串頭尾的重複字元雜訊再判斷。
+    const stripNoise=(x)=>x.replace(/^(.)\1+/u,'').replace(/(.)\1+$/u,'');
+    const candidates=(s.match(/[\p{Script=Han}]{2,5}/gu)||[]).map(stripNoise).filter(x=>x.length>=2);
+    return candidates.find(x=>!banned.test(x)) || '';
   }
   function normalizeAuctionCode(raw) {
     const s=normalizeDigitChars(String(raw||'').toUpperCase()).replace(/[‐‑‒–—―－_.:：\s]/g,'');
@@ -1202,7 +1361,10 @@
     return `AC${m[1]}-${serial}`;
   }
   function extractCodes(raw) {
-    const text=String(raw||'').toUpperCase().replace(/[‐‑‒–—―－_]/g,'-');
+    let text=String(raw||'').toUpperCase().replace(/[‐‑‒–—―－_]/g,'-');
+    // 實測拍照樣本中「AC」常被多讀出一個 C/G（如 AGC、ACC），使正則比對整筆落空；
+    // 由於代碼格式只允許 AC／AG 兩種字首，A 後面出現兩個 [CG] 字元必為雜訊，可安全收斂成一個。
+    text=text.replace(/A[CG]{2}(?=[0-9])/g,(m)=>'A'+m[m.length-1]);
     const tokens=text.split(/[\s,，;；]+/).filter(Boolean);
     const out=[];
     for(const t of tokens) {
@@ -1311,34 +1473,48 @@
       showProcessing('正在做透視校正…', 0.36, '校正會優先使用已載入的 OpenCV；若不可用則自動使用 JavaScript 備援。');
       await sleep(30);
 
-      // 不在校正階段再次阻塞等待 OpenCV。自動偵測若已成功，cvApi 早已可用；
+      // 不在校正階段再次阻塞等待 OpenCV。自動偵測若已成功，worker 早已就緒；
       // 若先前載入失敗，直接走 JS fallback，避免使用者第二次再等一輪。
-      const cv = cvApi?.Mat ? cvApi : null;
       const fullFrameFastPath = autoDetection.method === 'template-frame' && isNearFullFrameQuad(corners);
 
-      let warped = fullFrameFastPath
-        ? resizeCanvasFast(sourceCanvas, NORMALIZED_WIDTH, NORMALIZED_HEIGHT)
-        : cv
-          ? warpPerspectiveOpenCV(cv, sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT)
-          : warpPerspectiveJS(sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+      let warped;
+      let cvReady = fullFrameFastPath ? false : cvWorkerIsReady;
+      if (fullFrameFastPath) {
+        warped = resizeCanvasFast(sourceCanvas, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+      } else if (cvReady) {
+        try {
+          warped = await warpPerspectiveViaWorker(sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+        } catch (err) {
+          console.warn('OpenCV 透視校正失敗，改用 JS 備援：', err);
+          cvReady = false;
+          warped = warpPerspectiveJS(sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+        }
+      } else {
+        warped = warpPerspectiveJS(sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+      }
 
       setProcessingStatus(
         '正在校正水平傾斜…',
         0.62,
-        cv ? '利用文件表格水平線估算小角度傾斜。' : 'OpenCV 未就緒，本次略過自動水平線分析；仍可人工調整四角後重跑。'
+        cvReady ? '利用文件表格水平線估算小角度傾斜。' : 'OpenCV 未就緒，本次略過自動水平線分析；仍可人工調整四角後重跑。'
       );
       let deskewAngle = 0;
       let finalCanvas = warped;
-      if (cv) {
-        deskewAngle = estimateHorizontalSkew(cv, warped);
-        if (Math.abs(deskewAngle) >= 0.08 && Math.abs(deskewAngle) <= 4.5) {
-          const rotated = rotateCanvasOpenCV(cv, warped, -deskewAngle);
-          if (rotated !== warped) {
-            finalCanvas = rotated;
-            warped.width = 1;
-            warped.height = 1;
+      if (cvReady) {
+        try {
+          deskewAngle = await estimateHorizontalSkewViaWorker(warped);
+          if (Math.abs(deskewAngle) >= 0.08 && Math.abs(deskewAngle) <= 4.5) {
+            const rotated = await rotateCanvasViaWorker(warped, -deskewAngle);
+            if (rotated !== warped) {
+              finalCanvas = rotated;
+              warped.width = 1;
+              warped.height = 1;
+            }
+          } else {
+            deskewAngle = 0;
           }
-        } else {
+        } catch (err) {
+          console.warn('水平傾斜校正略過：', err);
           deskewAngle = 0;
         }
       }
@@ -1362,7 +1538,7 @@
       const pct = autoDetection.confidence ? `，四角信心 ${Math.round(autoDetection.confidence * 100)}%` : '';
       const angleText = deskewAngle
         ? `，水平修正 ${(-deskewAngle).toFixed(2)}°`
-        : cv
+        : cvReady
           ? '，水平線已檢查'
           : '，本次未執行自動水平線校正';
       const methodText = autoDetection.method === 'contour'
@@ -1471,7 +1647,7 @@
       showProcessing(
         '正在重新偵測文件四角…',
         0.28,
-        `這次會重新嘗試 OpenCV.js；最長等待約 ${Math.round(OPENCV_TOTAL_TIMEOUT_MS / 1000)} 秒。`
+        `這次會重新嘗試 OpenCV.js；最長等待約 ${Math.round(CV_WORKER_INIT_TIMEOUT_MS / 1000)} 秒（在背景 worker 執行，畫面不會被卡住）。`
       );
       const detection = await autoDetectDocument({ keepEditorOpen:true, forceOpenCVRetry:true });
       hideProcessing();
@@ -1497,6 +1673,7 @@
 
   window.addEventListener('pagehide',()=>{
     if(worker) worker.terminate();
+    if(cvWorker) cvWorker.terminate();
     if(correctedPreviewUrl && correctedPreviewUrl.startsWith('blob:')) URL.revokeObjectURL(correctedPreviewUrl);
   });
 })();
