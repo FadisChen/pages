@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>毛豬採購證明單 OCR</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #fff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d9e1ea;
+      --primary: #2563eb;
+      --primary-2: #1d4ed8;
+      --dark: #0f172a;
+      --soft: #eef4ff;
+      --danger: #b42318;
+      --success: #067647;
+      --warn: #b54708;
+      --radius: 16px;
+      --shadow: 0 16px 40px rgba(15,23,42,.10);
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg,#edf3ff 0,#f7f9fc 32%,var(--bg) 100%);
+      color: var(--text);
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    }
+    button,input,textarea { font: inherit; }
+    button { touch-action: manipulation; }
+    .app {
+      width: min(820px,calc(100% - 24px));
+      margin: 0 auto;
+      padding: 26px 0 calc(36px + env(safe-area-inset-bottom));
+    }
+    .hero { margin-bottom: 16px; }
+    .hero h1 { margin: 0 0 7px; font-size: clamp(25px,7vw,36px); line-height: 1.2; }
+    .hero p { margin: 0; color: var(--muted); line-height: 1.65; font-size: 14px; }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(217,225,234,.9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .section-title { display:flex; align-items:center; gap:9px; margin:0 0 14px; font-size:18px; }
+    .step-badge {
+      width: 28px; height: 28px; flex: 0 0 28px; display:grid; place-items:center;
+      border-radius: 50%; color:#fff; background:var(--dark); font-size:13px; font-weight:800;
+    }
+    .capture-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .btn {
+      min-height: 48px; border:0; border-radius:12px; padding:12px 15px; cursor:pointer;
+      font-weight:800; transition:.15s ease; display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-primary { color:#fff; background:var(--primary); }
+    .btn-primary:active { background:var(--primary-2); transform:translateY(1px); }
+    .btn-secondary { color:#243b80; background:#eaf0ff; }
+    .btn-dark { color:#fff; background:var(--dark); }
+    .btn-ghost { color:var(--text); background:#f2f4f7; border:1px solid var(--line); }
+    .btn-danger { color:var(--danger); background:#fff1f0; }
+    .help { margin:12px 0 0; color:var(--muted); font-size:12px; line-height:1.65; }
+    .preview-card { display:none; }
+    .preview-card.show { display:block; }
+    .preview-box { background:#e7ebf0; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+    .preview-box img { width:100%; max-height:390px; object-fit:contain; display:block; }
+    .preview-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .preview-actions .btn { flex:1 1 160px; }
+
+    .status { display:none; }
+    .status.show { display:block; }
+    .status-row { display:flex; justify-content:space-between; gap:10px; color:var(--muted); font-size:13px; margin-bottom:8px; }
+    .track { height:9px; overflow:hidden; border-radius:999px; background:#e7ecf3; }
+    .bar { height:100%; width:0%; background:var(--primary); transition:width .18s ease; }
+    .status-note { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.5; }
+
+    .result-card { display:none; }
+    .result-card.show { display:block; }
+    .notice { display:none; margin:0 0 14px; padding:11px 12px; border-radius:10px; font-size:13px; line-height:1.55; }
+    .notice.show { display:block; }
+    .notice.warn { color:#7a2e0e; background:#fff7ed; border:1px solid #fed7aa; }
+    .notice.ok { color:#05603a; background:#ecfdf3; border:1px solid #abefc6; }
+    .field { margin-bottom:13px; }
+    .field label { display:block; margin-bottom:6px; font-size:13px; font-weight:800; }
+    .field input, .field textarea {
+      width:100%; min-height:46px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+      color:var(--text); background:#fff; outline:none; font-size:16px; line-height:1.5;
+    }
+    .field textarea { min-height:94px; resize:vertical; }
+    .field input:focus, .field textarea:focus { border-color:#84adff; box-shadow:0 0 0 3px rgba(37,99,235,.10); }
+    .field input.missing { border-color:#fda29b; background:#fffbfa; }
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .code-head { display:flex; align-items:end; justify-content:space-between; gap:10px; margin:18px 0 9px; }
+    .code-head h3 { margin:0; font-size:16px; }
+    .code-head span { color:var(--muted); font-size:12px; }
+    .code-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .code-item { display:grid; grid-template-columns:36px 1fr 38px; gap:6px; align-items:center; }
+    .code-index { text-align:right; color:var(--muted); font-size:12px; padding-right:3px; }
+    .code-item input { min-width:0; width:100%; height:44px; border:1px solid var(--line); border-radius:9px; padding:8px 10px; font-size:16px; }
+    .icon-btn { width:38px; height:38px; border:0; border-radius:9px; cursor:pointer; background:#f2f4f7; color:#475467; font-size:20px; }
+    .result-actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:16px; }
+    .error { display:none; margin-top:12px; padding:11px 12px; border-radius:10px; color:var(--danger); background:#fff1f0; border:1px solid #fecdca; white-space:pre-wrap; font-size:13px; line-height:1.55; }
+    .error.show { display:block; }
+
+    /* Full-screen mobile document editor */
+    .editor {
+      position:fixed; inset:0; z-index:10000; display:none; flex-direction:column;
+      background:#080c14; color:#fff; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
+    }
+    .editor.show { display:flex; }
+    .editor-head { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.13); }
+    .editor-head h2 { margin:0; font-size:17px; }
+    .editor-close { width:42px; height:42px; border:0; border-radius:10px; background:rgba(255,255,255,.10); color:#fff; font-size:24px; }
+    .editor-stage { position:relative; flex:1 1 auto; min-height:0; overflow:hidden; background:#05070b; touch-action:none; }
+    #editorCanvas { width:100%; height:100%; display:block; touch-action:none; }
+    .editor-tip {
+      position:absolute; left:50%; top:10px; transform:translateX(-50%); width:max-content; max-width:92%;
+      padding:7px 10px; border-radius:999px; background:rgba(0,0,0,.66); font-size:12px; color:#fff; text-align:center; pointer-events:none;
+    }
+    .editor-tools { flex:0 0 auto; padding:10px 12px 8px; border-top:1px solid rgba(255,255,255,.13); background:#0b1220; }
+    .tool-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .tool-row .btn { min-height:44px; padding:9px 7px; font-size:13px; }
+    .editor-apply { width:100%; margin-top:9px; min-height:50px; }
+
+    .processing-overlay { position:fixed; inset:0; z-index:11000; display:none; place-items:center; padding:20px; background:rgba(15,23,42,.72); }
+    .processing-overlay.show { display:grid; }
+    .processing-box { width:min(420px,100%); padding:20px; border-radius:16px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.25); }
+    .processing-box strong { display:block; margin-bottom:10px; }
+
+    @media (max-width:640px) {
+      .app { width:min(100% - 18px,820px); padding-top:18px; }
+      .card { padding:15px; border-radius:14px; }
+      .capture-grid,.grid-2,.result-actions { grid-template-columns:1fr; }
+      .code-list { grid-template-columns:1fr; }
+      .hero p { font-size:13px; }
+    }
+    @media (min-width:900px) {
+      .editor { inset:3vh 50%; transform:translateX(-50%); width:min(900px,96vw); height:94vh; border-radius:18px; overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.45); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <h1>毛豬採購證明單 OCR</h1>
+      <p>手機拍照或選取照片後，先校正文件四角，再依固定版型辨識欄位。OCR 結果會直接填入表單，供使用者確認與修正。</p>
+    </header>
+
+    <section class="card">
+      <h2 class="section-title"><span class="step-badge">1</span>取得文件照片</h2>
+      <div class="capture-grid">
+        <button id="takePhotoBtn" class="btn btn-primary" type="button">開啟相機拍照</button>
+        <button id="choosePhotoBtn" class="btn btn-secondary" type="button">從手機選取照片</button>
+      </div>
+      <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+      <input id="galleryInput" type="file" accept="image/*" hidden />
+      <p class="help">建議讓整張文件完整入鏡、避免反光。拍歪沒有關係，下一步可拖曳四角做透視校正。</p>
+      <div id="errorBox" class="error" role="alert"></div>
+    </section>
+
+    <section id="previewCard" class="card preview-card">
+      <h2 class="section-title"><span class="step-badge">2</span>校正後文件</h2>
+      <div class="preview-box"><img id="correctedPreview" alt="校正後文件預覽" /></div>
+      <div class="preview-actions">
+        <button id="editAgainBtn" class="btn btn-ghost" type="button">重新調整四角</button>
+        <button id="recognizeAgainBtn" class="btn btn-secondary" type="button">重新 OCR</button>
+      </div>
+    </section>
+
+    <section id="statusCard" class="card status" aria-live="polite">
+      <h2 class="section-title"><span class="step-badge">3</span>OCR 辨識</h2>
+      <div class="status-row"><span id="statusText">準備中</span><span id="progressText">0%</span></div>
+      <div class="track"><div id="progressBar" class="bar"></div></div>
+      <div class="status-note">依固定版型分別辨識市場名稱、文件名稱、日期、承銷人與左右兩欄拍賣編號。</div>
+    </section>
+
+    <section id="resultCard" class="card result-card">
+      <h2 class="section-title"><span class="step-badge">4</span>確認與修正</h2>
+      <div id="resultNotice" class="notice"></div>
+
+      <div class="field">
+        <label for="marketInput">市場名稱</label>
+        <input id="marketInput" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="documentInput">文件名稱</label>
+        <input id="documentInput" autocomplete="off" />
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="dateInput">拍賣日期</label>
+          <input id="dateInput" inputmode="text" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="dealerNumberInput">承銷人編號</label>
+          <input id="dealerNumberInput" inputmode="numeric" autocomplete="off" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="dealerNameInput">承銷人姓名</label>
+        <input id="dealerNameInput" autocomplete="off" />
+      </div>
+
+      <div class="code-head">
+        <h3>拍賣編號</h3>
+        <span id="codeCount">0 筆</span>
+      </div>
+      <div id="codeList" class="code-list"></div>
+      <button id="addCodeBtn" class="btn btn-ghost" type="button" style="width:100%;margin-top:9px;">＋ 新增拍賣編號</button>
+
+      <div class="result-actions">
+        <button id="copyJsonBtn" class="btn btn-secondary" type="button">複製 JSON</button>
+        <button id="newScanBtn" class="btn btn-dark" type="button">辨識下一張</button>
+      </div>
+    </section>
+  </main>
+
+  <section id="editor" class="editor" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+    <div class="editor-head">
+      <h2 id="editorTitle">裁切與透視校正</h2>
+      <button id="editorCloseBtn" class="editor-close" type="button" aria-label="關閉">×</button>
+    </div>
+    <div id="editorStage" class="editor-stage">
+      <canvas id="editorCanvas"></canvas>
+      <div class="editor-tip">拖曳 4 個圓點到文件四角；可先旋轉再調整</div>
+    </div>
+    <div class="editor-tools">
+      <div class="tool-row">
+        <button id="rotateLeftBtn" class="btn btn-ghost" type="button">↶ 左轉 90°</button>
+        <button id="resetCornersBtn" class="btn btn-ghost" type="button">重設四角</button>
+        <button id="rotateRightBtn" class="btn btn-ghost" type="button">↷ 右轉 90°</button>
+      </div>
+      <button id="applyCorrectionBtn" class="btn btn-primary editor-apply" type="button">套用校正並開始 OCR</button>
+    </div>
+  </section>
+
+  <div id="processingOverlay" class="processing-overlay" aria-live="polite">
+    <div class="processing-box">
+      <strong id="processingTitle">正在校正圖片…</strong>
+      <div class="track"><div id="processingBar" class="bar"></div></div>
+    </div>
+  </div>
+
+  <canvas id="sourceCanvas" hidden></canvas>
+  <canvas id="correctedCanvas" hidden></canvas>
+
+<script>
+(() => {
+  'use strict';
+
+  // 固定版型：依目前實際文件寬高比例建立標準化頁面。
+  // 將照片透視校正成同一比例後，以下 ROI 才能穩定套用。
+  const FORM_ASPECT = 1087 / 1373; // width / height
+  const NORMALIZED_WIDTH = 1600;
+  const NORMALIZED_HEIGHT = Math.round(NORMALIZED_WIDTH / FORM_ASPECT);
+  const MAX_SOURCE_SIDE = 2600;
+
+  const ROI = {
+    market:       { x1: 0.075, y1: 0.022, x2: 0.925, y2: 0.070, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 1200 },
+    document:     { x1: 0.245, y1: 0.067, x2: 0.755, y2: 0.103, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 900 },
+    date:         { x1: 0.165, y1: 0.101, x2: 0.375, y2: 0.122, psm: 'SINGLE_LINE', type: 'date', pad: 0.0015, targetWidth: 800 },
+    dealerNumber: { x1: 0.175, y1: 0.123, x2: 0.285, y2: 0.140, psm: 'SINGLE_LINE', type: 'number', pad: 0.001, targetWidth: 520 },
+    dealerName:   { x1: 0.170, y1: 0.143, x2: 0.355, y2: 0.161, psm: 'SINGLE_LINE', type: 'name', pad: 0.001, targetWidth: 700 },
+    codesLeft:    { x1: 0.285, y1: 0.188, x2: 0.525, y2: 0.715, psm: 'SPARSE_TEXT', type: 'codes', pad: 0.002, targetWidth: 900 },
+    codesRight:   { x1: 0.705, y1: 0.188, x2: 0.990, y2: 0.715, psm: 'SPARSE_TEXT', type: 'codes', pad: 0.002, targetWidth: 900 }
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const takePhotoBtn = $('takePhotoBtn');
+  const choosePhotoBtn = $('choosePhotoBtn');
+  const cameraInput = $('cameraInput');
+  const galleryInput = $('galleryInput');
+  const errorBox = $('errorBox');
+  const previewCard = $('previewCard');
+  const correctedPreview = $('correctedPreview');
+  const editAgainBtn = $('editAgainBtn');
+  const recognizeAgainBtn = $('recognizeAgainBtn');
+  const statusCard = $('statusCard');
+  const statusText = $('statusText');
+  const progressText = $('progressText');
+  const progressBar = $('progressBar');
+  const resultCard = $('resultCard');
+  const resultNotice = $('resultNotice');
+  const marketInput = $('marketInput');
+  const documentInput = $('documentInput');
+  const dateInput = $('dateInput');
+  const dealerNumberInput = $('dealerNumberInput');
+  const dealerNameInput = $('dealerNameInput');
+  const codeList = $('codeList');
+  const codeCount = $('codeCount');
+  const addCodeBtn = $('addCodeBtn');
+  const copyJsonBtn = $('copyJsonBtn');
+  const newScanBtn = $('newScanBtn');
+
+  const editor = $('editor');
+  const editorStage = $('editorStage');
+  const editorCanvas = $('editorCanvas');
+  const editorCloseBtn = $('editorCloseBtn');
+  const rotateLeftBtn = $('rotateLeftBtn');
+  const rotateRightBtn = $('rotateRightBtn');
+  const resetCornersBtn = $('resetCornersBtn');
+  const applyCorrectionBtn = $('applyCorrectionBtn');
+  const sourceCanvas = $('sourceCanvas');
+  const correctedCanvas = $('correctedCanvas');
+  const processingOverlay = $('processingOverlay');
+  const processingTitle = $('processingTitle');
+  const processingBar = $('processingBar');
+
+  let sourceCtx = sourceCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  let correctedCtx = correctedCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  let editorCtx = editorCanvas.getContext('2d');
+  let sourceFile = null;
+  let correctedPreviewUrl = null;
+  let worker = null;
+  let workerPromise = null;
+  let isBusy = false;
+  let activeHandle = -1;
+  let drawTransform = { scale: 1, ox: 0, oy: 0, cssW: 0, cssH: 0 };
+  let corners = [];
+  let progressContext = { base: 0, span: 1, label: '' };
+
+  const statusMap = {
+    'loading tesseract core': '載入 OCR 核心',
+    'initializing tesseract': '初始化 OCR',
+    'loading language traineddata': '載入繁體中文語言資料',
+    'initializing api': '初始化辨識引擎',
+    'recognizing text': '辨識中'
+  };
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.add('show');
+  }
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.classList.remove('show');
+  }
+  function setBusy(busy) {
+    isBusy = busy;
+    takePhotoBtn.disabled = busy;
+    choosePhotoBtn.disabled = busy;
+    applyCorrectionBtn.disabled = busy;
+    recognizeAgainBtn.disabled = busy;
+  }
+  function setProgress(label, value) {
+    const p = Math.max(0, Math.min(1, Number(value) || 0));
+    statusCard.classList.add('show');
+    statusText.textContent = label;
+    progressText.textContent = `${Math.round(p * 100)}%`;
+    progressBar.style.width = `${p * 100}%`;
+  }
+  function workerLogger(m) {
+    const local = Math.max(0, Math.min(1, Number(m.progress) || 0));
+    const total = progressContext.base + local * progressContext.span;
+    const text = statusMap[m.status] || m.status || '處理中';
+    setProgress(progressContext.label ? `${progressContext.label}：${text}` : text, total);
+  }
+  function showProcessing(title, p = 0.1) {
+    processingTitle.textContent = title;
+    processingBar.style.width = `${Math.max(0,Math.min(1,p))*100}%`;
+    processingOverlay.classList.add('show');
+  }
+  function hideProcessing() { processingOverlay.classList.remove('show'); }
+
+  async function getWorker() {
+    if (worker) return worker;
+    if (workerPromise) return workerPromise;
+    progressContext = { base: 0, span: 0.12, label: '' };
+    workerPromise = Tesseract.createWorker(['chi_tra', 'eng'], Tesseract.OEM.LSTM_ONLY, { logger: workerLogger })
+      .then(async (w) => {
+        await w.setParameters({ preserve_interword_spaces: '1', user_defined_dpi: '300' });
+        worker = w;
+        return w;
+      })
+      .catch((err) => { workerPromise = null; throw err; });
+    return workerPromise;
+  }
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('無法讀取圖片。')); };
+      img.src = url;
+    });
+  }
+
+  async function setSourceFromFile(file) {
+    if (!file || !file.type?.startsWith('image/')) throw new Error('請選擇圖片檔案。');
+    sourceFile = file;
+    const img = await loadImage(file);
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const scale = Math.min(1, MAX_SOURCE_SIDE / Math.max(iw, ih));
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+    sourceCanvas.width = w;
+    sourceCanvas.height = h;
+    sourceCtx = sourceCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    sourceCtx.fillStyle = '#fff';
+    sourceCtx.fillRect(0,0,w,h);
+    sourceCtx.imageSmoothingEnabled = true;
+    sourceCtx.imageSmoothingQuality = 'high';
+    sourceCtx.drawImage(img, 0, 0, w, h);
+    resetCorners();
+  }
+
+  function resetCorners() {
+    const m = 0.035;
+    corners = [
+      { x: sourceCanvas.width * m, y: sourceCanvas.height * m },
+      { x: sourceCanvas.width * (1-m), y: sourceCanvas.height * m },
+      { x: sourceCanvas.width * (1-m), y: sourceCanvas.height * (1-m) },
+      { x: sourceCanvas.width * m, y: sourceCanvas.height * (1-m) }
+    ];
+    renderEditor();
+  }
+
+  function openEditor() {
+    editor.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(renderEditor);
+  }
+  function closeEditor() {
+    editor.classList.remove('show');
+    document.body.style.overflow = '';
+    activeHandle = -1;
+  }
+
+  function renderEditor() {
+    if (!editor.classList.contains('show') || !sourceCanvas.width) return;
+    const rect = editorStage.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width));
+    const cssH = Math.max(1, Math.round(rect.height));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    editorCanvas.width = Math.round(cssW * dpr);
+    editorCanvas.height = Math.round(cssH * dpr);
+    editorCanvas.style.width = `${cssW}px`;
+    editorCanvas.style.height = `${cssH}px`;
+    editorCtx = editorCanvas.getContext('2d');
+    editorCtx.setTransform(dpr,0,0,dpr,0,0);
+    editorCtx.clearRect(0,0,cssW,cssH);
+
+    const scale = Math.min(cssW / sourceCanvas.width, cssH / sourceCanvas.height);
+    const dw = sourceCanvas.width * scale;
+    const dh = sourceCanvas.height * scale;
+    const ox = (cssW - dw) / 2;
+    const oy = (cssH - dh) / 2;
+    drawTransform = { scale, ox, oy, cssW, cssH };
+
+    editorCtx.fillStyle = '#05070b';
+    editorCtx.fillRect(0,0,cssW,cssH);
+    editorCtx.drawImage(sourceCanvas, ox, oy, dw, dh);
+
+    // Shade outside selected quadrilateral.
+    const pts = corners.map(toDisplayPoint);
+    editorCtx.save();
+    editorCtx.fillStyle = 'rgba(0,0,0,.45)';
+    editorCtx.beginPath();
+    editorCtx.rect(0,0,cssW,cssH);
+    editorCtx.moveTo(pts[0].x,pts[0].y);
+    for (let i=1;i<pts.length;i++) editorCtx.lineTo(pts[i].x,pts[i].y);
+    editorCtx.closePath();
+    editorCtx.fill('evenodd');
+    editorCtx.restore();
+
+    editorCtx.lineWidth = 3;
+    editorCtx.strokeStyle = '#60a5fa';
+    editorCtx.beginPath();
+    editorCtx.moveTo(pts[0].x,pts[0].y);
+    for (let i=1;i<pts.length;i++) editorCtx.lineTo(pts[i].x,pts[i].y);
+    editorCtx.closePath();
+    editorCtx.stroke();
+
+    pts.forEach((p,i) => {
+      editorCtx.beginPath();
+      editorCtx.arc(p.x,p.y,13,0,Math.PI*2);
+      editorCtx.fillStyle = '#fff';
+      editorCtx.fill();
+      editorCtx.lineWidth = 4;
+      editorCtx.strokeStyle = i === activeHandle ? '#f59e0b' : '#2563eb';
+      editorCtx.stroke();
+    });
+  }
+
+  function toDisplayPoint(p) {
+    return { x: drawTransform.ox + p.x * drawTransform.scale, y: drawTransform.oy + p.y * drawTransform.scale };
+  }
+  function toSourcePoint(x,y) {
+    return {
+      x: Math.max(0, Math.min(sourceCanvas.width-1, (x - drawTransform.ox) / drawTransform.scale)),
+      y: Math.max(0, Math.min(sourceCanvas.height-1, (y - drawTransform.oy) / drawTransform.scale))
+    };
+  }
+  function pointerPos(ev) {
+    const r = editorCanvas.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  }
+  function nearestHandle(x,y) {
+    let idx=-1, best=Infinity;
+    corners.forEach((p,i) => {
+      const d = toDisplayPoint(p);
+      const dist = Math.hypot(d.x-x,d.y-y);
+      if (dist < best) { best=dist; idx=i; }
+    });
+    return best <= 46 ? idx : -1;
+  }
+
+  editorCanvas.addEventListener('pointerdown', (ev) => {
+    const p = pointerPos(ev);
+    activeHandle = nearestHandle(p.x,p.y);
+    if (activeHandle >= 0) {
+      editorCanvas.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+      renderEditor();
+    }
+  });
+  editorCanvas.addEventListener('pointermove', (ev) => {
+    if (activeHandle < 0) return;
+    const p = pointerPos(ev);
+    corners[activeHandle] = toSourcePoint(p.x,p.y);
+    ev.preventDefault();
+    renderEditor();
+  });
+  const releaseHandle = (ev) => {
+    if (activeHandle >= 0) {
+      try { editorCanvas.releasePointerCapture(ev.pointerId); } catch {}
+      activeHandle = -1;
+      renderEditor();
+    }
+  };
+  editorCanvas.addEventListener('pointerup', releaseHandle);
+  editorCanvas.addEventListener('pointercancel', releaseHandle);
+  window.addEventListener('resize', () => requestAnimationFrame(renderEditor));
+
+  function rotateSource(clockwise) {
+    const temp = document.createElement('canvas');
+    temp.width = sourceCanvas.height;
+    temp.height = sourceCanvas.width;
+    const tctx = temp.getContext('2d', { alpha:false });
+    tctx.fillStyle='#fff'; tctx.fillRect(0,0,temp.width,temp.height);
+    tctx.translate(temp.width/2,temp.height/2);
+    tctx.rotate(clockwise ? Math.PI/2 : -Math.PI/2);
+    tctx.drawImage(sourceCanvas,-sourceCanvas.width/2,-sourceCanvas.height/2);
+    sourceCanvas.width=temp.width; sourceCanvas.height=temp.height;
+    sourceCtx=sourceCanvas.getContext('2d',{alpha:false,willReadFrequently:true});
+    sourceCtx.drawImage(temp,0,0);
+    resetCorners();
+  }
+
+  function validateCorners(pts) {
+    if (pts.length !== 4) return false;
+    // Shoelace area check to reject tiny/crossed quadrilaterals.
+    let area = 0;
+    for (let i=0;i<4;i++) {
+      const a=pts[i], b=pts[(i+1)%4];
+      area += a.x*b.y - b.x*a.y;
+    }
+    return Math.abs(area)/2 > sourceCanvas.width*sourceCanvas.height*0.08;
+  }
+
+  function solveLinearSystem(A, b) {
+    const n = b.length;
+    const M = A.map((row,i) => [...row,b[i]]);
+    for (let col=0; col<n; col++) {
+      let pivot=col;
+      for (let r=col+1;r<n;r++) if (Math.abs(M[r][col])>Math.abs(M[pivot][col])) pivot=r;
+      if (Math.abs(M[pivot][col]) < 1e-10) throw new Error('文件四角位置無效，請重新調整。');
+      [M[col],M[pivot]]=[M[pivot],M[col]];
+      const div=M[col][col];
+      for (let c=col;c<=n;c++) M[col][c]/=div;
+      for (let r=0;r<n;r++) {
+        if (r===col) continue;
+        const f=M[r][col];
+        if (!f) continue;
+        for (let c=col;c<=n;c++) M[r][c]-=f*M[col][c];
+      }
+    }
+    return M.map(row=>row[n]);
+  }
+
+  // 求「標準化輸出座標 -> 原圖座標」的 3x3 Homography，之後做 inverse mapping。
+  function computeHomography(dstPts, srcPts) {
+    const A=[], b=[];
+    for (let i=0;i<4;i++) {
+      const x=dstPts[i].x, y=dstPts[i].y, u=srcPts[i].x, v=srcPts[i].y;
+      A.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u);
+      A.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v);
+    }
+    const h=solveLinearSystem(A,b);
+    return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+  }
+
+  function warpPerspective(source, pts, outW, outH) {
+    if (!validateCorners(pts)) throw new Error('四角範圍太小或交叉，請把四個圓點依左上、右上、右下、左下放到文件四角。');
+    const dstPts=[
+      {x:0,y:0},{x:outW-1,y:0},{x:outW-1,y:outH-1},{x:0,y:outH-1}
+    ];
+    const H=computeHomography(dstPts,pts);
+    const sctx=source.getContext('2d',{willReadFrequently:true});
+    const src=sctx.getImageData(0,0,source.width,source.height);
+    const out=new ImageData(outW,outH);
+    const sd=src.data, dd=out.data, sw=source.width, sh=source.height;
+
+    for (let y=0;y<outH;y++) {
+      // Incremental numerator/denominator terms reduce per-pixel arithmetic.
+      let nu=H[1]*y+H[2], nv=H[4]*y+H[5], de=H[7]*y+1;
+      for (let x=0;x<outW;x++) {
+        const sx=nu/de, sy=nv/de;
+        const di=(y*outW+x)*4;
+        if (sx>=0 && sy>=0 && sx<sw-1 && sy<sh-1) {
+          const x0=sx|0, y0=sy|0, fx=sx-x0, fy=sy-y0;
+          const i00=(y0*sw+x0)*4, i10=i00+4, i01=i00+sw*4, i11=i01+4;
+          const w00=(1-fx)*(1-fy), w10=fx*(1-fy), w01=(1-fx)*fy, w11=fx*fy;
+          dd[di]   = sd[i00]*w00 + sd[i10]*w10 + sd[i01]*w01 + sd[i11]*w11;
+          dd[di+1] = sd[i00+1]*w00 + sd[i10+1]*w10 + sd[i01+1]*w01 + sd[i11+1]*w11;
+          dd[di+2] = sd[i00+2]*w00 + sd[i10+2]*w10 + sd[i01+2]*w01 + sd[i11+2]*w11;
+          dd[di+3] = 255;
+        } else {
+          dd[di]=dd[di+1]=dd[di+2]=255; dd[di+3]=255;
+        }
+        nu+=H[0]; nv+=H[3]; de+=H[6];
+      }
+    }
+    const outCanvas=document.createElement('canvas');
+    outCanvas.width=outW; outCanvas.height=outH;
+    outCanvas.getContext('2d',{alpha:false}).putImageData(out,0,0);
+    return outCanvas;
+  }
+
+  function cropRatio(source,r,padding=r.pad ?? 0.003) {
+    const x1=Math.max(0,r.x1-padding), y1=Math.max(0,r.y1-padding);
+    const x2=Math.min(1,r.x2+padding), y2=Math.min(1,r.y2+padding);
+    const sx=Math.floor(source.width*x1), sy=Math.floor(source.height*y1);
+    const sw=Math.max(1,Math.ceil(source.width*x2)-sx), sh=Math.max(1,Math.ceil(source.height*y2)-sy);
+    const targetWidth = r.targetWidth || 900;
+    const scale = Math.min(3, Math.max(1, targetWidth / sw));
+    const c=document.createElement('canvas');
+    c.width=Math.round(sw*scale); c.height=Math.round(sh*scale);
+    const ctx=c.getContext('2d',{alpha:false,willReadFrequently:true});
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+    ctx.drawImage(source,sx,sy,sw,sh,0,0,c.width,c.height);
+    return c;
+  }
+
+  function otsuThreshold(grayHist,total) {
+    let sum=0; for(let i=0;i<256;i++) sum+=i*grayHist[i];
+    let sumB=0,wB=0,maxVar=-1,threshold=160;
+    for(let t=0;t<256;t++) {
+      wB+=grayHist[t]; if(!wB) continue;
+      const wF=total-wB; if(!wF) break;
+      sumB+=t*grayHist[t];
+      const mB=sumB/wB, mF=(sum-sumB)/wF;
+      const between=wB*wF*(mB-mF)*(mB-mF);
+      if(between>maxVar){ maxVar=between; threshold=t; }
+    }
+    return threshold;
+  }
+
+  function preprocessForOCR(canvas, binary=true) {
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const d=img.data, hist=new Uint32Array(256);
+    for(let i=0;i<d.length;i+=4) {
+      const g=Math.max(0,Math.min(255,Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2])));
+      hist[g]++;
+      d[i]=d[i+1]=d[i+2]=g;
+    }
+    if(binary) {
+      const t=Math.max(105,Math.min(220,otsuThreshold(hist,canvas.width*canvas.height)));
+      for(let i=0;i<d.length;i+=4) {
+        const v=d[i] > t ? 255 : 0;
+        d[i]=d[i+1]=d[i+2]=v;
+      }
+    } else {
+      // Mild contrast stretch for Chinese strokes.
+      for(let i=0;i<d.length;i+=4) {
+        const v=Math.max(0,Math.min(255,(d[i]-128)*1.25+128));
+        d[i]=d[i+1]=d[i+2]=v;
+      }
+    }
+    ctx.putImageData(img,0,0);
+    return canvas;
+  }
+
+  function psmValue(name) {
+    return Tesseract.PSM[name] ?? Tesseract.PSM.SINGLE_BLOCK;
+  }
+
+  async function recognizeTile(w, key, region, idx, total) {
+    let tile=cropRatio(correctedCanvas,region);
+    // 對固定表單的淺灰拍照背景，以 ROI 各自 Otsu 二值化，避免整頁陰影影響閾值。
+    preprocessForOCR(tile,true);
+    const whitelist = region.type==='number' ? '0123456789' :
+      region.type==='codes' ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' : '';
+    await w.setParameters({
+      tessedit_pageseg_mode: psmValue(region.psm),
+      tessedit_char_whitelist: whitelist,
+      preserve_interword_spaces:'1',
+      user_defined_dpi:'300'
+    });
+    progressContext={ base:0.12+0.84*(idx/total), span:0.84/total, label:region.type==='codes'?'拍賣編號':key };
+    let result=await w.recognize(tile);
+    let best={ text:result.data.text||'', confidence:Number(result.data.confidence)||0 };
+
+    // 中文姓名若第一輪低信心，再用灰階高對比重跑一次，避免二值化吃掉細筆畫。
+    if (region.type==='name' && (best.confidence<62 || !extractName(best.text))) {
+      tile=cropRatio(correctedCanvas,{...region,pad:Math.max(region.pad||0,0.004)});
+      preprocessForOCR(tile,false);
+      result=await w.recognize(tile);
+      const alt={text:result.data.text||'',confidence:Number(result.data.confidence)||0};
+      if (extractName(alt.text) && (!extractName(best.text) || alt.confidence>=best.confidence-8)) best=alt;
+    }
+    tile.width=1; tile.height=1;
+    return best;
+  }
+
+  function cleanText(s) {
+    return String(s||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/^[\s|:：;；,.，。_-]+|[\s|:：;；,.，。_-]+$/g,'').trim();
+  }
+  function cleanChineseLine(s) {
+    return cleanText(s).replace(/\s+/g,'').replace(/^[^\p{Script=Han}A-Za-z0-9（(]+/u,'').replace(/[^\p{Script=Han}A-Za-z0-9）)]+$/u,'');
+  }
+  function extractMarket(raw) {
+    const lines=String(raw||'').split(/\n+/).map(cleanChineseLine).filter(Boolean);
+    const c=lines.find(x=>/市場/u.test(x)) || lines.sort((a,b)=>b.length-a.length)[0] || '';
+    return c.replace(/毛豬採購證明單.*$/u,'');
+  }
+  function extractDocument(raw) {
+    const s=String(raw||'').replace(/\s+/g,'');
+    const m=s.match(/(?:毛豬)?採購證明單[（(]?[^）)\n]{0,6}[）)]?/u);
+    return m ? m[0] : cleanChineseLine(s);
+  }
+  function normalizeDigitChars(s) {
+    return String(s||'').replace(/[ＯOQD]/gi,'0').replace(/[ＩIlL|]/g,'1').replace(/[ＳS]/g,'5').replace(/[ＺZ]/g,'2').replace(/[ＢB]/g,'8');
+  }
+  function extractDate(raw) {
+    const s=normalizeDigitChars(String(raw||'')).replace(/\s+/g,' ');
+    const m=s.match(/(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/u) || s.match(/(\d{2,3})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? `${Number(m[1])} 年 ${Number(m[2])} 月 ${Number(m[3])} 日` : '';
+  }
+  function extractNumber(raw) {
+    const m=normalizeDigitChars(raw).match(/\d{1,5}/);
+    return m ? m[0] : '';
+  }
+  function extractName(raw) {
+    const s=String(raw||'').replace(/\s+/g,'');
+    const candidates=s.match(/[\p{Script=Han}]{2,5}/gu)||[];
+    return candidates.find(x=>!/(承銷|號碼|編號|日期|拍賣|市場|證明|豬單|項數|頭數)/u.test(x)) || '';
+  }
+  function normalizeAuctionCode(raw) {
+    const s=normalizeDigitChars(String(raw||'').toUpperCase()).replace(/[‐‑‒–—―－_.:：\s]/g,'');
+    const m=s.match(/A[CG]([0-9]{2})([0-9]{3,5})/);
+    if(!m) return '';
+    let serial=m[2];
+    if(serial.length<4) serial=serial.padStart(4,'0');
+    if(serial.length>4) serial=serial.slice(-4);
+    return `AC${m[1]}-${serial}`;
+  }
+  function extractCodes(raw) {
+    const text=String(raw||'').toUpperCase().replace(/[‐‑‒–—―－_]/g,'-');
+    const tokens=text.split(/[\s,，;；]+/).filter(Boolean);
+    const out=[];
+    for(const t of tokens) {
+      const c=normalizeAuctionCode(t);
+      if(c&&!out.includes(c)) out.push(c);
+    }
+    // Fallback：允許 OCR 將空格/換行插入代碼。
+    const compact=normalizeDigitChars(text).replace(/[^A-Z0-9]/g,'');
+    const re=/A[CG][0-9]{2}[0-9]{4}/g;
+    for(const m of compact.match(re)||[]) {
+      const c=normalizeAuctionCode(m);
+      if(c&&!out.includes(c)) out.push(c);
+    }
+    return out;
+  }
+
+  async function runOCR() {
+    if (!correctedCanvas.width || isBusy) return;
+    clearError(); setBusy(true); statusCard.classList.add('show');
+    resultCard.classList.remove('show');
+    setProgress('準備 OCR 引擎',0.02);
+    try {
+      const w=await getWorker();
+      const entries=Object.entries(ROI);
+      const raws={};
+      for(let i=0;i<entries.length;i++) {
+        const [key,region]=entries[i];
+        raws[key]=await recognizeTile(w,key,region,i,entries.length);
+      }
+      setProgress('整理表單欄位',0.97);
+      const left=extractCodes(raws.codesLeft.text);
+      const right=extractCodes(raws.codesRight.text);
+      const codes=[...left,...right.filter(c=>!left.includes(c))].sort((a,b)=>{
+        const ba=Number(a.slice(2,4)),bb=Number(b.slice(2,4));
+        return ba===bb ? Number(a.slice(-4))-Number(b.slice(-4)) : ba-bb;
+      });
+      const data={
+        market:extractMarket(raws.market.text),
+        document:extractDocument(raws.document.text),
+        date:extractDate(raws.date.text),
+        dealerNumber:extractNumber(raws.dealerNumber.text),
+        dealerName:extractName(raws.dealerName.text),
+        codes
+      };
+      fillForm(data);
+      setProgress('辨識完成',1);
+      resultCard.classList.add('show');
+      resultCard.scrollIntoView({behavior:'smooth',block:'start'});
+    } catch(err) {
+      console.error(err);
+      showError(`OCR 處理失敗：${err?.message||err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function fillForm(data) {
+    marketInput.value=data.market||'';
+    documentInput.value=data.document||'';
+    dateInput.value=data.date||'';
+    dealerNumberInput.value=data.dealerNumber||'';
+    dealerNameInput.value=data.dealerName||'';
+    renderCodes(data.codes||[]);
+    const required=[marketInput,documentInput,dateInput,dealerNumberInput,dealerNameInput];
+    required.forEach(el=>el.classList.toggle('missing',!el.value.trim()));
+    const missing=required.filter(el=>!el.value.trim()).length;
+    resultNotice.className='notice show '+(missing||!data.codes.length?'warn':'ok');
+    resultNotice.textContent = missing||!data.codes.length
+      ? `OCR 已完成，但有 ${missing} 個基本欄位空白，拍賣編號 ${data.codes.length} 筆。請依原圖確認並修正。`
+      : `OCR 已完成，基本欄位皆有結果，拍賣編號 ${data.codes.length} 筆。送出前請再人工確認。`;
+  }
+
+  function renderCodes(codes) {
+    codeList.innerHTML='';
+    codes.forEach(addCodeRow);
+    updateCodeCount();
+  }
+  function addCodeRow(value='') {
+    const row=document.createElement('div'); row.className='code-item';
+    const idx=document.createElement('span'); idx.className='code-index';
+    const input=document.createElement('input'); input.value=value; input.autocomplete='off'; input.autocapitalize='characters'; input.spellcheck=false;
+    const del=document.createElement('button'); del.type='button'; del.className='icon-btn'; del.textContent='×'; del.setAttribute('aria-label','刪除這筆拍賣編號');
+    del.addEventListener('click',()=>{row.remove();renumberCodes();});
+    row.append(idx,input,del); codeList.appendChild(row); renumberCodes();
+    if(!value) input.focus();
+  }
+  function renumberCodes() {
+    [...codeList.children].forEach((row,i)=>row.querySelector('.code-index').textContent=`${i+1}.`);
+    updateCodeCount();
+  }
+  function updateCodeCount() { codeCount.textContent=`${codeList.children.length} 筆`; }
+  function collectForm() {
+    return {
+      '市場名稱':marketInput.value.trim(),
+      '文件名稱':documentInput.value.trim(),
+      '拍賣日期':dateInput.value.trim(),
+      '承銷人編號':dealerNumberInput.value.trim(),
+      '承銷人姓名':dealerNameInput.value.trim(),
+      '拍賣編號':[...codeList.querySelectorAll('input')].map(x=>x.value.trim()).filter(Boolean)
+    };
+  }
+
+  async function applyCorrectionAndOCR() {
+    if(isBusy) return;
+    try {
+      setBusy(true); showProcessing('正在做透視校正…',0.12);
+      await new Promise(r=>setTimeout(r,30));
+      const warped=warpPerspective(sourceCanvas,corners,NORMALIZED_WIDTH,NORMALIZED_HEIGHT);
+      processingBar.style.width='75%'; processingTitle.textContent='正在建立標準化文件…';
+      correctedCanvas.width=warped.width; correctedCanvas.height=warped.height;
+      correctedCtx=correctedCanvas.getContext('2d',{alpha:false,willReadFrequently:true});
+      correctedCtx.drawImage(warped,0,0);
+      warped.width=1; warped.height=1;
+      if(correctedPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(correctedPreviewUrl);
+      correctedPreviewUrl=correctedCanvas.toDataURL('image/jpeg',0.88);
+      correctedPreview.src=correctedPreviewUrl;
+      previewCard.classList.add('show');
+      closeEditor();
+      processingBar.style.width='100%';
+      await new Promise(r=>setTimeout(r,80));
+      hideProcessing();
+      setBusy(false);
+      await runOCR();
+    } catch(err) {
+      console.error(err); hideProcessing(); setBusy(false); showError(err?.message||String(err));
+    }
+  }
+
+  async function handleFile(file) {
+    if(!file||isBusy) return;
+    clearError();
+    try {
+      setBusy(true); showProcessing('正在載入照片…',0.25);
+      await setSourceFromFile(file);
+      hideProcessing(); setBusy(false); openEditor();
+    } catch(err) {
+      hideProcessing(); setBusy(false); showError(err?.message||String(err));
+    } finally {
+      cameraInput.value=''; galleryInput.value='';
+    }
+  }
+
+  function resetForNext() {
+    resultCard.classList.remove('show');
+    previewCard.classList.remove('show');
+    statusCard.classList.remove('show');
+    [marketInput,documentInput,dateInput,dealerNumberInput,dealerNameInput].forEach(el=>{el.value='';el.classList.remove('missing');});
+    renderCodes([]);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  takePhotoBtn.addEventListener('click',()=>cameraInput.click());
+  choosePhotoBtn.addEventListener('click',()=>galleryInput.click());
+  cameraInput.addEventListener('change',e=>handleFile(e.target.files?.[0]));
+  galleryInput.addEventListener('change',e=>handleFile(e.target.files?.[0]));
+  editorCloseBtn.addEventListener('click',closeEditor);
+  rotateLeftBtn.addEventListener('click',()=>rotateSource(false));
+  rotateRightBtn.addEventListener('click',()=>rotateSource(true));
+  resetCornersBtn.addEventListener('click',resetCorners);
+  applyCorrectionBtn.addEventListener('click',applyCorrectionAndOCR);
+  editAgainBtn.addEventListener('click',openEditor);
+  recognizeAgainBtn.addEventListener('click',runOCR);
+  addCodeBtn.addEventListener('click',()=>addCodeRow(''));
+  newScanBtn.addEventListener('click',resetForNext);
+  copyJsonBtn.addEventListener('click',async()=>{
+    const text=JSON.stringify(collectForm(),null,2);
+    try { await navigator.clipboard.writeText(text); copyJsonBtn.textContent='已複製'; }
+    catch { const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();copyJsonBtn.textContent='已複製'; }
+    setTimeout(()=>copyJsonBtn.textContent='複製 JSON',1200);
+  });
+
+  window.addEventListener('pagehide',()=>{
+    if(worker) worker.terminate();
+    if(correctedPreviewUrl && correctedPreviewUrl.startsWith('blob:')) URL.revokeObjectURL(correctedPreviewUrl);
+  });
+})();
+</script>
+</body>
+</html>
