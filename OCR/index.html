@@ -5,153 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
   <title>毛豬採購證明單 OCR</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
-  <style>
-    :root {
-      --bg: #f4f7fb;
-      --card: #fff;
-      --text: #172033;
-      --muted: #667085;
-      --line: #d9e1ea;
-      --primary: #2563eb;
-      --primary-2: #1d4ed8;
-      --dark: #0f172a;
-      --soft: #eef4ff;
-      --danger: #b42318;
-      --success: #067647;
-      --warn: #b54708;
-      --radius: 16px;
-      --shadow: 0 16px 40px rgba(15,23,42,.10);
-    }
-    * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: linear-gradient(180deg,#edf3ff 0,#f7f9fc 32%,var(--bg) 100%);
-      color: var(--text);
-      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;
-    }
-    button,input,textarea { font: inherit; }
-    button { touch-action: manipulation; }
-    .app {
-      width: min(820px,calc(100% - 24px));
-      margin: 0 auto;
-      padding: 26px 0 calc(36px + env(safe-area-inset-bottom));
-    }
-    .hero { margin-bottom: 16px; }
-    .hero h1 { margin: 0 0 7px; font-size: clamp(25px,7vw,36px); line-height: 1.2; }
-    .hero p { margin: 0; color: var(--muted); line-height: 1.65; font-size: 14px; }
-    .card {
-      background: var(--card);
-      border: 1px solid rgba(217,225,234,.9);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 18px;
-      margin-bottom: 16px;
-    }
-    .section-title { display:flex; align-items:center; gap:9px; margin:0 0 14px; font-size:18px; }
-    .step-badge {
-      width: 28px; height: 28px; flex: 0 0 28px; display:grid; place-items:center;
-      border-radius: 50%; color:#fff; background:var(--dark); font-size:13px; font-weight:800;
-    }
-    .capture-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .btn {
-      min-height: 48px; border:0; border-radius:12px; padding:12px 15px; cursor:pointer;
-      font-weight:800; transition:.15s ease; display:inline-flex; align-items:center; justify-content:center; gap:7px;
-    }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    .btn-primary { color:#fff; background:var(--primary); }
-    .btn-primary:active { background:var(--primary-2); transform:translateY(1px); }
-    .btn-secondary { color:#243b80; background:#eaf0ff; }
-    .btn-dark { color:#fff; background:var(--dark); }
-    .btn-ghost { color:var(--text); background:#f2f4f7; border:1px solid var(--line); }
-    .btn-danger { color:var(--danger); background:#fff1f0; }
-    .help { margin:12px 0 0; color:var(--muted); font-size:12px; line-height:1.65; }
-    .preview-card { display:none; }
-    .preview-card.show { display:block; }
-    .preview-box { background:#e7ebf0; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
-    .preview-box img { width:100%; max-height:390px; object-fit:contain; display:block; }
-    .preview-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-    .preview-actions .btn { flex:1 1 160px; }
-
-    .status { display:none; }
-    .status.show { display:block; }
-    .status-row { display:flex; justify-content:space-between; gap:10px; color:var(--muted); font-size:13px; margin-bottom:8px; }
-    .track { height:9px; overflow:hidden; border-radius:999px; background:#e7ecf3; }
-    .bar { height:100%; width:0%; background:var(--primary); transition:width .18s ease; }
-    .status-note { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.5; }
-
-    .result-card { display:none; }
-    .result-card.show { display:block; }
-    .notice { display:none; margin:0 0 14px; padding:11px 12px; border-radius:10px; font-size:13px; line-height:1.55; }
-    .notice.show { display:block; }
-    .notice.warn { color:#7a2e0e; background:#fff7ed; border:1px solid #fed7aa; }
-    .notice.ok { color:#05603a; background:#ecfdf3; border:1px solid #abefc6; }
-    .field { margin-bottom:13px; }
-    .field label { display:block; margin-bottom:6px; font-size:13px; font-weight:800; }
-    .field input, .field textarea {
-      width:100%; min-height:46px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
-      color:var(--text); background:#fff; outline:none; font-size:16px; line-height:1.5;
-    }
-    .field textarea { min-height:94px; resize:vertical; }
-    .field input:focus, .field textarea:focus { border-color:#84adff; box-shadow:0 0 0 3px rgba(37,99,235,.10); }
-    .field input.missing { border-color:#fda29b; background:#fffbfa; }
-    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .code-head { display:flex; align-items:end; justify-content:space-between; gap:10px; margin:18px 0 9px; }
-    .code-head h3 { margin:0; font-size:16px; }
-    .code-head span { color:var(--muted); font-size:12px; }
-    .code-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .code-item { display:grid; grid-template-columns:36px 1fr 38px; gap:6px; align-items:center; }
-    .code-index { text-align:right; color:var(--muted); font-size:12px; padding-right:3px; }
-    .code-item input { min-width:0; width:100%; height:44px; border:1px solid var(--line); border-radius:9px; padding:8px 10px; font-size:16px; }
-    .icon-btn { width:38px; height:38px; border:0; border-radius:9px; cursor:pointer; background:#f2f4f7; color:#475467; font-size:20px; }
-    .result-actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:16px; }
-    .error { display:none; margin-top:12px; padding:11px 12px; border-radius:10px; color:var(--danger); background:#fff1f0; border:1px solid #fecdca; white-space:pre-wrap; font-size:13px; line-height:1.55; }
-    .error.show { display:block; }
-
-    /* Full-screen mobile document editor */
-    .editor {
-      position:fixed; inset:0; z-index:10000; display:none; flex-direction:column;
-      background:#080c14; color:#fff; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
-    }
-    .editor.show { display:flex; }
-    .editor-head { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.13); }
-    .editor-head h2 { margin:0; font-size:17px; }
-    .editor-close { width:42px; height:42px; border:0; border-radius:10px; background:rgba(255,255,255,.10); color:#fff; font-size:24px; }
-    .editor-stage { position:relative; flex:1 1 auto; min-height:0; overflow:hidden; background:#05070b; touch-action:none; }
-    #editorCanvas { width:100%; height:100%; display:block; touch-action:none; }
-    .editor-tip {
-      position:absolute; left:50%; top:10px; transform:translateX(-50%); width:max-content; max-width:92%;
-      padding:7px 10px; border-radius:999px; background:rgba(0,0,0,.66); font-size:12px; color:#fff; text-align:center; pointer-events:none;
-    }
-    .editor-tools { flex:0 0 auto; padding:10px 12px 8px; border-top:1px solid rgba(255,255,255,.13); background:#0b1220; }
-    .tool-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .tool-row .btn { min-height:44px; padding:9px 7px; font-size:13px; }
-    .editor-apply { width:100%; margin-top:9px; min-height:50px; }
-
-    .processing-overlay { position:fixed; inset:0; z-index:11000; display:none; place-items:center; padding:20px; background:rgba(15,23,42,.72); }
-    .processing-overlay.show { display:grid; }
-    .processing-box { width:min(420px,100%); padding:20px; border-radius:16px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.25); }
-    .processing-box strong { display:block; margin-bottom:10px; }
-
-    @media (max-width:640px) {
-      .app { width:min(100% - 18px,820px); padding-top:18px; }
-      .card { padding:15px; border-radius:14px; }
-      .capture-grid,.grid-2,.result-actions { grid-template-columns:1fr; }
-      .code-list { grid-template-columns:1fr; }
-      .hero p { font-size:13px; }
-    }
-    @media (min-width:900px) {
-      .editor { inset:3vh 50%; transform:translateX(-50%); width:min(900px,96vw); height:94vh; border-radius:18px; overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.45); }
-    }
-  </style>
+  <link rel="preconnect" href="https://docs.opencv.org" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <h1>毛豬採購證明單 OCR</h1>
-      <p>手機拍照或選取照片後，先校正文件四角，再依固定版型辨識欄位。OCR 結果會直接填入表單，供使用者確認與修正。</p>
+      <p>手機拍照或選取照片後，系統會先自動偵測文件、校正透視與水平傾斜，再依固定版型辨識欄位；必要時可人工微調四角。OCR 結果會直接填入表單供確認與修正。</p>
     </header>
 
     <section class="card">
@@ -162,13 +24,14 @@
       </div>
       <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
       <input id="galleryInput" type="file" accept="image/*" hidden />
-      <p class="help">建議讓整張文件完整入鏡、避免反光。拍歪沒有關係，下一步可拖曳四角做透視校正。</p>
+      <p class="help">建議讓整張文件完整入鏡、避免反光。系統會先自動偵測文件四角、校正透視與水平傾斜；偵測信心不足時才請使用者手動微調。</p>
       <div id="errorBox" class="error" role="alert"></div>
     </section>
 
     <section id="previewCard" class="card preview-card">
       <h2 class="section-title"><span class="step-badge">2</span>校正後文件</h2>
       <div class="preview-box"><img id="correctedPreview" alt="校正後文件預覽" /></div>
+      <div id="autoCorrectionNote" class="auto-note"><span class="auto-dot"></span><div><strong>校正資訊</strong><br><span id="autoCorrectionText">尚未校正</span></div></div>
       <div class="preview-actions">
         <button id="editAgainBtn" class="btn btn-ghost" type="button">重新調整四角</button>
         <button id="recognizeAgainBtn" class="btn btn-secondary" type="button">重新 OCR</button>
@@ -230,11 +93,12 @@
     </div>
     <div id="editorStage" class="editor-stage">
       <canvas id="editorCanvas"></canvas>
-      <div class="editor-tip">拖曳 4 個圓點到文件四角；可先旋轉再調整</div>
+      <div id="editorTip" class="editor-tip">拖曳 4 個圓點到文件四角；可先旋轉再調整</div>
     </div>
     <div class="editor-tools">
       <div class="tool-row">
         <button id="rotateLeftBtn" class="btn btn-ghost" type="button">↶ 左轉 90°</button>
+        <button id="autoDetectBtn" class="btn btn-ghost" type="button">自動找四角</button>
         <button id="resetCornersBtn" class="btn btn-ghost" type="button">重設四角</button>
         <button id="rotateRightBtn" class="btn btn-ghost" type="button">↷ 右轉 90°</button>
       </div>
@@ -246,6 +110,7 @@
     <div class="processing-box">
       <strong id="processingTitle">正在校正圖片…</strong>
       <div class="track"><div id="processingBar" class="bar"></div></div>
+      <div id="processingHint" class="status-note" style="margin-top:10px"></div>
     </div>
   </div>
 
@@ -258,10 +123,25 @@
 
   // 固定版型：依目前實際文件寬高比例建立標準化頁面。
   // 將照片透視校正成同一比例後，以下 ROI 才能穩定套用。
-  const FORM_ASPECT = 1087 / 1373; // width / height
+  const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
+  const OPENCV_URL = 'https://docs.opencv.org/4.x/opencv.js';
+
+  // 由目前固定版型實際樣本估算，頁面約為 3:4。
+  // 固定成同一比例後，ROI 座標才能在不同手機照片間保持一致。
+  const FORM_ASPECT = 0.75; // width / height
   const NORMALIZED_WIDTH = 1600;
   const NORMALIZED_HEIGHT = Math.round(NORMALIZED_WIDTH / FORM_ASPECT);
   const MAX_SOURCE_SIDE = 2600;
+  const DETECT_LONG_SIDE = 1200;
+  const AUTO_APPLY_CONFIDENCE = 0.78;
+  const AUTO_REVIEW_CONFIDENCE = 0.52;
+  const TEMPLATE_FAST_PATH_CONFIDENCE = 0.84;
+
+  // 外部大型引擎一律設 hard timeout，避免手機網路/CDN 異常時 UI 永久卡住。
+  const SCRIPT_LOAD_TIMEOUT_MS = 12000;
+  const OPENCV_TOTAL_TIMEOUT_MS = 14000;
+  const OPENCV_RUNTIME_TIMEOUT_MS = 9000;
+  const TESSERACT_WORKER_TIMEOUT_MS = 45000;
 
   const ROI = {
     market:       { x1: 0.075, y1: 0.022, x2: 0.925, y2: 0.070, psm: 'SINGLE_LINE', type: 'text', pad: 0.003, targetWidth: 1200 },
@@ -281,6 +161,8 @@
   const errorBox = $('errorBox');
   const previewCard = $('previewCard');
   const correctedPreview = $('correctedPreview');
+  const autoCorrectionNote = $('autoCorrectionNote');
+  const autoCorrectionText = $('autoCorrectionText');
   const editAgainBtn = $('editAgainBtn');
   const recognizeAgainBtn = $('recognizeAgainBtn');
   const statusCard = $('statusCard');
@@ -304,7 +186,9 @@
   const editorStage = $('editorStage');
   const editorCanvas = $('editorCanvas');
   const editorCloseBtn = $('editorCloseBtn');
+  const editorTip = $('editorTip');
   const rotateLeftBtn = $('rotateLeftBtn');
+  const autoDetectBtn = $('autoDetectBtn');
   const rotateRightBtn = $('rotateRightBtn');
   const resetCornersBtn = $('resetCornersBtn');
   const applyCorrectionBtn = $('applyCorrectionBtn');
@@ -313,6 +197,7 @@
   const processingOverlay = $('processingOverlay');
   const processingTitle = $('processingTitle');
   const processingBar = $('processingBar');
+  const processingHint = $('processingHint');
 
   let sourceCtx = sourceCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
   let correctedCtx = correctedCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
@@ -321,11 +206,16 @@
   let correctedPreviewUrl = null;
   let worker = null;
   let workerPromise = null;
+  let tesseractScriptPromise = null;
+  let opencvPromise = null;
+  let cvApi = null;
+  let opencvFailure = null;
   let isBusy = false;
   let activeHandle = -1;
   let drawTransform = { scale: 1, ox: 0, oy: 0, cssW: 0, cssH: 0 };
   let corners = [];
   let progressContext = { base: 0, span: 1, label: '' };
+  let autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '' };
 
   const statusMap = {
     'loading tesseract core': '載入 OCR 核心',
@@ -349,6 +239,7 @@
     choosePhotoBtn.disabled = busy;
     applyCorrectionBtn.disabled = busy;
     recognizeAgainBtn.disabled = busy;
+    autoDetectBtn.disabled = busy;
   }
   function setProgress(label, value) {
     const p = Math.max(0, Math.min(1, Number(value) || 0));
@@ -363,23 +254,171 @@
     const text = statusMap[m.status] || m.status || '處理中';
     setProgress(progressContext.label ? `${progressContext.label}：${text}` : text, total);
   }
-  function showProcessing(title, p = 0.1) {
+  function showProcessing(title, p = 0.1, hint = '') {
     processingTitle.textContent = title;
     processingBar.style.width = `${Math.max(0,Math.min(1,p))*100}%`;
+    processingHint.textContent = hint || '';
     processingOverlay.classList.add('show');
   }
-  function hideProcessing() { processingOverlay.classList.remove('show'); }
+  function setProcessingStatus(title, p, hint = '') {
+    processingTitle.textContent = title;
+    if (Number.isFinite(p)) processingBar.style.width = `${Math.max(0,Math.min(1,p))*100}%`;
+    processingHint.textContent = hint || '';
+  }
+  function hideProcessing() {
+    processingOverlay.classList.remove('show');
+    processingHint.textContent = '';
+  }
+
+  function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+  function withTimeout(promise, timeoutMs, message) {
+    let timer = null;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message || `處理逾時（${timeoutMs}ms）`)), timeoutMs);
+    });
+    return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
+  function loadExternalScript(src, id, timeoutMs = SCRIPT_LOAD_TIMEOUT_MS) {
+    const old = document.getElementById(id);
+    if (old?.dataset.loaded === '1') return Promise.resolve();
+    // 上一次若停在半載入狀態，直接移除，避免永遠等待不存在的 load/error。
+    if (old) old.remove();
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      let settled = false;
+      let timer = null;
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        script.onload = null;
+        script.onerror = null;
+      };
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        script.dataset.loaded = '1';
+        resolve();
+      };
+      const fail = (message) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        script.remove();
+        reject(new Error(message));
+      };
+
+      script.id = id;
+      script.src = src;
+      script.async = true;
+      script.onload = succeed;
+      script.onerror = () => fail(`無法載入 ${src}`);
+      timer = setTimeout(() => fail(`載入外部元件逾時：${src}`), timeoutMs);
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureTesseract() {
+    if (window.Tesseract?.createWorker) return window.Tesseract;
+    if (!tesseractScriptPromise) {
+      tesseractScriptPromise = loadExternalScript(TESSERACT_URL, 'tesseract-js', SCRIPT_LOAD_TIMEOUT_MS)
+        .then(() => {
+          if (!window.Tesseract?.createWorker) throw new Error('Tesseract.js 初始化失敗。');
+          return window.Tesseract;
+        })
+        .catch((err) => { tesseractScriptPromise = null; throw err; });
+    }
+    return tesseractScriptPromise;
+  }
+
+  async function waitForOpenCVRuntime() {
+    let candidate = window.cv;
+    if (candidate && typeof candidate.then === 'function') {
+      candidate = await withTimeout(
+        candidate,
+        OPENCV_RUNTIME_TIMEOUT_MS,
+        'OpenCV.js Runtime 初始化逾時。'
+      );
+      window.cv = candidate;
+    }
+
+    const deadline = Date.now() + OPENCV_RUNTIME_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      candidate = window.cv;
+      if (candidate?.Mat && candidate?.imread && candidate?.findContours) {
+        cvApi = candidate;
+        return candidate;
+      }
+      await sleep(80);
+    }
+    throw new Error('OpenCV.js Runtime 初始化逾時。');
+  }
+
+  async function ensureOpenCV({ forceRetry = false } = {}) {
+    if (cvApi?.Mat) return cvApi;
+    if (forceRetry) {
+      opencvFailure = null;
+      opencvPromise = null;
+      const old = document.getElementById('opencv-js');
+      if (old && old.dataset.loaded !== '1') old.remove();
+    }
+    if (opencvFailure && !forceRetry) throw opencvFailure;
+    if (opencvPromise) return opencvPromise;
+
+    const bootstrap = (async () => {
+      await loadExternalScript(OPENCV_URL, 'opencv-js', SCRIPT_LOAD_TIMEOUT_MS);
+      return waitForOpenCVRuntime();
+    })();
+
+    opencvPromise = withTimeout(
+      bootstrap,
+      OPENCV_TOTAL_TIMEOUT_MS,
+      'OpenCV.js 載入或初始化逾時，已改用備援流程。'
+    )
+      .then((cv) => {
+        cvApi = cv;
+        opencvFailure = null;
+        return cv;
+      })
+      .catch((err) => {
+        opencvFailure = err instanceof Error ? err : new Error(String(err));
+        opencvPromise = null;
+        throw opencvFailure;
+      });
+
+    return opencvPromise;
+  }
+
+  function warmOpenCVInBackground() {
+    if (cvApi?.Mat || opencvPromise || opencvFailure) return;
+    if (navigator.connection?.saveData) return;
+    ensureOpenCV().catch((err) => {
+      // 預熱失敗不打擾使用者；真正處理照片時會直接 fallback。
+      console.warn('OpenCV background warm-up unavailable:', err);
+    });
+  }
 
   async function getWorker() {
     if (worker) return worker;
     if (workerPromise) return workerPromise;
+    const T = await ensureTesseract();
     progressContext = { base: 0, span: 0.12, label: '' };
-    workerPromise = Tesseract.createWorker(['chi_tra', 'eng'], Tesseract.OEM.LSTM_ONLY, { logger: workerLogger })
+    const createPromise = T.createWorker(['chi_tra', 'eng'], T.OEM.LSTM_ONLY, { logger: workerLogger })
       .then(async (w) => {
         await w.setParameters({ preserve_interword_spaces: '1', user_defined_dpi: '300' });
         worker = w;
         return w;
-      })
+      });
+
+    workerPromise = withTimeout(
+      createPromise,
+      TESSERACT_WORKER_TIMEOUT_MS,
+      'OCR 引擎初始化逾時，請確認網路連線後重試。'
+    )
       .catch((err) => { workerPromise = null; throw err; });
     return workerPromise;
   }
@@ -394,12 +433,21 @@
     });
   }
 
+  async function loadDrawable(file) {
+    if ('createImageBitmap' in window) {
+      try {
+        return await createImageBitmap(file, { imageOrientation: 'from-image' });
+      } catch {}
+    }
+    return loadImage(file);
+  }
+
   async function setSourceFromFile(file) {
     if (!file || !file.type?.startsWith('image/')) throw new Error('請選擇圖片檔案。');
     sourceFile = file;
-    const img = await loadImage(file);
-    const iw = img.naturalWidth || img.width;
-    const ih = img.naturalHeight || img.height;
+    const drawable = await loadDrawable(file);
+    const iw = drawable.naturalWidth || drawable.width;
+    const ih = drawable.naturalHeight || drawable.height;
     const scale = Math.min(1, MAX_SOURCE_SIDE / Math.max(iw, ih));
     const w = Math.max(1, Math.round(iw * scale));
     const h = Math.max(1, Math.round(ih * scale));
@@ -410,12 +458,14 @@
     sourceCtx.fillRect(0,0,w,h);
     sourceCtx.imageSmoothingEnabled = true;
     sourceCtx.imageSmoothingQuality = 'high';
-    sourceCtx.drawImage(img, 0, 0, w, h);
+    sourceCtx.drawImage(drawable, 0, 0, w, h);
+    if (typeof drawable.close === 'function') drawable.close();
     resetCorners();
+    autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '' };
   }
 
   function resetCorners() {
-    const m = 0.035;
+    const m = 0.018;
     corners = [
       { x: sourceCanvas.width * m, y: sourceCanvas.height * m },
       { x: sourceCanvas.width * (1-m), y: sourceCanvas.height * m },
@@ -423,6 +473,245 @@
       { x: sourceCanvas.width * m, y: sourceCanvas.height * (1-m) }
     ];
     renderEditor();
+  }
+
+
+  function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
+
+  function setAutoCorrectionInfo(kind, text) {
+    autoCorrectionNote.className = `auto-note ${kind || ''}`.trim();
+    autoCorrectionText.textContent = text || '';
+  }
+
+  function polygonArea(pts) {
+    let sum = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      sum += a.x * b.y - b.x * a.y;
+    }
+    return Math.abs(sum) / 2;
+  }
+
+  function orderQuad(points) {
+    const pts = points.map((p) => ({ x: Number(p.x), y: Number(p.y) }));
+    if (pts.length !== 4) return pts;
+    const sums = pts.map((p) => p.x + p.y);
+    const diffs = pts.map((p) => p.y - p.x);
+    const pick = (arr, fn) => arr.reduce((best, v, i) => fn(v, arr[best]) ? i : best, 0);
+    const tl = pts[pick(sums, (a, b) => a < b)];
+    const br = pts[pick(sums, (a, b) => a > b)];
+    const tr = pts[pick(diffs, (a, b) => a < b)];
+    const bl = pts[pick(diffs, (a, b) => a > b)];
+    const ordered = [tl, tr, br, bl];
+    if (new Set(ordered.map((p) => `${p.x},${p.y}`)).size === 4) return ordered;
+
+    const byY = pts.slice().sort((a, b) => a.y - b.y);
+    const top = byY.slice(0, 2).sort((a, b) => a.x - b.x);
+    const bottom = byY.slice(2).sort((a, b) => a.x - b.x);
+    return [top[0], top[1], bottom[1], bottom[0]];
+  }
+
+  function quadMetrics(pts) {
+    const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const top = d(pts[0], pts[1]);
+    const right = d(pts[1], pts[2]);
+    const bottom = d(pts[2], pts[3]);
+    const left = d(pts[3], pts[0]);
+    const width = (top + bottom) / 2;
+    const height = (left + right) / 2;
+    return { width, height, aspect: Math.min(width, height) / Math.max(width, height) };
+  }
+
+  function strongestDarkRow(canvas, y1Ratio, y2Ratio) {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const y1 = Math.max(0, Math.floor(canvas.height * y1Ratio));
+    const y2 = Math.min(canvas.height - 1, Math.ceil(canvas.height * y2Ratio));
+    const stepX = Math.max(1, Math.floor(canvas.width / 900));
+    let best = { strength: 0, y: y1 };
+    for (let y = y1; y <= y2; y += 2) {
+      const row = ctx.getImageData(0, y, canvas.width, 1).data;
+      let dark = 0, total = 0;
+      for (let x = 0; x < canvas.width; x += stepX) {
+        const i = x * 4;
+        const g = 0.299 * row[i] + 0.587 * row[i + 1] + 0.114 * row[i + 2];
+        if (g < 105) dark++;
+        total++;
+      }
+      const strength = total ? dark / total : 0;
+      if (strength > best.strength) best = { strength, y };
+    }
+    return best;
+  }
+
+  function detectTightTemplateFrame() {
+    const w = sourceCanvas.width, h = sourceCanvas.height;
+    if (!w || !h || h <= w) return null;
+    const aspect = w / h;
+    const aspectScore = clamp01(1 - Math.abs(aspect - FORM_ASPECT) / 0.11);
+    const topLine = strongestDarkRow(sourceCanvas, 0.135, 0.205);
+    const bottomLine = strongestDarkRow(sourceCanvas, 0.62, 0.76);
+
+    // 固定版型若幾乎填滿畫面，表格上方的長水平線通常會橫跨約 80% 以上畫面。
+    // 這個 fallback 專門處理「紙張邊界已被照片裁掉」的情況。
+    if (aspectScore < 0.45 || topLine.strength < 0.62) return null;
+    const lineScore = clamp01((topLine.strength - 0.55) / 0.38);
+    const bottomScore = clamp01(bottomLine.strength / 0.42);
+    const confidence = clamp01(0.52 + 0.22 * aspectScore + 0.18 * lineScore + 0.08 * bottomScore);
+    return {
+      method: 'template-frame',
+      confidence,
+      quarterTurn: false,
+      corners: [
+        { x: 0, y: 0 },
+        { x: w - 1, y: 0 },
+        { x: w - 1, y: h - 1 },
+        { x: 0, y: h - 1 }
+      ],
+      detail: `固定版型填滿畫面；上方表格線強度 ${Math.round(topLine.strength * 100)}%`
+    };
+  }
+
+  function detectDocumentWithOpenCV(cv) {
+    let src, small, gray, blurred, edges, closed, contours, hierarchy, kernel;
+    try {
+      src = cv.imread(sourceCanvas);
+      const scale = Math.min(1, DETECT_LONG_SIDE / Math.max(src.cols, src.rows));
+      small = new cv.Mat();
+      cv.resize(src, small, new cv.Size(Math.max(1, Math.round(src.cols * scale)), Math.max(1, Math.round(src.rows * scale))), 0, 0, cv.INTER_AREA);
+      gray = new cv.Mat();
+      blurred = new cv.Mat();
+      edges = new cv.Mat();
+      closed = new cv.Mat();
+      cv.cvtColor(small, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+      cv.Canny(blurred, edges, 45, 150);
+      kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+      cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
+      contours = new cv.MatVector();
+      hierarchy = new cv.Mat();
+      cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+      const imageArea = small.cols * small.rows;
+      let best = null;
+      const epsilons = [0.015, 0.02, 0.025, 0.03, 0.04];
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        try {
+          const contourArea = Math.abs(cv.contourArea(cnt, false));
+          const areaRatio = contourArea / imageArea;
+          if (areaRatio < 0.18) continue;
+          const perimeter = cv.arcLength(cnt, true);
+          for (const eps of epsilons) {
+            const approx = new cv.Mat();
+            try {
+              cv.approxPolyDP(cnt, approx, eps * perimeter, true);
+              if (approx.rows !== 4 || (cv.isContourConvex && !cv.isContourConvex(approx))) continue;
+              const data = approx.data32S;
+              const raw = [];
+              for (let j = 0; j < 4; j++) raw.push({ x: data[j * 2], y: data[j * 2 + 1] });
+              let ordered = orderQuad(raw);
+              const metrics = quadMetrics(ordered);
+              const aspectScore = clamp01(1 - Math.abs(metrics.aspect - FORM_ASPECT) / 0.30);
+              const areaScore = clamp01((areaRatio - 0.18) / 0.62);
+              const cx = ordered.reduce((sum, p) => sum + p.x, 0) / 4;
+              const cy = ordered.reduce((sum, p) => sum + p.y, 0) / 4;
+              const centerDist = Math.hypot(cx - small.cols / 2, cy - small.rows / 2) / Math.hypot(small.cols / 2, small.rows / 2);
+              const centerScore = clamp01(1 - centerDist);
+              let confidence = clamp01(0.56 * areaScore + 0.30 * aspectScore + 0.14 * centerScore);
+              let quarterTurn = false;
+              if (metrics.width > metrics.height) {
+                // 讓輸出保持直式。方向可能仍差 180 度，因此降低信心並要求人工確認。
+                ordered = [ordered[1], ordered[2], ordered[3], ordered[0]];
+                quarterTurn = true;
+                confidence = Math.min(confidence, 0.68);
+              }
+              if (!best || confidence > best.confidence) {
+                best = {
+                  method: 'contour', confidence, quarterTurn,
+                  corners: ordered.map((p) => ({ x: p.x / scale, y: p.y / scale })),
+                  detail: `文件輪廓覆蓋 ${Math.round(areaRatio * 100)}%，比例相似度 ${Math.round(aspectScore * 100)}%`
+                };
+              }
+              break;
+            } finally {
+              approx.delete();
+            }
+          }
+        } finally {
+          cnt.delete();
+        }
+      }
+      return best;
+    } finally {
+      [src, small, gray, blurred, edges, closed, contours, hierarchy, kernel].forEach((m) => {
+        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
+      });
+    }
+  }
+
+  async function autoDetectDocument({ keepEditorOpen = false, forceOpenCVRetry = false } = {}) {
+    // 先跑零下載成本的固定版型快速判斷。大量實際照片本來就幾乎填滿畫面，
+    // 這條 fast path 可直接避開 OpenCV.js 首次載入成本。
+    const templateCandidate = detectTightTemplateFrame();
+    if (!forceOpenCVRetry && templateCandidate && templateCandidate.confidence >= TEMPLATE_FAST_PATH_CONFIDENCE) {
+      corners = templateCandidate.corners.map((p) => ({
+        x: Math.max(0, Math.min(sourceCanvas.width - 1, p.x)),
+        y: Math.max(0, Math.min(sourceCanvas.height - 1, p.y))
+      }));
+      autoDetection = { ...templateCandidate, deskewAngle: 0 };
+      const pct = Math.round(templateCandidate.confidence * 100);
+      editorTip.textContent = `固定版型已快速定位（信心 ${pct}%）；若邊界不準可再手動調整`;
+      if (keepEditorOpen) renderEditor();
+      return templateCandidate;
+    }
+
+    let cvCandidate = null;
+    let cvError = null;
+    try {
+      setProcessingStatus(
+        '正在載入文件偵測引擎…',
+        0.30,
+        `首次使用需下載 OpenCV.js；最長等待約 ${Math.round(OPENCV_TOTAL_TIMEOUT_MS / 1000)} 秒，逾時會自動切換備援流程。`
+      );
+      const cv = await ensureOpenCV({ forceRetry: forceOpenCVRetry });
+      setProcessingStatus('正在分析文件邊界…', 0.33, '已載入 OpenCV.js，正在搜尋紙張輪廓。');
+      cvCandidate = detectDocumentWithOpenCV(cv);
+    } catch (err) {
+      cvError = err;
+      console.warn('OpenCV auto detection unavailable:', err);
+    }
+
+    let candidate = cvCandidate;
+    if (!candidate || (templateCandidate && templateCandidate.confidence > candidate.confidence + 0.08)) {
+      candidate = templateCandidate;
+    }
+
+    if (candidate) {
+      corners = candidate.corners.map((p) => ({
+        x: Math.max(0, Math.min(sourceCanvas.width - 1, p.x)),
+        y: Math.max(0, Math.min(sourceCanvas.height - 1, p.y))
+      }));
+      autoDetection = { ...candidate, deskewAngle: 0 };
+      const pct = Math.round(candidate.confidence * 100);
+      editorTip.textContent = candidate.quarterTurn
+        ? `已偵測文件（${pct}%），且判斷為橫向；請確認方向與四角`
+        : `已預先偵測文件四角（信心 ${pct}%）；不準時可直接拖曳微調`;
+      if (keepEditorOpen) renderEditor();
+      return candidate;
+    }
+
+    resetCorners();
+    autoDetection = {
+      method: 'manual', confidence: 0, deskewAngle: 0,
+      detail: cvError
+        ? `自動偵測不可用（${cvError.message || cvError}），已切換人工四角校正。`
+        : '未找到可靠文件邊界，已切換人工四角校正。'
+    };
+    editorTip.textContent = cvError
+      ? '自動偵測逾時或不可用，已切換人工模式；請拖曳 4 個圓點到文件四角'
+      : '未可靠偵測到文件四角，請拖曳 4 個圓點到文件四角';
+    if (keepEditorOpen) renderEditor();
+    return null;
   }
 
   function openEditor() {
@@ -555,6 +844,8 @@
     sourceCtx=sourceCanvas.getContext('2d',{alpha:false,willReadFrequently:true});
     sourceCtx.drawImage(temp,0,0);
     resetCorners();
+    autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '使用者已旋轉圖片。' };
+    editorTip.textContent = '已旋轉圖片；可按「自動找四角」重新偵測，或直接拖曳四角';
   }
 
   function validateCorners(pts) {
@@ -600,7 +891,7 @@
     return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
   }
 
-  function warpPerspective(source, pts, outW, outH) {
+  function warpPerspectiveJS(source, pts, outW, outH) {
     if (!validateCorners(pts)) throw new Error('四角範圍太小或交叉，請把四個圓點依左上、右上、右下、左下放到文件四角。');
     const dstPts=[
       {x:0,y:0},{x:outW-1,y:0},{x:outW-1,y:outH-1},{x:0,y:outH-1}
@@ -635,6 +926,148 @@
     outCanvas.width=outW; outCanvas.height=outH;
     outCanvas.getContext('2d',{alpha:false}).putImageData(out,0,0);
     return outCanvas;
+  }
+
+
+  function isNearFullFrameQuad(pts) {
+    if (!pts || pts.length !== 4 || !sourceCanvas.width || !sourceCanvas.height) return false;
+    const targets = [
+      { x: 0, y: 0 },
+      { x: sourceCanvas.width - 1, y: 0 },
+      { x: sourceCanvas.width - 1, y: sourceCanvas.height - 1 },
+      { x: 0, y: sourceCanvas.height - 1 }
+    ];
+    const tolerance = Math.hypot(sourceCanvas.width, sourceCanvas.height) * 0.035;
+    return pts.every((p, i) => Math.hypot(p.x - targets[i].x, p.y - targets[i].y) <= tolerance);
+  }
+
+  function resizeCanvasFast(source, outW, outH) {
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    const ctx = out.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, outW, outH);
+    return out;
+  }
+
+  function warpPerspectiveOpenCV(cv, source, pts, outW, outH) {
+    if (!validateCorners(pts)) throw new Error('四角範圍太小或交叉，請重新調整文件四角。');
+    const srcMat = cv.imread(source);
+    const dstMat = new cv.Mat();
+    const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      pts[0].x, pts[0].y,
+      pts[1].x, pts[1].y,
+      pts[2].x, pts[2].y,
+      pts[3].x, pts[3].y
+    ]);
+    const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      0, 0,
+      outW - 1, 0,
+      outW - 1, outH - 1,
+      0, outH - 1
+    ]);
+    const transform = cv.getPerspectiveTransform(srcPts, dstPts);
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    try {
+      cv.warpPerspective(
+        srcMat,
+        dstMat,
+        transform,
+        new cv.Size(outW, outH),
+        cv.INTER_LINEAR,
+        cv.BORDER_CONSTANT,
+        new cv.Scalar(255, 255, 255, 255)
+      );
+      cv.imshow(out, dstMat);
+      return out;
+    } finally {
+      srcMat.delete();
+      dstMat.delete();
+      srcPts.delete();
+      dstPts.delete();
+      transform.delete();
+    }
+  }
+
+  function estimateHorizontalSkew(cv, canvas) {
+    let src, gray, binary, horizontal, lines, kernel;
+    try {
+      src = cv.imread(canvas);
+      gray = new cv.Mat();
+      binary = new cv.Mat();
+      horizontal = new cv.Mat();
+      lines = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.threshold(gray, binary, 150, 255, cv.THRESH_BINARY_INV);
+      const kernelWidth = Math.max(25, Math.round(canvas.width * 0.035));
+      kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(kernelWidth, 1));
+      cv.morphologyEx(binary, horizontal, cv.MORPH_OPEN, kernel);
+      cv.HoughLinesP(
+        horizontal,
+        lines,
+        1,
+        Math.PI / 1800,
+        45,
+        Math.round(canvas.width * 0.42),
+        Math.round(canvas.width * 0.06)
+      );
+      const angles = [];
+      const data = lines.data32S || [];
+      for (let i = 0; i + 3 < data.length; i += 4) {
+        const x1 = data[i], y1 = data[i + 1], x2 = data[i + 2], y2 = data[i + 3];
+        const ym = (y1 + y2) / 2;
+        if (ym < canvas.height * 0.12 || ym > canvas.height * 0.31) continue;
+        const length = Math.hypot(x2 - x1, y2 - y1);
+        if (length < canvas.width * 0.42) continue;
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        if (Math.abs(angle) <= 5) angles.push(angle);
+      }
+      if (!angles.length) return 0;
+      angles.sort((a, b) => a - b);
+      const mid = Math.floor(angles.length / 2);
+      return angles.length % 2 ? angles[mid] : (angles[mid - 1] + angles[mid]) / 2;
+    } catch (err) {
+      console.warn('Deskew estimation failed:', err);
+      return 0;
+    } finally {
+      [src, gray, binary, horizontal, lines, kernel].forEach((m) => {
+        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
+      });
+    }
+  }
+
+  function rotateCanvasOpenCV(cv, canvas, angleDeg) {
+    if (Math.abs(angleDeg) < 0.08) return canvas;
+    let src, dst, matrix;
+    try {
+      src = cv.imread(canvas);
+      dst = new cv.Mat();
+      matrix = cv.getRotationMatrix2D(new cv.Point(src.cols / 2, src.rows / 2), angleDeg, 1);
+      cv.warpAffine(
+        src,
+        dst,
+        matrix,
+        new cv.Size(src.cols, src.rows),
+        cv.INTER_LINEAR,
+        cv.BORDER_CONSTANT,
+        new cv.Scalar(255, 255, 255, 255)
+      );
+      const out = document.createElement('canvas');
+      out.width = canvas.width;
+      out.height = canvas.height;
+      cv.imshow(out, dst);
+      return out;
+    } finally {
+      [src, dst, matrix].forEach((m) => {
+        try { if (m && typeof m.delete === 'function') m.delete(); } catch {}
+      });
+    }
   }
 
   function cropRatio(source,r,padding=r.pad ?? 0.003) {
@@ -694,7 +1127,8 @@
   }
 
   function psmValue(name) {
-    return Tesseract.PSM[name] ?? Tesseract.PSM.SINGLE_BLOCK;
+    const PSM = window.Tesseract?.PSM;
+    return PSM?.[name] ?? PSM?.SINGLE_BLOCK ?? '6';
   }
 
   async function recognizeTile(w, key, region, idx, total) {
@@ -871,43 +1305,136 @@
     };
   }
 
-  async function applyCorrectionAndOCR() {
-    if(isBusy) return;
+  async function applyCorrectionAndOCR({ automatic = false } = {}) {
     try {
-      setBusy(true); showProcessing('正在做透視校正…',0.12);
-      await new Promise(r=>setTimeout(r,30));
-      const warped=warpPerspective(sourceCanvas,corners,NORMALIZED_WIDTH,NORMALIZED_HEIGHT);
-      processingBar.style.width='75%'; processingTitle.textContent='正在建立標準化文件…';
-      correctedCanvas.width=warped.width; correctedCanvas.height=warped.height;
-      correctedCtx=correctedCanvas.getContext('2d',{alpha:false,willReadFrequently:true});
-      correctedCtx.drawImage(warped,0,0);
-      warped.width=1; warped.height=1;
-      if(correctedPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(correctedPreviewUrl);
-      correctedPreviewUrl=correctedCanvas.toDataURL('image/jpeg',0.88);
-      correctedPreview.src=correctedPreviewUrl;
+      setBusy(true);
+      showProcessing('正在做透視校正…', 0.36, '校正會優先使用已載入的 OpenCV；若不可用則自動使用 JavaScript 備援。');
+      await sleep(30);
+
+      // 不在校正階段再次阻塞等待 OpenCV。自動偵測若已成功，cvApi 早已可用；
+      // 若先前載入失敗，直接走 JS fallback，避免使用者第二次再等一輪。
+      const cv = cvApi?.Mat ? cvApi : null;
+      const fullFrameFastPath = autoDetection.method === 'template-frame' && isNearFullFrameQuad(corners);
+
+      let warped = fullFrameFastPath
+        ? resizeCanvasFast(sourceCanvas, NORMALIZED_WIDTH, NORMALIZED_HEIGHT)
+        : cv
+          ? warpPerspectiveOpenCV(cv, sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT)
+          : warpPerspectiveJS(sourceCanvas, corners, NORMALIZED_WIDTH, NORMALIZED_HEIGHT);
+
+      setProcessingStatus(
+        '正在校正水平傾斜…',
+        0.62,
+        cv ? '利用文件表格水平線估算小角度傾斜。' : 'OpenCV 未就緒，本次略過自動水平線分析；仍可人工調整四角後重跑。'
+      );
+      let deskewAngle = 0;
+      let finalCanvas = warped;
+      if (cv) {
+        deskewAngle = estimateHorizontalSkew(cv, warped);
+        if (Math.abs(deskewAngle) >= 0.08 && Math.abs(deskewAngle) <= 4.5) {
+          const rotated = rotateCanvasOpenCV(cv, warped, -deskewAngle);
+          if (rotated !== warped) {
+            finalCanvas = rotated;
+            warped.width = 1;
+            warped.height = 1;
+          }
+        } else {
+          deskewAngle = 0;
+        }
+      }
+
+      setProcessingStatus('正在建立標準化文件…', 0.78, '將文件統一成固定比例，接著會以固定 ROI 進行 OCR。');
+      correctedCanvas.width = finalCanvas.width;
+      correctedCanvas.height = finalCanvas.height;
+      correctedCtx = correctedCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+      correctedCtx.fillStyle = '#fff';
+      correctedCtx.fillRect(0, 0, correctedCanvas.width, correctedCanvas.height);
+      correctedCtx.drawImage(finalCanvas, 0, 0);
+      if (finalCanvas !== warped) {
+        finalCanvas.width = 1;
+        finalCanvas.height = 1;
+      } else {
+        warped.width = 1;
+        warped.height = 1;
+      }
+
+      autoDetection.deskewAngle = deskewAngle;
+      const pct = autoDetection.confidence ? `，四角信心 ${Math.round(autoDetection.confidence * 100)}%` : '';
+      const angleText = deskewAngle
+        ? `，水平修正 ${(-deskewAngle).toFixed(2)}°`
+        : cv
+          ? '，水平線已檢查'
+          : '，本次未執行自動水平線校正';
+      const methodText = autoDetection.method === 'contour'
+        ? '自動文件邊界偵測'
+        : autoDetection.method === 'template-frame'
+          ? '固定版型滿版偵測'
+          : '人工四角校正';
+      setAutoCorrectionInfo(
+        automatic ? 'ok' : (autoDetection.confidence >= AUTO_REVIEW_CONFIDENCE ? 'ok' : 'warn'),
+        `${methodText}${pct}${angleText}。若邊界不準，可按「重新調整四角」。`
+      );
+
+      correctedPreview.src = correctedCanvas.toDataURL('image/jpeg', 0.9);
       previewCard.classList.add('show');
       closeEditor();
-      processingBar.style.width='100%';
-      await new Promise(r=>setTimeout(r,80));
+      setProcessingStatus('文件校正完成', 1, '即將開始 OCR。');
+      await sleep(60);
       hideProcessing();
       setBusy(false);
       await runOCR();
-    } catch(err) {
-      console.error(err); hideProcessing(); setBusy(false); showError(err?.message||String(err));
+    } catch (err) {
+      console.error(err);
+      hideProcessing();
+      setBusy(false);
+      showError(err?.message || String(err));
     }
   }
 
   async function handleFile(file) {
-    if(!file||isBusy) return;
+    if (!file || isBusy) return;
     clearError();
+    resultCard.classList.remove('show');
+    previewCard.classList.remove('show');
+    statusCard.classList.remove('show');
+    setAutoCorrectionInfo('', '尚未校正');
+
     try {
-      setBusy(true); showProcessing('正在載入照片…',0.25);
+      setBusy(true);
+      showProcessing('正在載入照片…', 0.12, '照片只在目前瀏覽器頁面中處理。');
       await setSourceFromFile(file);
-      hideProcessing(); setBusy(false); openEditor();
-    } catch(err) {
-      hideProcessing(); setBusy(false); showError(err?.message||String(err));
+
+      setProcessingStatus(
+        '正在自動偵測文件四角…',
+        0.28,
+        '先使用固定版型快速判斷；只有需要時才載入 OpenCV.js。'
+      );
+      const detection = await autoDetectDocument();
+
+      if (detection && detection.confidence >= AUTO_APPLY_CONFIDENCE && !detection.quarterTurn) {
+        setProcessingStatus('已偵測文件，正在自動校正…', 0.34, '自動結果可在完成後按「重新調整四角」修正。');
+        await applyCorrectionAndOCR({ automatic: true });
+        return;
+      }
+
+      hideProcessing();
+      setBusy(false);
+      openEditor();
+      if (detection) {
+        const pct = Math.round(detection.confidence * 100);
+        editorTip.textContent = detection.quarterTurn
+          ? `偵測到橫向文件（${pct}%）。請先確認方向，再微調四角後開始 OCR`
+          : `已預先放好四角（信心 ${pct}%），請確認後開始 OCR`;
+      } else {
+        editorTip.textContent = '自動偵測信心不足，請拖曳 4 個圓點到文件四角';
+      }
+    } catch (err) {
+      hideProcessing();
+      setBusy(false);
+      showError(err?.message || String(err));
     } finally {
-      cameraInput.value=''; galleryInput.value='';
+      cameraInput.value = '';
+      galleryInput.value = '';
     }
   }
 
@@ -915,19 +1442,47 @@
     resultCard.classList.remove('show');
     previewCard.classList.remove('show');
     statusCard.classList.remove('show');
+    setAutoCorrectionInfo('', '尚未校正');
     [marketInput,documentInput,dateInput,dealerNumberInput,dealerNameInput].forEach(el=>{el.value='';el.classList.remove('missing');});
     renderCodes([]);
+    autoDetection = { method:'manual', confidence:0, deskewAngle:0, detail:'' };
+    sourceCanvas.width = sourceCanvas.height = 1;
+    correctedCanvas.width = correctedCanvas.height = 1;
     window.scrollTo({top:0,behavior:'smooth'});
   }
 
-  takePhotoBtn.addEventListener('click',()=>cameraInput.click());
-  choosePhotoBtn.addEventListener('click',()=>galleryInput.click());
+  takePhotoBtn.addEventListener('click',()=>{ warmOpenCVInBackground(); cameraInput.click(); });
+  choosePhotoBtn.addEventListener('click',()=>{ warmOpenCVInBackground(); galleryInput.click(); });
   cameraInput.addEventListener('change',e=>handleFile(e.target.files?.[0]));
   galleryInput.addEventListener('change',e=>handleFile(e.target.files?.[0]));
   editorCloseBtn.addEventListener('click',closeEditor);
   rotateLeftBtn.addEventListener('click',()=>rotateSource(false));
   rotateRightBtn.addEventListener('click',()=>rotateSource(true));
-  resetCornersBtn.addEventListener('click',resetCorners);
+  resetCornersBtn.addEventListener('click',()=>{
+    resetCorners();
+    autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '使用者重設四角。' };
+    editorTip.textContent = '已重設四角，請拖曳 4 個圓點到文件四角';
+  });
+  autoDetectBtn.addEventListener('click',async()=>{
+    if(isBusy || !sourceCanvas.width) return;
+    clearError();
+    try {
+      setBusy(true);
+      showProcessing(
+        '正在重新偵測文件四角…',
+        0.28,
+        `這次會重新嘗試 OpenCV.js；最長等待約 ${Math.round(OPENCV_TOTAL_TIMEOUT_MS / 1000)} 秒。`
+      );
+      const detection = await autoDetectDocument({ keepEditorOpen:true, forceOpenCVRetry:true });
+      hideProcessing();
+      setBusy(false);
+      if(!detection) showError('未找到可靠的文件邊界，請手動拖曳四角。');
+    } catch(err) {
+      hideProcessing();
+      setBusy(false);
+      showError(err?.message || String(err));
+    }
+  });
   applyCorrectionBtn.addEventListener('click',applyCorrectionAndOCR);
   editAgainBtn.addEventListener('click',openEditor);
   recognizeAgainBtn.addEventListener('click',runOCR);
