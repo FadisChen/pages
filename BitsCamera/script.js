@@ -17,9 +17,11 @@ const paramPanel = document.getElementById('paramPanel');
 const paramPanelTitle = document.getElementById('paramPanelTitle');
 const paramPanelClose = document.getElementById('paramPanelClose');
 const paramPanelBody = document.getElementById('paramPanelBody');
+const colorModeBtn = document.getElementById('colorModeBtn');
 
 // ---- State ----
 let currentStyle = 'floyd';
+let colorMode = false;
 let mirrorCurrent = true;
 let currentStream = null;
 let videoDevices = [];
@@ -208,8 +210,43 @@ function blit(srcCanvas) {
 }
 
 // ---- Dithering / effect algorithms ----
-function applyFloydSteinberg(imageData, w, h, bias) {
+function applyFloydSteinberg(imageData, w, h, bias, useColor) {
   const data = imageData.data;
+
+  if (useColor) {
+    const channels = [0, 1, 2].map((channel) => {
+      const values = new Float32Array(w * h);
+      for (let i = 0, p = 0; p < values.length; i += 4, p++) {
+        values[p] = data[i + channel] + bias;
+      }
+      return values;
+    });
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        for (const channel of channels) {
+          const old = channel[idx];
+          const nv = old < 128 ? 0 : 255;
+          const err = old - nv;
+          channel[idx] = nv;
+          if (x + 1 < w) channel[idx + 1] += err * 7 / 16;
+          if (x - 1 >= 0 && y + 1 < h) channel[idx + w - 1] += err * 3 / 16;
+          if (y + 1 < h) channel[idx + w] += err * 5 / 16;
+          if (x + 1 < w && y + 1 < h) channel[idx + w + 1] += err * 1 / 16;
+        }
+      }
+    }
+
+    for (let p = 0, i = 0; p < w * h; p++, i += 4) {
+      data[i] = channels[0][p] < 128 ? 0 : 255;
+      data[i + 1] = channels[1][p] < 128 ? 0 : 255;
+      data[i + 2] = channels[2][p] < 128 ? 0 : 255;
+      data[i + 3] = 255;
+    }
+    return;
+  }
+
   const gray = new Float32Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     gray[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] + bias;
@@ -234,32 +271,44 @@ function applyFloydSteinberg(imageData, w, h, bias) {
   }
 }
 
-function applyBayer(imageData, w, h, bias) {
+function applyBayer(imageData, w, h, bias, useColor) {
   const data = imageData.data;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] + bias;
       const threshold = (BAYER_8[y & 7][x & 7] + 0.5) / 64 * 255;
-      const v = gray < threshold ? 0 : 255;
-      data[i] = data[i + 1] = data[i + 2] = v;
+      if (useColor) {
+        data[i] = data[i] + bias < threshold ? 0 : 255;
+        data[i + 1] = data[i + 1] + bias < threshold ? 0 : 255;
+        data[i + 2] = data[i + 2] + bias < threshold ? 0 : 255;
+      } else {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] + bias;
+        const v = gray < threshold ? 0 : 255;
+        data[i] = data[i + 1] = data[i + 2] = v;
+      }
       data[i + 3] = 255;
     }
   }
 }
 
-function applyPosterize(imageData, levels) {
+function applyPosterize(imageData, levels, useColor) {
   const data = imageData.data;
   const step = 255 / (levels - 1);
   for (let i = 0; i < data.length; i += 4) {
-    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    const v = Math.round(Math.round(gray / step) * step);
-    data[i] = data[i + 1] = data[i + 2] = v;
+    if (useColor) {
+      data[i] = Math.round(Math.round(data[i] / step) * step);
+      data[i + 1] = Math.round(Math.round(data[i + 1] / step) * step);
+      data[i + 2] = Math.round(Math.round(data[i + 2] / step) * step);
+    } else {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const v = Math.round(Math.round(gray / step) * step);
+      data[i] = data[i + 1] = data[i + 2] = v;
+    }
     data[i + 3] = 255;
   }
 }
 
-function renderHalftone(params) {
+function renderHalftone(params, useColor) {
   const { w, h } = getProcessDims(params.density.value);
 
   sampleCanvas.width = w;
@@ -289,7 +338,11 @@ function renderHalftone(params) {
       const cy = (y + 0.5) * cellH;
       displayCtx.beginPath();
       displayCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (useColor) {
+        displayCtx.fillStyle = `rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`;
+      }
       displayCtx.fill();
+      if (useColor) displayCtx.fillStyle = '#000';
     }
   }
 }
@@ -302,7 +355,7 @@ function renderFrame() {
 
   const cfg = STYLE_CONFIG[currentStyle];
   if (cfg.type === 'halftone') {
-    renderHalftone(cfg.params);
+    renderHalftone(cfg.params, colorMode);
     return;
   }
 
@@ -313,9 +366,9 @@ function renderFrame() {
   drawVideoToCanvas(offCtx, w, h, mirrorCurrent);
 
   const imgData = offCtx.getImageData(0, 0, w, h);
-  if (currentStyle === 'floyd') applyFloydSteinberg(imgData, w, h, cfg.params.bias.value);
-  else if (currentStyle === 'bayer') applyBayer(imgData, w, h, cfg.params.bias.value);
-  else if (currentStyle === 'posterize') applyPosterize(imgData, cfg.params.levels.value);
+  if (currentStyle === 'floyd') applyFloydSteinberg(imgData, w, h, cfg.params.bias.value, colorMode);
+  else if (currentStyle === 'bayer') applyBayer(imgData, w, h, cfg.params.bias.value, colorMode);
+  else if (currentStyle === 'posterize') applyPosterize(imgData, cfg.params.levels.value, colorMode);
   offCtx.putImageData(imgData, 0, 0);
 
   blit(offscreenCanvas);
@@ -362,6 +415,20 @@ settingsBtn.addEventListener('click', () => {
 });
 
 paramPanelClose.addEventListener('click', () => paramPanel.classList.remove('open'));
+
+function updateColorModeButton() {
+  colorModeBtn.setAttribute('aria-label', `色彩模式：${colorMode ? '彩色' : '黑白'}`);
+  colorModeBtn.setAttribute('aria-pressed', String(colorMode));
+  colorModeBtn.querySelectorAll('.mode-toggle-option').forEach((option) => {
+    option.classList.toggle('active', (option.dataset.mode === 'color') === colorMode);
+  });
+}
+
+colorModeBtn.addEventListener('click', () => {
+  colorMode = !colorMode;
+  updateColorModeButton();
+});
+updateColorModeButton();
 
 // ---- UI wiring ----
 document.querySelectorAll('.tab').forEach((btn) => {

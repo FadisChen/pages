@@ -1,7 +1,7 @@
 // Bump this version whenever style.css or script.js changes — cache-first
 // assets below only get refreshed for returning visitors when the cache
 // name itself changes. Forgetting this is the #1 PWA-caching footgun.
-const CACHE_NAME = 'bitscamera-v2';
+const CACHE_NAME = 'bitscamera-v3';
 
 const APP_SHELL = [
   './',

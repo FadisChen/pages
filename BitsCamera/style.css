@@ -234,6 +234,41 @@ html, body {
   flex-shrink: 0;
 }
 
+.param-panel-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px 12px;
+  font-size: 13px;
+  color: #d0d0d5;
+  flex-shrink: 0;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #2c2c30;
+  border-radius: 999px;
+  background: #1c1c1f;
+  color: #b8b8bd;
+  cursor: pointer;
+}
+
+.mode-toggle-option {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  transition: background .15s, color .15s;
+}
+
+.mode-toggle-option.active {
+  background: #f4f4f5;
+  color: #0b0b0d;
+  font-weight: 600;
+}
+
 .panel-close-btn {
   width: 30px;
   height: 30px;
