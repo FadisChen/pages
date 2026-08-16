@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人生周数可视化</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .input-section {
+            padding: 40px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .reset-btn {
+            background: #e9ecef;
+            color: #666;
+        }
+
+        .reset-btn:hover {
+            background: #dee2e6;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .visualization {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+            gap: 8px;
+            margin-top: 30px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .week-circle {
+            aspect-ratio: 1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid;
+        }
+
+        .week-circle:hover {
+            transform: scale(1.15);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .week-circle.passed {
+            background: transparent;
+            border-color: #ddd;
+            color: #999;
+        }
+
+        .week-circle.passed:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .week-circle.current {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            color: white;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+
+        .week-circle.future {
+            background: #f0f3ff;
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 100;
+        }
+
+        .week-circle:hover .tooltip {
+            opacity: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 30px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .legend {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e9ecef;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-circle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid;
+        }
+
+        .legend-circle.passed {
+            background: transparent;
+            border-color: #ddd;
+        }
+
+        .legend-circle.current {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+        }
+
+        .legend-circle.future {
+            background: #f0f3ff;
+            border-color: #667eea;
+        }
+
+        .error {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌍 人生周数可视化</h1>
+            <p>用每一周的圆来可视化你的人生</p>
+        </div>
+
+        <div class="input-section">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="birthDate">出生年月日 *</label>
+                    <input type="date" id="birthDate" required>
+                    <div class="error" id="birthDateError"></div>
+                </div>
+                <div class="form-group">
+                    <label for="lifeExpectancy">预计寿命 (岁) *</label>
+                    <input type="number" id="lifeExpectancy" min="1" max="150" placeholder="例如：80" required>
+                    <div class="error" id="lifeExpectancyError"></div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="submit-btn" onclick="handleSubmit()">生成可视化</button>
+                <button class="reset-btn" onclick="handleReset()">重置数据</button>
+            </div>
+        </div>
+
+        <div class="content" id="content">
+            <div class="empty-state">
+                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="30" cy="35" r="6" fill="currentColor"/>
+                    <circle cx="70" cy="35" r="6" fill="currentColor"/>
+                    <path d="M 30 60 Q 50 75 70 60" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                </svg>
+                <p>请输入出生年月日和预计寿命来开始</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'lifeWeeksData';
+
+        // 页面加载时恢复数据
+        window.addEventListener('load', () => {
+            const savedData = localStorage.getItem(STORAGE_KEY);
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    document.getElementById('birthDate').value = data.birthDate;
+                    document.getElementById('lifeExpectancy').value = data.lifeExpectancy;
+                    visualize(data);
+                } catch (e) {
+                    console.error('Failed to restore data:', e);
+                }
+            }
+        });
+
+        function handleSubmit() {
+            const birthDate = document.getElementById('birthDate').value;
+            const lifeExpectancy = document.getElementById('lifeExpectancy').value;
+
+            // 清空错误消息
+            document.getElementById('birthDateError').classList.remove('show');
+            document.getElementById('lifeExpectancyError').classList.remove('show');
+
+            // 验证
+            if (!birthDate) {
+                showError('birthDateError', '请选择出生年月日');
+                return;
+            }
+            if (!lifeExpectancy) {
+                showError('lifeExpectancyError', '请输入预计寿命');
+                return;
+            }
+
+            const birthDateTime = new Date(birthDate);
+            const today = new Date();
+
+            if (birthDateTime > today) {
+                showError('birthDateError', '出生日期不能是未来日期');
+                return;
+            }
+
+            if (parseInt(lifeExpectancy) < 1 || parseInt(lifeExpectancy) > 150) {
+                showError('lifeExpectancyError', '请输入1-150之间的年龄');
+                return;
+            }
+
+            const data = { birthDate, lifeExpectancy };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            visualize(data);
+        }
+
+        function handleReset() {
+            if (confirm('确定要重置所有数据吗？')) {
+                localStorage.removeItem(STORAGE_KEY);
+                document.getElementById('birthDate').value = '';
+                document.getElementById('lifeExpectancy').value = '';
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="30" cy="35" r="6" fill="currentColor"/>
+                            <circle cx="70" cy="35" r="6" fill="currentColor"/>
+                            <path d="M 30 60 Q 50 75 70 60" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        </svg>
+                        <p>请输入出生年月日和预计寿命来开始</p>
+                    </div>
+                `;
+            }
+        }
+
+        function showError(elementId, message) {
+            const error = document.getElementById(elementId);
+            error.textContent = message;
+            error.classList.add('show');
+        }
+
+        function visualize(data) {
+            const birthDate = new Date(data.birthDate);
+            const today = new Date();
+            const lifeExpectancy = parseInt(data.lifeExpectancy);
+
+            // 计算已活过的周数
+            const livedMs = today - birthDate;
+            const livedWeeks = Math.floor(livedMs / (7 * 24 * 60 * 60 * 1000));
+
+            // 计算总周数
+            const totalWeeks = Math.floor(lifeExpectancy * 52.1429); // 每年平均52.1429周
+
+            // 计算剩余周数
+            const remainingWeeks = Math.max(0, totalWeeks - livedWeeks);
+
+            // 计算当前年龄
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+
+            // 生成圆形HTML
+            let circlesHTML = '';
+            for (let i = 1; i <= totalWeeks; i++) {
+                let className = 'week-circle';
+                let style = '';
+
+                if (i <= livedWeeks) {
+                    className += ' passed';
+                } else if (i === livedWeeks + 1) {
+                    className += ' current';
+                } else {
+                    className += ' future';
+                }
+
+                circlesHTML += `<div class="${className}" title="第 ${i} 周"></div>`;
+            }
+
+            // 更新content区域
+            document.getElementById('content').innerHTML = `
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-label">当前年龄</div>
+                        <div class="stat-value">${age} 岁</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">已活周数</div>
+                        <div class="stat-value">${livedWeeks.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">剩余周数</div>
+                        <div class="stat-value" style="color: #ffd700;">${remainingWeeks.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">总寿命周数</div>
+                        <div class="stat-value">${totalWeeks.toLocaleString()}</div>
+                    </div>
+                </div>
+
+                <div class="visualization">
+                    ${circlesHTML}
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-circle passed"></div>
+                        <span>已过去</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle current"></div>
+                        <span>当前周</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle future"></div>
+                        <span>未来</span>
+                    </div>
+                </div>
+            `;
+
+            // 添加交互效果
+            addCircleInteractions();
+        }
+
+        function addCircleInteractions() {
+            const circles = document.querySelectorAll('.week-circle');
+            circles.forEach((circle, index) => {
+                const weekNum = index + 1;
+
+                circle.addEventListener('mouseenter', () => {
+                    // 计算年周
+                    const year = Math.floor((weekNum - 1) / 52) + 1;
+                    const weekInYear = ((weekNum - 1) % 52) + 1;
+                    circle.title = `第 ${year} 年，第 ${weekInYear} 周`;
+                });
+            });
+        }
+
+        // 页面关闭时的提示
+        window.addEventListener('beforeunload', (e) => {
+            const birthDate = document.getElementById('birthDate').value;
+            if (birthDate && !localStorage.getItem(STORAGE_KEY)) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>
