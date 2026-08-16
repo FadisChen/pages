@@ -12,8 +12,6 @@ export class BrowserAudioEngine {
     this.activeCueOscillators = new Set();
     this.playbackAt = 0;
     this.running = false;
-    this.captureEnabled = true;
-    this.cueGeneration = 0;
   }
 
   async start() {
@@ -36,7 +34,7 @@ export class BrowserAudioEngine {
   }
 
   capture(samples) {
-    if (!this.running || !this.context || !this.captureEnabled) return;
+    if (!this.running || !this.context) return;
     const pcm = floatToPcm16(resample(samples, this.context.sampleRate, 16000));
     this.onAudioChunk?.(pcm);
     if (this.onLevel) {
@@ -74,12 +72,10 @@ export class BrowserAudioEngine {
     if (!this.running || !this.context || this.context.state === 'closed') return;
     await this.context.resume();
     this.stopSessionCues();
-    const generation = ++this.cueGeneration;
     const notes = kind === 'end'
       ? [{ frequency: 659.25, offset: 0, duration: .13 }, { frequency: 440, offset: .1, duration: .2 }]
       : [{ frequency: 523.25, offset: 0, duration: .13 }, { frequency: 659.25, offset: .1, duration: .2 }];
     const startAt = this.context.currentTime + .015;
-    this.captureEnabled = false;
 
     for (const note of notes) {
       const oscillator = this.context.createOscillator();
@@ -105,14 +101,11 @@ export class BrowserAudioEngine {
 
     const totalMs = Math.ceil(Math.max(...notes.map((note) => note.offset + note.duration)) * 1000) + 35;
     await new Promise((resolve) => setTimeout(resolve, totalMs));
-    if (this.cueGeneration === generation) this.captureEnabled = true;
   }
 
   stopSessionCues() {
-    this.cueGeneration += 1;
     for (const oscillator of this.activeCueOscillators) try { oscillator.stop(); } catch { /* ended */ }
     this.activeCueOscillators.clear();
-    this.captureEnabled = true;
   }
 
   flushPlayback() {

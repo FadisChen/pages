@@ -106,12 +106,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .history-row p { margin:0; }
 .history-empty { margin:8px; color:var(--soft); font-size:12px; text-align:center; }
 .casebook-button { color:var(--gold); }
-.casebook-overlay { align-items:stretch; padding:clamp(14px,3vw,36px); }
-.casebook { display:grid; width:min(1080px,100%); min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:25px; background:#24130d; box-shadow:0 38px 95px rgba(0,0,0,.62); }
+.casebook-overlay { align-items:center; padding:clamp(14px,3vw,36px); }
+.casebook { display:grid; width:min(1080px,100%); height:min(900px,calc(100dvh - 2 * clamp(14px,3vw,36px))); grid-template-rows:auto minmax(0,1fr); min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:25px; background:#24130d; box-shadow:0 38px 95px rgba(0,0,0,.62); }
 .casebook-head { display:flex; align-items:start; justify-content:space-between; gap:18px; padding:clamp(20px,3vw,34px); border-bottom:1px solid rgba(255,224,170,.12); background:linear-gradient(165deg,#4b2819,#1b0e0a); }
 .casebook-head h2 { margin:8px 0 5px; font:500 clamp(27px,4vw,44px)/1 Georgia,'Noto Serif TC',serif; }
 .casebook-head p:last-child { margin:0; color:#a9916c; font-size:11px; }
-.casebook-scroll { min-height:0; overflow-y:auto; padding:clamp(18px,3vw,32px); scrollbar-color:#a36b35 rgba(15,7,5,.42); }
+.casebook-scroll { min-height:0; overflow-y:auto; padding:clamp(18px,3vw,32px); scrollbar-color:#a36b35 rgba(15,7,5,.42); scrollbar-width:thin; }
+.casebook-scroll::-webkit-scrollbar { width:10px; }
+.casebook-scroll::-webkit-scrollbar-track { background:rgba(15,7,5,.42); }
+.casebook-scroll::-webkit-scrollbar-thumb { border:2px solid rgba(15,7,5,.42); border-radius:999px; background:#a36b35; }
 .case-routes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .case-route, .case-deduction, .case-accusation, .case-trust-panel, .case-ending { padding:16px; border:1px solid rgba(255,220,158,.14); border-radius:16px; background:rgba(255,244,220,.035); }
 .case-route { display:grid; align-content:start; gap:12px; }
