@@ -29,14 +29,40 @@
     </section>
 
     <section id="previewCard" class="card preview-card">
-      <h2 class="section-title"><span class="step-badge">2</span>校正後文件</h2>
-      <div class="preview-box"><img id="correctedPreview" alt="校正後文件預覽" /></div>
+      <h2 class="section-title"><span class="step-badge">2</span>OCR 圖片與辨識範圍</h2>
+      <div class="preview-box">
+        <div id="ocrPreviewStage" class="ocr-preview-stage" role="button" tabindex="0" aria-label="點擊放大檢視 OCR 辨識範圍" title="點擊放大檢視">
+          <img id="correctedPreview" alt="OCR 文件預覽" />
+          <div id="ocrRegionOverlay" class="ocr-region-overlay" aria-hidden="true"></div>
+        </div>
+      </div>
+      <p id="previewLegend" class="preview-legend">尚未載入圖片</p>
       <div id="autoCorrectionNote" class="auto-note"><span class="auto-dot"></span><div><strong>校正資訊</strong><br><span id="autoCorrectionText">尚未校正</span></div></div>
       <div class="preview-actions">
         <button id="editAgainBtn" class="btn btn-ghost" type="button">重新調整四角</button>
         <button id="recognizeAgainBtn" class="btn btn-secondary" type="button">重新 OCR</button>
       </div>
     </section>
+
+  <section id="ocrPreviewModal" class="ocr-preview-modal" role="dialog" aria-modal="true" aria-labelledby="ocrPreviewModalTitle" hidden>
+    <div class="ocr-preview-dialog">
+      <div class="ocr-preview-modal-head">
+        <div>
+          <span class="ocr-preview-kicker">OCR REGION VIEW</span>
+          <h2 id="ocrPreviewModalTitle">辨識範圍放大檢視</h2>
+        </div>
+        <button id="ocrPreviewCloseBtn" class="ocr-preview-close" type="button" aria-label="關閉放大預覽">×</button>
+      </div>
+      <div id="ocrPreviewModalStage" class="ocr-preview-modal-stage">
+        <img id="ocrModalPreview" alt="OCR 辨識範圍放大預覽" />
+        <div id="ocrModalRegionOverlay" class="ocr-region-overlay" aria-hidden="true"></div>
+      </div>
+      <div class="ocr-preview-modal-foot">
+        <span>紅框為送入 OCR 的辨識範圍</span>
+        <span>點擊背景或按 Esc 關閉</span>
+      </div>
+    </div>
+  </section>
 
     <section id="statusCard" class="card status" aria-live="polite">
       <h2 class="section-title"><span class="step-badge">3</span>OCR 辨識</h2>
@@ -164,7 +190,15 @@
   const galleryInput = $('galleryInput');
   const errorBox = $('errorBox');
   const previewCard = $('previewCard');
+  const ocrPreviewStage = $('ocrPreviewStage');
   const correctedPreview = $('correctedPreview');
+  const ocrRegionOverlay = $('ocrRegionOverlay');
+  const previewLegend = $('previewLegend');
+  const ocrPreviewModal = $('ocrPreviewModal');
+  const ocrPreviewModalStage = $('ocrPreviewModalStage');
+  const ocrModalPreview = $('ocrModalPreview');
+  const ocrModalRegionOverlay = $('ocrModalRegionOverlay');
+  const ocrPreviewCloseBtn = $('ocrPreviewCloseBtn');
   const autoCorrectionNote = $('autoCorrectionNote');
   const autoCorrectionText = $('autoCorrectionText');
   const editAgainBtn = $('editAgainBtn');
@@ -224,6 +258,16 @@
   let progressContext = { base: 0, span: 1, label: '' };
   let autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '' };
 
+  const OCR_REGION_LABELS = {
+    market: '市場名稱',
+    document: '文件名稱',
+    date: '拍賣日期',
+    dealerNumber: '承銷人編號',
+    dealerName: '承銷人姓名',
+    codesLeft: '拍賣編號（左）',
+    codesRight: '拍賣編號（右）'
+  };
+
   const statusMap = {
     'loading tesseract core': '載入 OCR 核心',
     'initializing tesseract': '初始化 OCR',
@@ -239,6 +283,91 @@
   function clearError() {
     errorBox.textContent = '';
     errorBox.classList.remove('show');
+  }
+
+  function clearOCRRegionBoxes(overlay = ocrRegionOverlay) {
+    overlay.replaceChildren();
+  }
+
+  function renderRegionBoxes(stage, image, overlay) {
+    clearOCRRegionBoxes(overlay);
+    if (correctedPreview.dataset.overlay !== 'roi' || !image.naturalWidth || !image.naturalHeight) return;
+
+    const stageRect = stage.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    if (!stageRect.width || !stageRect.height || !imageRect.width || !imageRect.height) return;
+
+    // img 可能因 max-height 及 object-fit contain 留下左右空白，先算出圖片實際繪製區域，
+    // 再把標準化 ROI 換算成預覽畫面上的像素位置。
+    const scale = Math.min(
+      imageRect.width / image.naturalWidth,
+      imageRect.height / image.naturalHeight
+    );
+    const imageWidth = image.naturalWidth * scale;
+    const imageHeight = image.naturalHeight * scale;
+    const imageLeft = imageRect.left - stageRect.left + (imageRect.width - imageWidth) / 2;
+    const imageTop = imageRect.top - stageRect.top + (imageRect.height - imageHeight) / 2;
+
+    Object.entries(ROI).forEach(([key, region]) => {
+      const padding = region.pad ?? 0.003;
+      const x1 = Math.max(0, region.x1 - padding);
+      const y1 = Math.max(0, region.y1 - padding);
+      const x2 = Math.min(1, region.x2 + padding);
+      const y2 = Math.min(1, region.y2 + padding);
+      const box = document.createElement('div');
+      box.className = 'ocr-region-box';
+      box.style.left = imageLeft + x1 * imageWidth + 'px';
+      box.style.top = imageTop + y1 * imageHeight + 'px';
+      box.style.width = (x2 - x1) * imageWidth + 'px';
+      box.style.height = (y2 - y1) * imageHeight + 'px';
+      box.setAttribute('aria-label', 'OCR 辨識範圍：' + (OCR_REGION_LABELS[key] || key));
+
+      //const label = document.createElement('span');
+      //label.textContent = OCR_REGION_LABELS[key] || key;
+      //box.appendChild(label);
+      overlay.appendChild(box);
+    });
+  }
+
+  function renderOCRRegionBoxes() {
+    renderRegionBoxes(ocrPreviewStage, correctedPreview, ocrRegionOverlay);
+    if (ocrPreviewModal.classList.contains('show')) {
+      renderRegionBoxes(ocrPreviewModalStage, ocrModalPreview, ocrModalRegionOverlay);
+    }
+  }
+
+  let previewFocusBeforeOpen = null;
+
+  function openOCRPreview() {
+    if (!correctedPreview.src) return;
+    previewFocusBeforeOpen = document.activeElement;
+    ocrModalPreview.src = correctedPreview.currentSrc || correctedPreview.src;
+    ocrPreviewModal.hidden = false;
+    ocrPreviewModal.classList.add('show');
+    document.body.classList.add('ocr-modal-open');
+    requestAnimationFrame(() => {
+      renderOCRRegionBoxes();
+      ocrPreviewCloseBtn.focus();
+    });
+  }
+
+  function closeOCRPreview() {
+    if (!ocrPreviewModal.classList.contains('show')) return;
+    ocrPreviewModal.classList.remove('show');
+    ocrPreviewModal.hidden = true;
+    document.body.classList.remove('ocr-modal-open');
+    if (previewFocusBeforeOpen && typeof previewFocusBeforeOpen.focus === 'function') {
+      previewFocusBeforeOpen.focus();
+    }
+  }
+
+  function showPreviewImage(canvas, showRegions, legend) {
+    correctedPreview.dataset.overlay = showRegions ? 'roi' : 'none';
+    previewLegend.textContent = legend || '';
+    clearOCRRegionBoxes();
+    correctedPreview.src = canvas.toDataURL('image/jpeg', 0.9);
+    previewCard.classList.add('show');
+    requestAnimationFrame(renderOCRRegionBoxes);
   }
   function setBusy(busy) {
     isBusy = busy;
@@ -821,6 +950,7 @@ self.onmessage = async (ev) => {
     sourceCtx.imageSmoothingQuality = 'high';
     sourceCtx.drawImage(drawable, 0, 0, w, h);
     if (typeof drawable.close === 'function') drawable.close();
+    showPreviewImage(sourceCanvas, false, '已載入上傳圖片；文件校正完成後，紅框會標示送入 OCR 的辨識範圍。');
     resetCorners();
     autoDetection = { method: 'manual', confidence: 0, deskewAngle: 0, detail: '' };
   }
@@ -1551,8 +1681,7 @@ self.onmessage = async (ev) => {
         `${methodText}${pct}${angleText}。若邊界不準，可按「重新調整四角」。`
       );
 
-      correctedPreview.src = correctedCanvas.toDataURL('image/jpeg', 0.9);
-      previewCard.classList.add('show');
+      showPreviewImage(correctedCanvas, true, '紅框表示這次送入 OCR 的各個辨識範圍。');
       closeEditor();
       setProcessingStatus('文件校正完成', 1, '即將開始 OCR。');
       await sleep(60);
@@ -1621,6 +1750,10 @@ self.onmessage = async (ev) => {
     setAutoCorrectionInfo('', '尚未校正');
     [marketInput,documentInput,dateInput,dealerNumberInput,dealerNameInput].forEach(el=>{el.value='';el.classList.remove('missing');});
     renderCodes([]);
+    correctedPreview.dataset.overlay = 'none';
+    correctedPreview.removeAttribute('src');
+    clearOCRRegionBoxes();
+    previewLegend.textContent = '尚未載入圖片';
     autoDetection = { method:'manual', confidence:0, deskewAngle:0, detail:'' };
     sourceCanvas.width = sourceCanvas.height = 1;
     correctedCanvas.width = correctedCanvas.height = 1;
@@ -1670,6 +1803,26 @@ self.onmessage = async (ev) => {
     catch { const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();copyJsonBtn.textContent='已複製'; }
     setTimeout(()=>copyJsonBtn.textContent='複製 JSON',1200);
   });
+
+  ocrPreviewStage.addEventListener('click', openOCRPreview);
+  ocrPreviewStage.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openOCRPreview();
+    }
+  });
+  ocrPreviewCloseBtn.addEventListener('click', closeOCRPreview);
+  ocrPreviewModal.addEventListener('click', (event) => {
+    if (event.target === ocrPreviewModal) closeOCRPreview();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && ocrPreviewModal.classList.contains('show')) {
+      closeOCRPreview();
+    }
+  });
+  correctedPreview.addEventListener('load', renderOCRRegionBoxes);
+  ocrModalPreview.addEventListener('load', renderOCRRegionBoxes);
+  window.addEventListener('resize', renderOCRRegionBoxes);
 
   window.addEventListener('pagehide',()=>{
     if(worker) worker.terminate();
