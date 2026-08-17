@@ -334,7 +334,6 @@ function openSettings(tab) {
 
 function openStoryBoard() {
   if (state.mode !== 'story') return;
-  if (state.call) return toast('請先結束目前的交談，再查看案件簿。');
   ensureSave(); state.overlay = 'story-board'; state.characterPreviewId = null; render();
 }
 
