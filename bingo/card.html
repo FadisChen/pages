@@ -197,7 +197,7 @@
 
     function renderCard(card) {
       document.title = '卡片 ' + card.cardId + '｜2026 T 部門尾牙';
-      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-lines"><span class="card-lines-label">CONNECTED LINES</span><strong class="card-lines-value" id="lineCount">0</strong><span class="card-lines-max">/ 12</span></div><div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div></article>';
+      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-lines"><span class="card-lines-label">連線數</span><strong class="card-lines-value" id="lineCount">0</strong><span class="card-lines-max">條</span></div><div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div></article>';
       applyStoredMarks(card);
     }
 
