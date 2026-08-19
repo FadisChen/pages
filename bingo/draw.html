@@ -74,10 +74,19 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <div class="reveal-overlay" id="revealOverlay" aria-hidden="true">
+    <div class="reveal-frame">
+      <div class="reveal-kicker">NUMBER CALLED</div>
+      <div class="reveal-number" id="revealNumber">—</div>
+    </div>
+  </div>
+
   <script>
     const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
     const STORAGE_KEY = 't-dept-bingo-draw-state-v3';
     const STORAGE_VERSION = 3;
+    const REVEAL_HOLD_DURATION = 3000;
+    const REVEAL_FADE_DURATION = 700;
 
     let state = loadState();
     let isDrawing = false;
@@ -172,6 +181,26 @@
       toastTimer = window.setTimeout(function () { toast.classList.remove('is-visible'); }, 3200);
     }
 
+    function showNumberReveal(number) {
+      return new Promise(function (resolve) {
+        const overlay = $('#revealOverlay');
+        $('#revealNumber').textContent = number;
+        overlay.setAttribute('aria-hidden', 'false');
+
+        window.requestAnimationFrame(function () {
+          overlay.classList.add('is-visible');
+        });
+
+        window.setTimeout(function () {
+          overlay.classList.remove('is-visible');
+          window.setTimeout(function () {
+            overlay.setAttribute('aria-hidden', 'true');
+            resolve();
+          }, REVEAL_FADE_DURATION);
+        }, REVEAL_HOLD_DURATION);
+      });
+    }
+
     $('#drawButton').addEventListener('click', function () {
       if (isDrawing) return;
       const remaining = ALL_NUMBERS.filter(function (number) { return !state.drawnNumbers.includes(number); });
@@ -190,11 +219,15 @@
         const picked = remaining[randomIndex(remaining.length)];
         state.drawnNumbers.push(picked);
         state.currentNumber = picked;
-        isDrawing = false;
         $('#stage').classList.remove('is-rolling');
         saveState();
         render();
         showToast('號碼 ' + picked + ' 已開出；參加者卡片不會自動圈選。');
+
+        showNumberReveal(picked).then(function () {
+          isDrawing = false;
+          render();
+        });
       }, 1100);
     });
 
