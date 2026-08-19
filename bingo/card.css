@@ -1,0 +1,234 @@
+    :root {
+      --ink: #21191a;
+      --ink-soft: #725f5d;
+      --paper: #f7f0df;
+      --paper-bright: #fffaf0;
+      --vermilion: #d94b3f;
+      --jade: #1d6961;
+      --gold: #c7a45c;
+      --line: rgba(33, 25, 26, .18);
+      --display: "Bodoni 72", "Didot", "Noto Serif TC", "Songti TC", serif;
+      --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      --mono: "IBM Plex Mono", "Cascadia Mono", "Consolas", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-height: 100%; }
+
+    body {
+      min-width: 320px;
+      min-height: 100svh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 8%, rgba(255, 250, 240, .86), transparent 26rem),
+        linear-gradient(140deg, #e9cda8, #f1e1c5 50%, #d7b98e);
+      font-family: var(--sans);
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+      opacity: .16;
+      background: url("assets/paper-ink-texture.png") center / cover;
+      mix-blend-mode: multiply;
+    }
+
+    .page {
+      display: grid;
+      place-items: center;
+      min-height: 100svh;
+      padding: 22px 14px 30px;
+    }
+
+    #cardRoot {
+      width: min(780px, calc(100vw - 24px));
+    }
+
+    .digital-card {
+      position: relative;
+      width: 100%;
+      padding: clamp(22px, 5vw, 39px);
+      overflow: hidden;
+      border: 1px solid var(--ink);
+      background:
+        radial-gradient(circle at 86% 9%, rgba(199, 164, 92, .32), transparent 155px),
+        var(--paper-bright);
+      box-shadow: 11px 11px 0 var(--ink), 0 24px 60px rgba(58, 26, 23, .16);
+    }
+
+    .digital-card::before,
+    .digital-card::after {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      content: "";
+      border: 1px solid rgba(29, 105, 97, .36);
+    }
+
+    .digital-card::before {
+      top: 14px;
+      left: 14px;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .digital-card::after {
+      right: 14px;
+      bottom: 14px;
+      border-top: 0;
+      border-left: 0;
+    }
+
+    .card-kicker {
+      color: var(--vermilion);
+      font: 800 10px/1 var(--mono);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+
+    .card-title-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: end;
+      margin-top: 17px;
+    }
+
+    .card-title {
+      margin: 0;
+      color: var(--jade);
+      font: 900 clamp(54px, 13vw, 91px)/.78 var(--display);
+      letter-spacing: -.1em;
+    }
+
+    .card-number {
+      padding: 8px 10px 7px;
+      color: var(--paper);
+      background: var(--ink);
+      font: 900 13px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .card-event {
+      margin-top: 12px;
+      color: var(--ink-soft);
+      font: 800 10px/1.4 var(--mono);
+      letter-spacing: .12em;
+    }
+
+    .card-rule {
+      height: 1px;
+      margin: 25px 0 22px;
+      background: linear-gradient(90deg, var(--vermilion), var(--gold), transparent);
+    }
+
+    .bingo-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      width: min(100%, 700px);
+      margin: 0 auto;
+      border-top: 1px solid var(--ink);
+      border-left: 1px solid var(--ink);
+    }
+
+    .bingo-cell {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      color: var(--ink);
+      border-right: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      background: rgba(255, 250, 240, .62);
+      font: 900 clamp(22px, 7vw, 47px)/1 var(--mono);
+    }
+
+    .bingo-cell.is-free {
+      color: var(--paper);
+      background: var(--vermilion);
+      font: 900 clamp(17px, 5vw, 35px)/1 var(--mono);
+      letter-spacing: .04em;
+    }
+
+    .card-bottom {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 20px;
+      color: var(--ink-soft);
+      font: 800 9px/1.4 var(--mono);
+      letter-spacing: .07em;
+    }
+
+    .verified {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 21px;
+      padding: 8px 10px;
+      color: var(--jade);
+      border: 1px solid rgba(29, 105, 97, .25);
+      background: rgba(29, 105, 97, .08);
+      font: 800 9px/1 var(--mono);
+      letter-spacing: .1em;
+    }
+
+    .verified::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: var(--jade);
+      box-shadow: 0 0 0 4px rgba(29, 105, 97, .13);
+    }
+
+    .error-card {
+      width: min(100%, 700px);
+      padding: 31px;
+      border: 1px solid var(--ink);
+      background: var(--paper-bright);
+      box-shadow: 9px 9px 0 var(--vermilion);
+    }
+
+    .error-card h1 {
+      margin: 16px 0 0;
+      font: 900 clamp(49px, 12vw, 84px)/.86 var(--display);
+      letter-spacing: -.08em;
+    }
+
+    .error-card h1 em {
+      color: var(--vermilion);
+      font-style: normal;
+    }
+
+    .error-card p {
+      margin: 17px 0 0;
+      color: var(--ink-soft);
+      font-size: 12px;
+      line-height: 1.75;
+    }
+
+    .error-kicker {
+      color: var(--vermilion);
+      font: 800 10px/1 var(--mono);
+      letter-spacing: .18em;
+    }
+
+    @media (max-width: 520px) {
+      .page { padding: 8px 5px 16px; }
+      .digital-card {
+        padding: 22px 14px 19px;
+        box-shadow: 6px 6px 0 var(--ink), 0 15px 35px rgba(58, 26, 23, .14);
+      }
+      .card-title-row { align-items: center; }
+      .card-number { padding: 7px 8px 6px; font-size: 11px; }
+      .card-event { font-size: 8px; }
+      .card-rule { margin: 21px 0 18px; }
+      .bingo-cell { font-size: clamp(18px, 9vw, 31px); }
+      .bingo-cell.is-free { font-size: clamp(14px, 7vw, 24px); }
+      .card-bottom { font-size: 7px; }
+    }

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#21191a" />
+  <link rel="icon" href="data:," />
+  <title>2026 T 部門尾牙｜報到發卡台</title>
+  <script src="assets/qrcode.min.js"></script>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <main class="site-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">B</div>
+        <div>
+          <strong>BINGO ATELIER</strong>
+          <small>T DEPT. / 2026 YEAR-END PARTY</small>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="event-chip">2026 T 部門尾牙</div>
+        <div class="live-badge"><span class="signal"></span> CHECK-IN DESK</div>
+        <a class="draw-link" href="draw.html">進入抽號碼 ↗</a>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Front desk / hand out the luck</div>
+        <h1>今天的卡，<em>從這裡交出去。</em></h1>
+        <p class="hero-copy">選擇卡號顯示專屬 QR Code；已領取的卡號仍可重新開啟 QR Code，方便再次提供給參加者。</p>
+      </div>
+      <div class="hero-stamp" aria-hidden="true">
+        <div class="stamp-kicker">CARD EDITION</div>
+        <div class="stamp-number">001—120</div>
+        <div class="stamp-footer"><span>FREE / T</span><span>QR HANDOUT</span></div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <article class="panel number-wall">
+        <div class="panel-head">
+          <div>
+            <div class="mono-label">Check-in queue / 120 cards</div>
+            <h2 class="panel-title">選擇卡號</h2>
+            <p class="panel-subtitle">點擊卡號顯示 QR Code；首次開啟會標記為已領取，之後仍可重新開啟。</p>
+          </div>
+          <div class="mono-label"><span id="claimedCount">0</span> / 120 CLAIMED</div>
+        </div>
+        <div class="number-grid" id="numberGrid" aria-live="polite"></div>
+        <div class="wall-footer"><span><strong id="availableCount">120</strong> 張尚未領取</span><span>CLICK → SHOW QR · REOPEN ANYTIME</span></div>
+      </article>
+
+      <aside class="panel qr-panel">
+        <div class="mono-label">Selected card / QR handout</div>
+        <h2 id="selectedCardLabel">尚未選取</h2>
+        <div id="qrContent">
+          <div class="qr-empty"><div><strong>選一個卡號</strong>QR Code 會在這裡出現</div></div>
+        </div>
+        <div class="qr-panel-foot">QR 內容包含完整卡片排列<br />NO ACCOUNT / NO SERVER / LOCAL CLAIM LOG</div>
+        <button class="reset-button" id="resetButton" type="button">重置全部領取狀態</button>
+      </aside>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const ACTIVITY_NAME = '2026 T 部門尾牙';
+    const CARD_COUNT = 120;
+    const CARD_SIZE = 25;
+    const CENTER_INDEX = 12;
+    const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
+    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v1';
+    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v1';
+
+    let cards = loadCardPool();
+    let claimedCards = loadClaimedCards();
+    let selectedCardId = null;
+    let toastTimer;
+
+    const $ = function (selector) { return document.querySelector(selector); };
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function randomIndex(max) {
+      if (window.crypto && window.crypto.getRandomValues) {
+        const buffer = new Uint32Array(1);
+        window.crypto.getRandomValues(buffer);
+        return buffer[0] % max;
+      }
+      return Math.floor(Math.random() * max);
+    }
+
+    function shuffle(items) {
+      const result = items.slice();
+      for (let index = result.length - 1; index > 0; index -= 1) {
+        const swapIndex = randomIndex(index + 1);
+        const swap = result[index];
+        result[index] = result[swapIndex];
+        result[swapIndex] = swap;
+      }
+      return result;
+    }
+
+    function createGrid() {
+      const shuffledNumbers = shuffle(ALL_NUMBERS);
+      const grid = [];
+      let numberIndex = 0;
+      for (let index = 0; index < CARD_SIZE; index += 1) {
+        if (index === CENTER_INDEX) {
+          grid.push('T');
+        } else {
+          grid.push(shuffledNumbers[numberIndex]);
+          numberIndex += 1;
+        }
+      }
+      return grid;
+    }
+
+    function gridFingerprint(grid) {
+      return grid.join(',');
+    }
+
+    function isValidGrid(grid) {
+      if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
+      const numbers = grid.filter(function (value) { return value !== 'T'; });
+      return numbers.length === ALL_NUMBERS.length
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
+        && new Set(numbers).size === ALL_NUMBERS.length;
+    }
+
+    function isValidCardPool(value) {
+      if (!Array.isArray(value) || value.length !== CARD_COUNT) return false;
+      const ids = new Set();
+      const fingerprints = new Set();
+      return value.every(function (card, index) {
+        if (!card || typeof card.cardId !== 'string' || ids.has(card.cardId) || !isValidGrid(card.grid)) return false;
+        if (card.cardId !== String(index + 1).padStart(3, '0')) return false;
+        const fingerprint = gridFingerprint(card.grid);
+        if (fingerprints.has(fingerprint)) return false;
+        ids.add(card.cardId);
+        fingerprints.add(fingerprint);
+        return true;
+      });
+    }
+
+    function createCardPool() {
+      const result = [];
+      const fingerprints = new Set();
+      while (result.length < CARD_COUNT) {
+        const grid = createGrid();
+        const fingerprint = gridFingerprint(grid);
+        if (fingerprints.has(fingerprint)) continue;
+        fingerprints.add(fingerprint);
+        result.push({
+          cardId: String(result.length + 1).padStart(3, '0'),
+          grid: grid
+        });
+      }
+      return result;
+    }
+
+    function loadCardPool() {
+      try {
+        const raw = localStorage.getItem(CARDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (isValidCardPool(parsed)) return parsed;
+      } catch (error) {
+        // Fall through and create a fresh pool.
+      }
+
+      const pool = createCardPool();
+      try {
+        localStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(pool));
+      } catch (error) {
+        showToast('卡池無法保存；請勿重新整理，否則卡號可能重新配置。');
+      }
+      return pool;
+    }
+
+    function loadClaimedCards() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(CLAIMED_STORAGE_KEY) || '[]');
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.filter(function (id) {
+          return typeof id === 'string' && /^[0-9]{3}$/.test(id);
+        }));
+      } catch (error) {
+        return new Set();
+      }
+    }
+
+    function saveClaimedCards() {
+      try {
+        localStorage.setItem(CLAIMED_STORAGE_KEY, JSON.stringify(Array.from(claimedCards)));
+      } catch (error) {
+        showToast('無法保存領取狀態；目前只保留在這個頁面的記憶體中。');
+      }
+    }
+
+    function bytesToBase64Url(bytes) {
+      let binary = '';
+      bytes.forEach(function (byte) { binary += String.fromCharCode(byte); });
+      return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+    }
+
+    function encodeCardPayload(card) {
+      const payload = {
+        version: 1,
+        activityName: ACTIVITY_NAME,
+        cardId: card.cardId,
+        grid: card.grid
+      };
+      return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+    }
+
+      function cardUrl(card) {
+        const target = new URL('card.html', window.location.href);
+        target.searchParams.set('v', '4');
+        target.searchParams.set('card', encodeCardPayload(card));
+        return target.href;
+      }
+
+    function renderQr(mount, card) {
+      mount.innerHTML = '';
+      if (typeof QRCode !== 'function') {
+        mount.innerHTML = '<div class="qr-fallback">QR 套件未載入<br />請確認 assets/qrcode.min.js</div>';
+        return false;
+      }
+
+      try {
+        new QRCode(mount, {
+          text: cardUrl(card),
+          width: 270,
+          height: 270,
+          colorDark: '#21191a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H
+        });
+        return true;
+      } catch (error) {
+        mount.innerHTML = '<div class="qr-fallback">QR 產生失敗<br />請重新載入頁面</div>';
+        return false;
+      }
+    }
+
+    function renderNumberGrid() {
+      $('#numberGrid').innerHTML = cards.map(function (card) {
+        const claimed = claimedCards.has(card.cardId);
+        const selected = selectedCardId === card.cardId;
+        return '<button class="number-tile' + (claimed ? ' is-claimed' : '') + (selected ? ' is-selected' : '') + '" type="button" data-card-id="' + card.cardId + '" aria-label="卡號 ' + card.cardId + (claimed ? ' 已領取，可重新開啟 QR Code' : ' 尚未領取') + '">'
+          + card.cardId
+          + '</button>';
+      }).join('');
+
+      $('#claimedCount').textContent = claimedCards.size;
+      $('#availableCount').textContent = CARD_COUNT - claimedCards.size;
+    }
+
+    function renderQrPanel(card) {
+      const label = $('#selectedCardLabel');
+      const content = $('#qrContent');
+
+      if (!card) {
+        label.textContent = '尚未選取';
+        content.innerHTML = '<div class="qr-empty"><div><strong>選一個卡號</strong>QR Code 會在這裡出現</div></div>';
+        return false;
+      }
+
+      label.textContent = card.cardId;
+      const url = cardUrl(card);
+      content.innerHTML = '<div class="selected-state"><span class="signal"></span> ' + (claimedCards.has(card.cardId) ? '已領取／可重新開啟' : 'QR 已產生／待領取標記') + '</div><div class="qr-stage"><div id="qrMount" aria-label="卡號 ' + card.cardId + ' 的 QR Code"></div></div><div class="qr-url"><div class="qr-url-label">Scan URL / Card page</div><a class="qr-url-value" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></div>';
+      return renderQr($('#qrMount'), card);
+    }
+
+    function selectCard(cardId) {
+      const card = cards.find(function (item) { return item.cardId === cardId; });
+      if (!card) return;
+
+      if (claimedCards.has(cardId)) {
+        selectedCardId = cardId;
+        renderNumberGrid();
+        renderQrPanel(card);
+        showToast('卡號 ' + cardId + ' 已領取，QR Code 可重新開啟。');
+        return;
+      }
+
+      selectedCardId = cardId;
+      const qrReady = renderQrPanel(card);
+      if (qrReady === false) {
+        showToast('QR Code 尚未產生，這張卡不會標記為已領取。');
+        return;
+      }
+
+      claimedCards.add(cardId);
+      saveClaimedCards();
+      renderNumberGrid();
+      renderQrPanel(card);
+      showToast('卡號 ' + cardId + ' 已標記為已領取。');
+    }
+
+    function showToast(message) {
+      const toast = $('#toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.add('is-visible');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(function () { toast.classList.remove('is-visible'); }, 3200);
+    }
+
+    $('#numberGrid').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-card-id]');
+      if (!button) return;
+      selectCard(button.dataset.cardId);
+    });
+
+    $('#resetButton').addEventListener('click', function () {
+      if (!claimedCards.size) {
+        showToast('目前沒有已領取的卡片。');
+        return;
+      }
+      if (!window.confirm('確定要重置全部領取狀態嗎？120 張卡將重新變成可領取。')) return;
+      claimedCards = new Set();
+      selectedCardId = null;
+      saveClaimedCards();
+      renderNumberGrid();
+      renderQrPanel(null);
+      showToast('領取狀態已重置。');
+    });
+
+    renderNumberGrid();
+    renderQrPanel(null);
+  </script>
+</body>
+</html>

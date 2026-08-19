@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#21191a" />
+  <link rel="icon" href="data:," />
+  <title>現場抽號碼｜2026 T 部門尾牙</title>
+  <link rel="stylesheet" href="draw.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="回到報到發卡台">
+        <span class="brand-mark">B</span>
+        <span><strong>BINGO ATELIER</strong><small>T DEPT. / 2026 YEAR-END PARTY</small></span>
+      </a>
+      <a class="back-link" href="index.html">← 回到報到發卡</a>
+    </header>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Room 02 / host only</div>
+        <h1>把號碼，<em>交給今晚。</em></h1>
+        <p class="hero-copy">抽號碼和參加者卡片是獨立流程。每次只抽出一個尚未出現的號碼，結果保存於這台主持人裝置。</p>
+      </div>
+      <div class="live-badge">LIVE DRAW ／ 1—24 ／ NO REPEAT</div>
+    </section>
+
+    <section class="draw-layout">
+      <article class="stage" id="stage">
+        <header class="stage-head">
+          <div>
+            <div class="stage-kicker">Live Draw / 02</div>
+            <h2>現場抽號碼</h2>
+            <p>動畫完成後才會寫入抽出順序。</p>
+          </div>
+          <div class="stage-status" id="stageStatus">READY TO DRAW</div>
+        </header>
+        <div class="current">
+          <div class="ball" aria-live="polite">
+            <div class="ball-number" id="currentNumber">—</div>
+            <div class="ball-caption">CURRENT DRAW</div>
+          </div>
+          <p class="instruction" id="instruction">準備好了嗎？把今晚的第一個號碼交給大家。</p>
+          <button class="draw-button" id="drawButton" type="button">✦ 抽號碼 ↗</button>
+          <button class="reset-button" id="resetButton" type="button">↻ 清除開獎結果</button>
+        </div>
+        <footer class="stage-foot"><span>● HOST CONSOLE</span><span>1—24 / NO REPEAT</span><span>CARDS STAY UNCHANGED</span></footer>
+      </article>
+
+      <aside class="side">
+        <article class="panel progress">
+          <div class="mono-label">Draw progress</div>
+          <div class="progress-row"><strong class="progress-value"><span id="drawCount">0</span> <small>/ 24</small></strong><span class="mono-label" id="progressStatus">尚未開始</span></div>
+          <div class="track"><div class="fill" id="progressFill"></div></div>
+          <div class="progress-meta"><span>START</span><span id="remainingCount">24 REMAINING</span><span>FINISH</span></div>
+        </article>
+
+        <article class="panel">
+          <header class="history-head"><div><div class="mono-label">Call sheet</div><h2>已開出號碼</h2></div><span class="mono-label">ORDER</span></header>
+          <div class="history-list" id="historyList"></div>
+        </article>
+
+        <article class="panel">
+          <header class="pool-head"><div><div class="mono-label">Number pool</div><h2>號碼池</h2></div><span class="mono-label">1—24</span></header>
+          <div class="pool-list" id="poolList"></div>
+        </article>
+
+        <div class="note"><strong>目前版本：</strong>抽出的號碼只記錄於這個抽號碼頁，不會自動圈選或修改參加者的 card.html。</div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
+    const STORAGE_KEY = 't-dept-bingo-draw-state-v3';
+    const STORAGE_VERSION = 3;
+
+    let state = loadState();
+    let isDrawing = false;
+    let toastTimer;
+
+    const $ = function (selector) { return document.querySelector(selector); };
+
+    function emptyState() {
+      return { version: STORAGE_VERSION, drawnNumbers: [], currentNumber: null, updatedAt: null };
+    }
+
+    function normalizeState(value) {
+      if (!value || value.version !== STORAGE_VERSION || !Array.isArray(value.drawnNumbers)) return null;
+      const numbers = value.drawnNumbers.filter(function (number) {
+        return Number.isInteger(number) && number >= 1 && number <= 24;
+      });
+      const uniqueNumbers = Array.from(new Set(numbers));
+      if (uniqueNumbers.length !== numbers.length) return null;
+      if (value.currentNumber !== null && value.currentNumber !== uniqueNumbers[uniqueNumbers.length - 1]) return null;
+      return {
+        version: STORAGE_VERSION,
+        drawnNumbers: uniqueNumbers,
+        currentNumber: uniqueNumbers.length ? uniqueNumbers[uniqueNumbers.length - 1] : null,
+        updatedAt: value.updatedAt || null
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? normalizeState(JSON.parse(raw)) || emptyState() : emptyState();
+      } catch (error) {
+        return emptyState();
+      }
+    }
+
+    function saveState() {
+      state.updatedAt = new Date().toISOString();
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        showToast('無法保存抽號狀態；目前只保留在頁面記憶體。');
+      }
+    }
+
+    function randomIndex(max) {
+      if (window.crypto && window.crypto.getRandomValues) {
+        const buffer = new Uint32Array(1);
+        window.crypto.getRandomValues(buffer);
+        return buffer[0] % max;
+      }
+      return Math.floor(Math.random() * max);
+    }
+
+    function render() {
+      const drawnSet = new Set(state.drawnNumbers);
+      const count = state.drawnNumbers.length;
+      const remaining = ALL_NUMBERS.filter(function (number) { return !drawnSet.has(number); });
+      const complete = count === ALL_NUMBERS.length;
+
+      $('#currentNumber').textContent = state.currentNumber === null ? '—' : state.currentNumber;
+      $('#drawCount').textContent = count;
+      $('#remainingCount').textContent = remaining.length + ' REMAINING';
+      $('#progressFill').style.width = (count / ALL_NUMBERS.length) * 100 + '%';
+      $('#progressStatus').textContent = count === 0 ? '尚未開始' : complete ? '全部開出' : '進行中';
+      $('#stageStatus').textContent = complete ? 'ALL NUMBERS OUT' : isDrawing ? 'DRAWING…' : 'READY TO DRAW';
+      $('#instruction').textContent = count === 0
+        ? '準備好了嗎？把今晚的第一個號碼交給大家。'
+        : complete
+          ? '24 個號碼都已經到齊，抽號流程完成。'
+          : '下一個號碼會從尚未開出的清單中隨機出現。';
+      $('#drawButton').disabled = isDrawing || complete;
+      $('#resetButton').disabled = isDrawing;
+      $('#drawButton').textContent = complete ? '✓ 全部開出' : '✦ 抽號碼 ↗';
+
+      $('#historyList').innerHTML = count
+        ? state.drawnNumbers.map(function (number, index) {
+            return '<div class="history-item"><small>#' + String(index + 1).padStart(2, '0') + '</small><strong>' + number + '</strong></div>';
+          }).join('')
+        : '<div class="empty">目前還沒有開出號碼。<br />按下抽號碼，開始第一輪抽號。</div>';
+
+      $('#poolList').innerHTML = ALL_NUMBERS.map(function (number) {
+        return '<div class="pool-number' + (drawnSet.has(number) ? ' is-drawn' : '') + '">' + number + '</div>';
+      }).join('');
+    }
+
+    function showToast(message) {
+      const toast = $('#toast');
+      toast.textContent = message;
+      toast.classList.add('is-visible');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(function () { toast.classList.remove('is-visible'); }, 3200);
+    }
+
+    $('#drawButton').addEventListener('click', function () {
+      if (isDrawing) return;
+      const remaining = ALL_NUMBERS.filter(function (number) { return !state.drawnNumbers.includes(number); });
+      if (!remaining.length) return;
+
+      isDrawing = true;
+      $('#stage').classList.add('is-rolling');
+      render();
+
+      const rollTimer = window.setInterval(function () {
+        $('#currentNumber').textContent = remaining[randomIndex(remaining.length)];
+      }, 80);
+
+      window.setTimeout(function () {
+        window.clearInterval(rollTimer);
+        const picked = remaining[randomIndex(remaining.length)];
+        state.drawnNumbers.push(picked);
+        state.currentNumber = picked;
+        isDrawing = false;
+        $('#stage').classList.remove('is-rolling');
+        saveState();
+        render();
+        showToast('號碼 ' + picked + ' 已開出；參加者卡片不會自動圈選。');
+      }, 1100);
+    });
+
+    $('#resetButton').addEventListener('click', function () {
+      if (!state.drawnNumbers.length) {
+        showToast('目前沒有需要清除的開獎紀錄。');
+        return;
+      }
+      if (!window.confirm('確定要清除目前的 1～24 抽號結果嗎？')) return;
+      state = emptyState();
+      saveState();
+      render();
+      showToast('抽號結果已清除。');
+    });
+
+    render();
+  </script>
+</body>
+</html>

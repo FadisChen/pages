@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#21191a" />
+  <link rel="icon" href="data:," />
+  <title>數位賓果卡｜2026 T 部門尾牙</title>
+  <link rel="stylesheet" href="card.css?v=4" />
+</head>
+<body>
+  <main class="page">
+    <div id="cardRoot"></div>
+  </main>
+
+  <script>
+    const ACTIVITY_NAME = '2026 T 部門尾牙';
+    const CARD_SIZE = 25;
+    const CENTER_INDEX = 12;
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function base64UrlToBytes(value) {
+      const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+      const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+      const binary = atob(padded);
+      return Uint8Array.from(binary, function (character) { return character.charCodeAt(0); });
+    }
+
+    function isValidGrid(grid) {
+      if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
+      const numbers = grid.filter(function (value) { return value !== 'T'; });
+      return numbers.length === 24
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
+        && new Set(numbers).size === 24;
+    }
+
+    function decodePayload(encoded) {
+      const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encoded)));
+      if (payload.version !== 1 || payload.activityName !== ACTIVITY_NAME || typeof payload.cardId !== 'string' || !isValidGrid(payload.grid)) {
+        throw new Error('QR 內容不是有效的 2026 T 部門尾牙卡片。');
+      }
+      return payload;
+    }
+
+    function gridMarkup(grid) {
+      return '<div class="bingo-grid">' + grid.map(function (value) {
+        return '<div class="bingo-cell' + (value === 'T' ? ' is-free' : '') + '">' + escapeHtml(value) + '</div>';
+      }).join('') + '</div>';
+    }
+
+    function renderError(message) {
+      document.title = '卡片無法還原｜2026 T 部門尾牙';
+      document.querySelector('#cardRoot').innerHTML = '<article class="error-card"><div class="error-kicker">QR / INVALID CARD</div><h1>這張卡<br /><em>走失了。</em></h1><p>' + escapeHtml(message) + '<br />請回到報到櫃台，重新掃描正確的 QR Code。</p></article>';
+    }
+
+    function renderCard(card) {
+      document.title = '卡片 ' + card.cardId + '｜2026 T 部門尾牙';
+      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div></article>';
+    }
+
+    try {
+      const encoded = new URLSearchParams(window.location.search).get('card');
+      if (!encoded) {
+        renderError('網址中找不到 card querystring。');
+      } else {
+        renderCard(decodePayload(encoded));
+      }
+    } catch (error) {
+      renderError(error.message || 'QR 內容無法解析。');
+    }
+  </script>
+</body>
+</html>
