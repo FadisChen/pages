@@ -494,6 +494,61 @@
       transform: translateY(0);
     }
 
+    .reveal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(circle at 50% 38%, rgba(217, 75, 63, .38), transparent 60rem), var(--ink);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .7s ease, visibility 0s linear .7s;
+    }
+
+    .reveal-overlay.is-visible {
+      visibility: visible;
+      opacity: 1;
+      transition: opacity .35s ease;
+    }
+
+    .reveal-frame {
+      display: grid;
+      justify-items: center;
+      transform: scale(.82);
+      opacity: 0;
+      transition: transform .45s cubic-bezier(.2, .85, .3, 1.35), opacity .3s ease;
+    }
+
+    .reveal-overlay.is-visible .reveal-frame {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    .reveal-kicker {
+      color: var(--gold);
+      font: 800 12px/1 var(--mono);
+      letter-spacing: .32em;
+      text-transform: uppercase;
+    }
+
+    .reveal-number {
+      margin-top: 22px;
+      color: var(--paper);
+      font-family: var(--display);
+      font-weight: 900;
+      font-size: min(70vh, 46vw);
+      line-height: .82;
+      letter-spacing: -.1em;
+      text-shadow: 10px 14px 0 rgba(81, 24, 25, .4);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal-overlay, .reveal-frame { transition: none !important; }
+    }
+
     .is-rolling .ball { animation: shake .12s linear infinite; }
     .is-rolling .ball-number { animation: flicker .2s linear infinite; }
 
