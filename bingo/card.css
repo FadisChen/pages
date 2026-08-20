@@ -249,6 +249,31 @@
       letter-spacing: .07em;
     }
 
+    .card-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 18px;
+    }
+
+    .reset-marks-button {
+      padding: 10px 16px;
+      color: var(--ink);
+      border: 1px solid var(--ink);
+      background: transparent;
+      font: 800 10px/1 var(--mono);
+      letter-spacing: .1em;
+      cursor: pointer;
+      transition: color .15s ease, background .15s ease, transform .1s ease;
+    }
+
+    .reset-marks-button:hover {
+      color: var(--paper);
+      background: var(--ink);
+    }
+
+    .reset-marks-button:active { transform: scale(.97); }
+    .reset-marks-button:focus-visible { outline: 2px solid var(--jade); outline-offset: 3px; }
+
     .verified {
       display: inline-flex;
       align-items: center;

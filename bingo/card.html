@@ -78,7 +78,7 @@
     function gridMarkup(grid) {
       return '<div class="bingo-grid">' + grid.map(function (value, index) {
         if (value === 'T') {
-          return '<div class="bingo-cell is-free" data-index="' + index + '">' + escapeHtml(value) + '</div>';
+          return '<div class="bingo-cell is-free" data-index="' + index + '">福</div>';
         }
         return '<button type="button" class="bingo-cell is-number" data-index="' + index + '" aria-pressed="false">' + escapeHtml(value) + '</button>';
       }).join('') + '</div>';
@@ -176,6 +176,18 @@
       connectedLineCount = newCount;
     }
 
+    function resetMarks() {
+      if (!currentCard) return;
+      marks.fill(false);
+      document.querySelectorAll('.bingo-cell.is-number').forEach(function (cellEl) {
+        cellEl.classList.remove('is-marked');
+        cellEl.setAttribute('aria-pressed', 'false');
+      });
+      saveMarks(currentCard.cardId);
+      connectedLineCount = countConnectedLines();
+      updateLineCountDisplay(connectedLineCount);
+    }
+
     function applyStoredMarks(card) {
       marks = new Array(CARD_SIZE).fill(false);
       loadMarks(card.cardId).forEach(function (index) {
@@ -197,11 +209,16 @@
 
     function renderCard(card) {
       document.title = '卡片 ' + card.cardId + '｜2026 T 部門尾牙';
-      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-lines"><span class="card-lines-label">連線數</span><strong class="card-lines-value" id="lineCount">0</strong><span class="card-lines-max">條</span></div><div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div></article>';
+      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-lines"><span class="card-lines-label">連線數</span><strong class="card-lines-value" id="lineCount">0</strong><span class="card-lines-max">條</span></div><div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div><div class="card-actions"><button type="button" class="reset-marks-button" id="resetMarksButton">↻ 重  置</button></div></article>';
       applyStoredMarks(card);
     }
 
     document.querySelector('#cardRoot').addEventListener('click', function (event) {
+      const resetButton = event.target.closest('#resetMarksButton');
+      if (resetButton) {
+        resetMarks();
+        return;
+      }
       const cell = event.target.closest('.bingo-cell.is-number');
       if (!cell) return;
       toggleMark(cell);
