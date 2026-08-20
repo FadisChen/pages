@@ -17,6 +17,7 @@
     const ACTIVITY_NAME = '2026 T 部門尾牙';
     const CARD_SIZE = 25;
     const CENTER_INDEX = 12;
+    const CARD_QUERY_STORAGE_KEY = 'bingo-card-query-v1';
     const MARKS_STORAGE_PREFIX = 'bingo-card-marks-v1:';
     const CONFETTI_COLORS = ['#d94b3f', '#c7a45c', '#1d6961', '#f7f0df', '#21191a'];
     const CONFETTI_PIECE_COUNT = 60;
@@ -213,6 +214,18 @@
       applyStoredMarks(card);
     }
 
+    function getCardQueryString() {
+      const queryString = window.location.search;
+      try {
+        const storedQueryString = localStorage.getItem(CARD_QUERY_STORAGE_KEY);
+        if (storedQueryString) return storedQueryString;
+        if (queryString) localStorage.setItem(CARD_QUERY_STORAGE_KEY, queryString);
+      } catch (error) {
+        // use the URL querystring when storage is unavailable
+      }
+      return queryString;
+    }
+
     document.querySelector('#cardRoot').addEventListener('click', function (event) {
       const resetButton = event.target.closest('#resetMarksButton');
       if (resetButton) {
@@ -225,7 +238,7 @@
     });
 
     try {
-      const encoded = new URLSearchParams(window.location.search).get('card');
+      const encoded = new URLSearchParams(getCardQueryString()).get('card');
       if (!encoded) {
         renderError('網址中找不到 card querystring。');
       } else {
