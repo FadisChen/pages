@@ -17,6 +17,31 @@
     const ACTIVITY_NAME = '2026 T 部門尾牙';
     const CARD_SIZE = 25;
     const CENTER_INDEX = 12;
+    const MARKS_STORAGE_PREFIX = 'bingo-card-marks-v1:';
+    const CONFETTI_COLORS = ['#d94b3f', '#c7a45c', '#1d6961', '#f7f0df', '#21191a'];
+    const CONFETTI_PIECE_COUNT = 60;
+    const CONFETTI_LIFETIME = 3200;
+
+    const LINES = (function () {
+      const lines = [];
+      for (let row = 0; row < 5; row++) {
+        const line = [];
+        for (let col = 0; col < 5; col++) line.push(row * 5 + col);
+        lines.push(line);
+      }
+      for (let col = 0; col < 5; col++) {
+        const line = [];
+        for (let row = 0; row < 5; row++) line.push(row * 5 + col);
+        lines.push(line);
+      }
+      lines.push([0, 6, 12, 18, 24]);
+      lines.push([4, 8, 12, 16, 20]);
+      return lines;
+    })();
+
+    let currentCard = null;
+    let marks = new Array(CARD_SIZE).fill(false);
+    let connectedLineCount = 0;
 
     function escapeHtml(value) {
       return String(value)
@@ -51,9 +76,130 @@
     }
 
     function gridMarkup(grid) {
-      return '<div class="bingo-grid">' + grid.map(function (value) {
-        return '<div class="bingo-cell' + (value === 'T' ? ' is-free' : '') + '">' + escapeHtml(value) + '</div>';
+      return '<div class="bingo-grid">' + grid.map(function (value, index) {
+        if (value === 'T') {
+          return '<div class="bingo-cell is-free" data-index="' + index + '">福</div>';
+        }
+        return '<button type="button" class="bingo-cell is-number" data-index="' + index + '" aria-pressed="false">' + escapeHtml(value) + '</button>';
       }).join('') + '</div>';
+    }
+
+    function marksStorageKey(cardId) {
+      return MARKS_STORAGE_PREFIX + cardId;
+    }
+
+    function loadMarks(cardId) {
+      try {
+        const raw = localStorage.getItem(marksStorageKey(cardId));
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.markedIndexes)) return [];
+        return parsed.markedIndexes.filter(function (index) {
+          return Number.isInteger(index) && index >= 0 && index < CARD_SIZE && index !== CENTER_INDEX;
+        });
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function saveMarks(cardId) {
+      const markedIndexes = marks.reduce(function (list, isMarkedValue, index) {
+        if (isMarkedValue) list.push(index);
+        return list;
+      }, []);
+      try {
+        localStorage.setItem(marksStorageKey(cardId), JSON.stringify({
+          version: 1,
+          markedIndexes: markedIndexes,
+          updatedAt: new Date().toISOString()
+        }));
+      } catch (error) {
+        // marks stay in memory only for this session if storage is unavailable
+      }
+    }
+
+    function isMarked(index) {
+      return index === CENTER_INDEX || !!marks[index];
+    }
+
+    function countConnectedLines() {
+      return LINES.reduce(function (total, line) {
+        return line.every(isMarked) ? total + 1 : total;
+      }, 0);
+    }
+
+    function updateLineCountDisplay(count) {
+      const el = document.querySelector('#lineCount');
+      if (!el) return;
+      el.textContent = count;
+      el.classList.toggle('is-bingo', count >= 3);
+    }
+
+    function spawnConfetti() {
+      const layer = document.createElement('div');
+      layer.className = 'confetti-layer';
+      layer.setAttribute('aria-hidden', 'true');
+
+      for (let i = 0; i < CONFETTI_PIECE_COUNT; i++) {
+        const piece = document.createElement('span');
+        piece.className = 'confetti-piece';
+        const duration = 2.4 + Math.random() * 1.4;
+        piece.style.left = (Math.random() * 100) + 'vw';
+        piece.style.animationDelay = (Math.random() * 0.6) + 's';
+        piece.style.animationDuration = duration + 's';
+        piece.style.setProperty('--drift', ((Math.random() * 2 - 1) * 60) + 'px');
+        piece.style.setProperty('--spin', Math.random() > 0.5 ? 1 : -1);
+        const size = 6 + Math.random() * 7;
+        piece.style.width = size + 'px';
+        piece.style.height = (size * 0.4) + 'px';
+        piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+        layer.appendChild(piece);
+      }
+
+      document.body.appendChild(layer);
+      window.setTimeout(function () { layer.remove(); }, CONFETTI_LIFETIME);
+    }
+
+    function toggleMark(cellEl) {
+      if (!currentCard) return;
+      const index = Number(cellEl.getAttribute('data-index'));
+      marks[index] = !marks[index];
+      cellEl.classList.toggle('is-marked', marks[index]);
+      cellEl.setAttribute('aria-pressed', marks[index] ? 'true' : 'false');
+      saveMarks(currentCard.cardId);
+
+      const newCount = countConnectedLines();
+      updateLineCountDisplay(newCount);
+      if (newCount >= 3 && connectedLineCount < 3) {
+        spawnConfetti();
+      }
+      connectedLineCount = newCount;
+    }
+
+    function resetMarks() {
+      if (!currentCard) return;
+      marks.fill(false);
+      document.querySelectorAll('.bingo-cell.is-number').forEach(function (cellEl) {
+        cellEl.classList.remove('is-marked');
+        cellEl.setAttribute('aria-pressed', 'false');
+      });
+      saveMarks(currentCard.cardId);
+      connectedLineCount = countConnectedLines();
+      updateLineCountDisplay(connectedLineCount);
+    }
+
+    function applyStoredMarks(card) {
+      marks = new Array(CARD_SIZE).fill(false);
+      loadMarks(card.cardId).forEach(function (index) {
+        marks[index] = true;
+        const cellEl = document.querySelector('.bingo-cell[data-index="' + index + '"]');
+        if (cellEl) {
+          cellEl.classList.add('is-marked');
+          cellEl.setAttribute('aria-pressed', 'true');
+        }
+      });
+      connectedLineCount = countConnectedLines();
+      updateLineCountDisplay(connectedLineCount);
     }
 
     function renderError(message) {
@@ -63,15 +209,28 @@
 
     function renderCard(card) {
       document.title = '卡片 ' + card.cardId + '｜2026 T 部門尾牙';
-      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div></article>';
+      document.querySelector('#cardRoot').innerHTML = '<article class="digital-card"><div class="card-title-row"><h1 class="card-title">BINGO</h1></div><div class="card-event">' + escapeHtml(card.activityName) + '</div><div class="card-rule"></div>' + gridMarkup(card.grid) + '<div class="card-lines"><span class="card-lines-label">連線數</span><strong class="card-lines-value" id="lineCount">0</strong><span class="card-lines-max">條</span></div><div class="card-bottom"><span>下好離手</span><span>童叟無欺</span></div><div class="card-actions"><button type="button" class="reset-marks-button" id="resetMarksButton">↻ 重  置</button></div></article>';
+      applyStoredMarks(card);
     }
+
+    document.querySelector('#cardRoot').addEventListener('click', function (event) {
+      const resetButton = event.target.closest('#resetMarksButton');
+      if (resetButton) {
+        resetMarks();
+        return;
+      }
+      const cell = event.target.closest('.bingo-cell.is-number');
+      if (!cell) return;
+      toggleMark(cell);
+    });
 
     try {
       const encoded = new URLSearchParams(window.location.search).get('card');
       if (!encoded) {
         renderError('網址中找不到 card querystring。');
       } else {
-        renderCard(decodePayload(encoded));
+        currentCard = decodePayload(encoded);
+        renderCard(currentCard);
       }
     } catch (error) {
       renderError(error.message || 'QR 內容無法解析。');

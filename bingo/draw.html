@@ -6,9 +6,32 @@
   <meta name="theme-color" content="#21191a" />
   <link rel="icon" href="data:," />
   <title>現場抽號碼｜2026 T 部門尾牙</title>
+  <script src="auth.js"></script>
   <link rel="stylesheet" href="draw.css" />
 </head>
 <body>
+  <div class="auth-overlay" id="authOverlay" hidden>
+    <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authCopy">
+      <div class="auth-mark" aria-hidden="true">B</div>
+      <div class="auth-kicker">Private console / sign in</div>
+      <h1 id="authTitle">先登入，<em>再進場。</em></h1>
+      <p class="auth-copy" id="authCopy">這是 T 部門尾牙的工作主控台，請輸入工作帳號以繼續。</p>
+      <form class="auth-form" id="authForm" autocomplete="on">
+        <label class="auth-field" for="authUsername">
+          <span>帳號 / User ID</span>
+          <input id="authUsername" name="username" type="text" autocomplete="username" required />
+        </label>
+        <label class="auth-field" for="authPassword">
+          <span>密碼 / Password</span>
+          <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="auth-submit" id="authSubmit" type="submit">登入主控台 ↗</button>
+        <p class="auth-error" id="authError" role="alert" hidden></p>
+        <div class="auth-meta">SESSION ACCESS · CLOSE TAB TO SIGN OUT</div>
+      </form>
+    </section>
+  </div>
+
   <main class="shell">
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="回到報到發卡台">
@@ -31,9 +54,8 @@
       <article class="stage" id="stage">
         <header class="stage-head">
           <div>
-            <div class="stage-kicker">Live Draw / 02</div>
+            <div class="stage-kicker">Live Draw</div>
             <h2>現場抽號碼</h2>
-            <p>動畫完成後才會寫入抽出順序。</p>
           </div>
           <div class="stage-status" id="stageStatus">READY TO DRAW</div>
         </header>
@@ -46,7 +68,7 @@
           <button class="draw-button" id="drawButton" type="button">✦ 抽號碼 ↗</button>
           <button class="reset-button" id="resetButton" type="button">↻ 清除開獎結果</button>
         </div>
-        <footer class="stage-foot"><span>● HOST CONSOLE</span><span>1—24 / NO REPEAT</span><span>CARDS STAY UNCHANGED</span></footer>
+        <footer class="stage-foot"></footer>
       </article>
 
       <aside class="side">
@@ -66,18 +88,25 @@
           <header class="pool-head"><div><div class="mono-label">Number pool</div><h2>號碼池</h2></div><span class="mono-label">1—24</span></header>
           <div class="pool-list" id="poolList"></div>
         </article>
-
-        <div class="note"><strong>目前版本：</strong>抽出的號碼只記錄於這個抽號碼頁，不會自動圈選或修改參加者的 card.html。</div>
       </aside>
     </section>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <div class="reveal-overlay" id="revealOverlay" aria-hidden="true">
+    <div class="reveal-frame">
+      <div class="reveal-kicker">NUMBER CALLED</div>
+      <div class="reveal-number" id="revealNumber">—</div>
+    </div>
+  </div>
+
   <script>
+    BingoAuth.ready.then(function () {
     const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
     const STORAGE_KEY = 't-dept-bingo-draw-state-v3';
     const STORAGE_VERSION = 3;
+    const REVEAL_FADE_DURATION = 700;
 
     let state = loadState();
     let isDrawing = false;
@@ -172,6 +201,26 @@
       toastTimer = window.setTimeout(function () { toast.classList.remove('is-visible'); }, 3200);
     }
 
+    function showNumberReveal(number) {
+      return new Promise(function (resolve) {
+        const overlay = $('#revealOverlay');
+        $('#revealNumber').textContent = number;
+        overlay.setAttribute('aria-hidden', 'false');
+
+        window.requestAnimationFrame(function () {
+          overlay.classList.add('is-visible');
+        });
+
+        overlay.addEventListener('click', function () {
+          overlay.classList.remove('is-visible');
+          window.setTimeout(function () {
+            overlay.setAttribute('aria-hidden', 'true');
+            resolve();
+          }, REVEAL_FADE_DURATION);
+        }, { once: true });
+      });
+    }
+
     $('#drawButton').addEventListener('click', function () {
       if (isDrawing) return;
       const remaining = ALL_NUMBERS.filter(function (number) { return !state.drawnNumbers.includes(number); });
@@ -190,11 +239,15 @@
         const picked = remaining[randomIndex(remaining.length)];
         state.drawnNumbers.push(picked);
         state.currentNumber = picked;
-        isDrawing = false;
         $('#stage').classList.remove('is-rolling');
         saveState();
         render();
         showToast('號碼 ' + picked + ' 已開出；參加者卡片不會自動圈選。');
+
+        showNumberReveal(picked).then(function () {
+          isDrawing = false;
+          render();
+        });
       }, 1100);
     });
 
@@ -211,6 +264,7 @@
     });
 
     render();
+    });
   </script>
 </body>
 </html>

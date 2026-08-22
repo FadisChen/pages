@@ -6,10 +6,33 @@
   <meta name="theme-color" content="#21191a" />
   <link rel="icon" href="data:," />
   <title>2026 T 部門尾牙｜報到發卡台</title>
+  <script src="auth.js"></script>
   <script src="assets/qrcode.min.js"></script>
   <link rel="stylesheet" href="index.css" />
 </head>
 <body>
+  <div class="auth-overlay" id="authOverlay" hidden>
+    <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authCopy">
+      <div class="auth-mark" aria-hidden="true">B</div>
+      <div class="auth-kicker">Private console / sign in</div>
+      <h1 id="authTitle">先登入，<em>再進場。</em></h1>
+      <p class="auth-copy" id="authCopy">這是 T 部門尾牙的工作主控台，請輸入工作帳號以繼續。</p>
+      <form class="auth-form" id="authForm" autocomplete="on">
+        <label class="auth-field" for="authUsername">
+          <span>帳號 / User ID</span>
+          <input id="authUsername" name="username" type="text" autocomplete="username" required />
+        </label>
+        <label class="auth-field" for="authPassword">
+          <span>密碼 / Password</span>
+          <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="auth-submit" id="authSubmit" type="submit">登入主控台 ↗</button>
+        <p class="auth-error" id="authError" role="alert" hidden></p>
+        <div class="auth-meta">SESSION ACCESS · CLOSE TAB TO SIGN OUT</div>
+      </form>
+    </section>
+  </div>
+
   <main class="site-shell">
     <header class="topbar">
       <div class="brand">
@@ -29,8 +52,7 @@
     <section class="hero">
       <div>
         <div class="eyebrow">Front desk / hand out the luck</div>
-        <h1>今天的卡，<em>從這裡交出去。</em></h1>
-        <p class="hero-copy">選擇卡號顯示專屬 QR Code；已領取的卡號仍可重新開啟 QR Code，方便再次提供給參加者。</p>
+        <h1>下好離手<em>童叟無欺</em></h1>
       </div>
       <div class="hero-stamp" aria-hidden="true">
         <div class="stamp-kicker">CARD EDITION</div>
@@ -45,21 +67,18 @@
           <div>
             <div class="mono-label">Check-in queue / 120 cards</div>
             <h2 class="panel-title">選擇卡號</h2>
-            <p class="panel-subtitle">點擊卡號顯示 QR Code；首次開啟會標記為已領取，之後仍可重新開啟。</p>
           </div>
           <div class="mono-label"><span id="claimedCount">0</span> / 120 CLAIMED</div>
         </div>
         <div class="number-grid" id="numberGrid" aria-live="polite"></div>
-        <div class="wall-footer"><span><strong id="availableCount">120</strong> 張尚未領取</span><span>CLICK → SHOW QR · REOPEN ANYTIME</span></div>
+        <div class="wall-footer"><span><strong id="availableCount">120</strong> 張尚未領取</span></div>
       </article>
 
       <aside class="panel qr-panel">
-        <div class="mono-label">Selected card / QR handout</div>
         <h2 id="selectedCardLabel">尚未選取</h2>
         <div id="qrContent">
           <div class="qr-empty"><div><strong>選一個卡號</strong>QR Code 會在這裡出現</div></div>
         </div>
-        <div class="qr-panel-foot">QR 內容包含完整卡片排列<br />NO ACCOUNT / NO SERVER / LOCAL CLAIM LOG</div>
         <button class="reset-button" id="resetButton" type="button">重置全部領取狀態</button>
       </aside>
     </section>
@@ -68,6 +87,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
+    BingoAuth.ready.then(function () {
     const ACTIVITY_NAME = '2026 T 部門尾牙';
     const CARD_COUNT = 120;
     const CARD_SIZE = 25;
@@ -279,7 +299,7 @@
 
       label.textContent = card.cardId;
       const url = cardUrl(card);
-      content.innerHTML = '<div class="selected-state"><span class="signal"></span> ' + (claimedCards.has(card.cardId) ? '已領取／可重新開啟' : 'QR 已產生／待領取標記') + '</div><div class="qr-stage"><div id="qrMount" aria-label="卡號 ' + card.cardId + ' 的 QR Code"></div></div><div class="qr-url"><div class="qr-url-label">Scan URL / Card page</div><a class="qr-url-value" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></div>';
+      content.innerHTML = '<div class="selected-state"><span class="signal"></span> ' + (claimedCards.has(card.cardId) ? '已領取' : 'QR 已產生／待領取標記') + '</div><div class="qr-stage"><div id="qrMount" aria-label="卡號 ' + card.cardId + ' 的 QR Code"></div></div><div class="qr-url"><div class="qr-url-label">Scan URL / Card page</div><a class="qr-url-value" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></div>';
       return renderQr($('#qrMount'), card);
     }
 
@@ -340,6 +360,7 @@
 
     renderNumberGrid();
     renderQrPanel(null);
+    });
   </script>
 </body>
 </html>

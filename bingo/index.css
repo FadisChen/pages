@@ -693,3 +693,180 @@
       .qr-stage > div { width: 250px; }
       .toast { right: 12px; bottom: 12px; left: 12px; max-width: none; }
     }
+
+    html.auth-locked,
+    html.auth-locked body {
+      overflow: hidden;
+    }
+
+    html.auth-locked body > :not(.auth-overlay) {
+      visibility: hidden;
+    }
+
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(217, 75, 63, .27), transparent 33rem),
+        rgba(33, 25, 26, .91);
+    }
+
+    .auth-overlay[hidden] { display: none; }
+
+    .auth-dialog {
+      position: relative;
+      width: min(100%, 430px);
+      padding: 34px 34px 31px;
+      color: var(--ink);
+      border: 1px solid var(--ink);
+      background:
+        radial-gradient(circle at 92% 8%, rgba(199, 164, 92, .25), transparent 135px),
+        var(--paper-bright);
+      box-shadow: 10px 10px 0 var(--vermilion), 0 28px 70px rgba(0, 0, 0, .32);
+    }
+
+    .auth-dialog::before,
+    .auth-dialog::after {
+      position: absolute;
+      width: 19px;
+      height: 19px;
+      content: "";
+      border: 1px solid rgba(33, 25, 26, .35);
+    }
+
+    .auth-dialog::before {
+      top: 13px;
+      left: 13px;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .auth-dialog::after {
+      right: 13px;
+      bottom: 13px;
+      border-top: 0;
+      border-left: 0;
+    }
+
+    .auth-mark {
+      display: grid;
+      place-items: center;
+      width: 43px;
+      height: 43px;
+      margin-bottom: 24px;
+      color: var(--paper);
+      background: var(--vermilion);
+      border: 1px solid var(--ink);
+      box-shadow: 4px 4px 0 var(--ink);
+      font: 900 25px/1 var(--display);
+      transform: rotate(-7deg);
+    }
+
+    .auth-kicker {
+      color: var(--vermilion-dark);
+      font: 800 9px/1 var(--mono);
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+
+    .auth-dialog h1 {
+      margin: 13px 0 0;
+      font: 900 clamp(38px, 7vw, 53px)/.9 var(--display);
+      letter-spacing: -.08em;
+    }
+
+    .auth-copy {
+      margin: 15px 0 25px;
+      color: var(--ink-soft);
+      font-size: 12px;
+      line-height: 1.75;
+    }
+
+    .auth-form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .auth-field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .auth-field span {
+      color: var(--ink-soft);
+      font: 800 9px/1 var(--mono);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .auth-field input {
+      width: 100%;
+      min-height: 45px;
+      padding: 0 13px;
+      color: var(--ink);
+      border: 1px solid rgba(33, 25, 26, .3);
+      outline: 0;
+      background: rgba(255, 250, 240, .72);
+      font: 700 13px/1 var(--mono);
+      transition: .2s ease;
+    }
+
+    .auth-field input:focus {
+      border-color: var(--jade);
+      box-shadow: 4px 4px 0 rgba(29, 105, 97, .2);
+    }
+
+    .auth-field input:disabled {
+      opacity: .65;
+      cursor: wait;
+    }
+
+    .auth-submit {
+      min-height: 48px;
+      margin-top: 3px;
+      color: var(--paper);
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      box-shadow: 4px 4px 0 var(--vermilion);
+      font: 800 10px/1 var(--mono);
+      letter-spacing: .07em;
+      transition: .2s ease;
+    }
+
+    .auth-submit:hover:not(:disabled) {
+      background: var(--vermilion);
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+
+    .auth-submit:disabled {
+      color: rgba(247, 240, 223, .65);
+      background: var(--ink-soft);
+      box-shadow: none;
+    }
+
+    .auth-error {
+      min-height: 17px;
+      margin: 0;
+      color: var(--vermilion-dark);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .auth-meta {
+      padding-top: 17px;
+      margin-top: 2px;
+      color: var(--ink-soft);
+      border-top: 1px solid var(--line);
+      font: 700 8px/1.5 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    @media (max-width: 500px) {
+      .auth-overlay { padding: 17px; }
+      .auth-dialog { padding: 29px 23px 25px; box-shadow: 6px 6px 0 var(--vermilion), 0 20px 45px rgba(0, 0, 0, .3); }
+    }
