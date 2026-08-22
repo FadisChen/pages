@@ -56,19 +56,19 @@ const PEOPLE = [
 ];
 
 const DISPLAY_WIDTHS = Object.freeze({
-  friend1: 17,
-  friend2: 17,
-  friend3: 17,
-  friend4: 17,
-  friend5: 17,
-  friend6: 17,
-  friend7: 17,
-  friend8: 17,
-  friend9: 17,
-  friend10: 17,
-  friend11: 17,
-  friend12: 17,
-  friend13: 17,
+  friend1: 19,
+  friend2: 19,
+  friend3: 19,
+  friend4: 19,
+  friend5: 19,
+  friend6: 19,
+  friend7: 19,
+  friend8: 19,
+  friend9: 19,
+  friend10: 19,
+  friend11: 19,
+  friend12: 19,
+  friend13: 19,
 });
 
 const HIT_RATIOS = Object.freeze({
