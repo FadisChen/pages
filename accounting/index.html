@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>記帳 APP</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰️</text></svg>" type="image/svg+xml">
+    <script src="auth.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -23,75 +24,25 @@
             }
         }
     </script>
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .glass-input {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .glass-input option {
-            background: #f8f9fa !important;
-            color: #333 !important;
-            padding: 8px;
-        }
-        .glass-input:focus {
-            background: rgba(255, 255, 255, 0.3);
-            outline: none;
-            border-color: rgba(255, 255, 255, 0.5);
-        }
-        /* 針對 Webkit 瀏覽器的下拉選單樣式 */
-        select.glass-input {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 12px center;
-            background-size: 16px;
-            padding-right: 40px;
-        }
-        /* Firefox 特殊處理 */
-        @-moz-document url-prefix() {
-            .glass-input option {
-                background-color: #f8f9fa;
-                color: #333;
-            }
-        }
-        /* Safari 和 Chrome 的下拉選單文字對比度 */
-        select.glass-input:not(:focus) {
-            color: white;
-        }
-        select.glass-input:focus {
-            color: #333;
-            background: rgba(255, 255, 255, 0.9);
-        }
-        /* 確保選項在所有瀏覽器中都有良好的對比度 */
-        select.glass-input option {
-            background-color: #ffffff !important;
-            color: #333333 !important;
-            padding: 10px !important;
-            border: none !important;
-        }
-        .delete-btn:hover {
-            background: rgba(239, 68, 68, 0.8);
-        }
-    </style>
+    <link rel="stylesheet" href="index.css" />
 </head>
 <body class="font-sans text-white">
+    <div class="auth-overlay" id="authOverlay" hidden>
+        <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authCopy">
+            <form class="auth-form" id="authForm" autocomplete="on">
+                <label class="auth-field" for="authUsername">
+                    <span>帳號 / User ID</span>
+                    <input id="authUsername" name="username" type="text" autocomplete="username" required>
+                </label>
+                <label class="auth-field" for="authPassword">
+                    <span>密碼 / Password</span>
+                    <input id="authPassword" name="password" type="password" autocomplete="current-password" required>
+                </label>
+                <button class="auth-submit" id="authSubmit" type="submit">登入 ↗</button>
+                <p class="auth-error" id="authError" role="alert" hidden></p>
+            </form>
+        </section>
+    </div>
     <div class="container mx-auto px-4 py-6 max-w-md">
         <!-- Header -->
         <header class="glass rounded-3xl p-6 mb-6 text-center">            
@@ -124,7 +75,10 @@
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-3">
                     <input type="date" id="expenseDate" class="glass-input rounded-xl p-3 text-white placeholder-white/70" />
-                    <input type="text" id="itemName" placeholder="項目名稱" class="glass-input rounded-xl p-3 text-white placeholder-white/70" />
+                    <div id="itemNamePicker" class="recent-item-picker">
+                        <input type="text" id="itemName" placeholder="項目名稱" class="glass-input rounded-xl p-3 w-full text-white placeholder-white/70" autocomplete="off" aria-autocomplete="list" aria-controls="recentItemsList" aria-expanded="false" />
+                        <div id="recentItemsList" class="recent-items-list" role="listbox" hidden></div>
+                    </div>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-3">

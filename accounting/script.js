@@ -1,6 +1,9 @@
 // 全域變數
 let currentMonth = new Date();
 let expenseChart = null;
+const RECENT_ITEM_NAMES_STORAGE_KEY = 'accounting-recent-item-names-v1';
+const RECENT_ITEM_NAMES_LIMIT = 10;
+let recentItemNames = [];
 
 // 配置 - 請更新您的 GAS Web App URL
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxly3rDUSbmq5HItUueJXd5q2cMqxzQhSurRUpfuaPu3Y4EYkgk6bIwMwwWiwfahxJURQ/exec'; // 請替換為您的 GAS Web App URL
@@ -14,6 +17,8 @@ const elements = {
     expenseListEl: document.getElementById('expenseList'),
     expenseDateEl: document.getElementById('expenseDate'),
     itemNameEl: document.getElementById('itemName'),
+    itemNamePicker: document.getElementById('itemNamePicker'),
+    recentItemsList: document.getElementById('recentItemsList'),
     expenseTypeEl: document.getElementById('expenseType'),
     paymentMethodEl: document.getElementById('paymentMethod'),
     amountEl: document.getElementById('amount'),
@@ -48,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeApp() {
     // 設定今天的日期為預設值（使用當地時間）
     elements.expenseDateEl.value = getLocalDateString();
+    loadRecentItemNames();
     
     // 初始化圖表
     initializeChart();
@@ -64,6 +70,20 @@ function setupEventListeners() {
     // 月份切換按鈕
     elements.prevMonthBtn.addEventListener('click', () => changeMonth(-1));
     elements.nextMonthBtn.addEventListener('click', () => changeMonth(1));
+
+    // 最近使用的項目名稱
+    elements.itemNameEl.addEventListener('focus', showRecentItemNames);
+    elements.itemNameEl.addEventListener('input', showRecentItemNames);
+    elements.itemNameEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideRecentItemNames();
+        }
+    });
+    document.addEventListener('click', function(e) {
+        if (!elements.itemNamePicker.contains(e.target)) {
+            hideRecentItemNames();
+        }
+    });
     
     // Enter 鍵提交
     [elements.expenseDateEl, elements.itemNameEl, elements.amountEl].forEach(input => {
@@ -80,6 +100,80 @@ function setupEventListeners() {
             stopVoiceInput();
         }
     });
+}
+
+function loadRecentItemNames() {
+    try {
+        const storedNames = JSON.parse(localStorage.getItem(RECENT_ITEM_NAMES_STORAGE_KEY) || '[]');
+        recentItemNames = Array.isArray(storedNames)
+            ? storedNames
+                .filter(name => typeof name === 'string' && name.trim())
+                .map(name => name.trim())
+                .slice(0, RECENT_ITEM_NAMES_LIMIT)
+            : [];
+    } catch (error) {
+        recentItemNames = [];
+    }
+}
+
+function saveRecentItemName(itemName) {
+    const normalizedName = itemName.trim();
+    if (!normalizedName) return;
+
+    recentItemNames = [
+        normalizedName,
+        ...recentItemNames.filter(name => name !== normalizedName)
+    ].slice(0, RECENT_ITEM_NAMES_LIMIT);
+
+    try {
+        localStorage.setItem(RECENT_ITEM_NAMES_STORAGE_KEY, JSON.stringify(recentItemNames));
+    } catch (error) {
+        // 瀏覽器禁止儲存時不影響記帳功能
+    }
+}
+
+function showRecentItemNames() {
+    const keyword = elements.itemNameEl.value.trim().toLocaleLowerCase();
+    const matchingNames = recentItemNames.filter(name =>
+        name.toLocaleLowerCase().includes(keyword)
+    );
+
+    elements.recentItemsList.innerHTML = '';
+    if (matchingNames.length === 0) {
+        if (recentItemNames.length === 0) {
+            const emptyMessage = document.createElement('div');
+            emptyMessage.className = 'recent-items-empty';
+            emptyMessage.textContent = '最近使用項目';
+            elements.recentItemsList.appendChild(emptyMessage);
+            elements.recentItemsList.hidden = false;
+            elements.itemNameEl.setAttribute('aria-expanded', 'true');
+        } else {
+            hideRecentItemNames();
+        }
+        return;
+    }
+
+    matchingNames.forEach(function(name) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'recent-item-option';
+        option.setAttribute('role', 'option');
+        option.textContent = name;
+        option.addEventListener('click', function() {
+            elements.itemNameEl.value = name;
+            hideRecentItemNames();
+            elements.itemNameEl.focus();
+        });
+        elements.recentItemsList.appendChild(option);
+    });
+
+    elements.recentItemsList.hidden = false;
+    elements.itemNameEl.setAttribute('aria-expanded', 'true');
+}
+
+function hideRecentItemNames() {
+    elements.recentItemsList.hidden = true;
+    elements.itemNameEl.setAttribute('aria-expanded', 'false');
 }
 
 function updateCurrentMonthDisplay() {
@@ -150,6 +244,8 @@ async function addExpenseRecord() {
         const result = await response.json();
         
         if (result.success) {
+            saveRecentItemName(data.itemName);
+
             // 清空表單
             clearForm();
             
@@ -183,6 +279,7 @@ async function addExpenseRecord() {
 
 function clearForm() {
     elements.itemNameEl.value = '';
+    hideRecentItemNames();
     elements.amountEl.value = '';
     elements.expenseTypeEl.selectedIndex = 0;
     elements.paymentMethodEl.selectedIndex = 0;
