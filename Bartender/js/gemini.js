@@ -269,7 +269,7 @@ export async function analyzeMemories(apiKey, character, transcript, existing, m
   } else if (/^gemini-3.6(?:-|$)/i.test(modelName)) {
     generationConfig = { thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json', responseSchema: schema };
   } else {
-    generationConfig = { thinkingConfig: { thinkingLevel: 'low' }, responseFormat: { text: { mimeType: 'application/json', schema } } };
+    generationConfig = { thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json', responseJsonSchema: schema };
   }
   const response = await fetch(`${API_BASE}/models/${modelName}:generateContent`, {
     method: 'POST',
@@ -356,7 +356,7 @@ function structuredGenerationConfig(modelName, schema) {
   if (/^gemini-2\.5(?:-|$)/i.test(modelName)) return { thinkingConfig: { thinkingBudget: 1024 }, responseMimeType: 'application/json', responseSchema: schema };
   if (/^gemini-3\.1(?:-|$)/i.test(modelName)) return { thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json', responseJsonSchema: schema };
   if (/^gemini-3\.6(?:-|$)/i.test(modelName)) return { thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json', responseSchema: schema };
-  return { thinkingConfig: { thinkingLevel: 'low' }, responseFormat: { text: { mimeType: 'application/json', schema } } };
+  return { thinkingConfig: { thinkingLevel: 'low' }, responseMimeType: 'application/json', responseJsonSchema: schema };
 }
 function normalize(value) { return String(value || '').toLocaleLowerCase().replace(/\s+/g, ''); }
 function bytesToBase64(bytes) { let binary = ''; for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)); return btoa(binary); }
