@@ -91,6 +91,16 @@
   }
   .preview-wrap img{max-width:100%;max-height:320px;display:block;}
   .preview-empty{color:var(--muted);font-size:.85rem;text-align:center;padding:24px;}
+  .editor-panel{border-top:1px solid var(--border);margin-top:16px;padding-top:16px;}
+  .editor-panel h3{font-size:.95rem;margin:0 0 12px;}
+  .editor-controls{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .editor-controls label{margin:0;white-space:nowrap;}
+  .editor-controls input[type=range]{flex:1;min-width:0;accent-color:var(--primary);}
+  .rotation-value{min-width:64px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem;}
+  .editor-canvas-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#20242a;}
+  #editorCanvas{display:block;width:100%;height:auto;max-height:60vh;object-fit:contain;touch-action:none;cursor:crosshair;}
+  .editor-help{font-size:.75rem;color:var(--muted);line-height:1.5;margin:8px 0 12px;}
+  .editor-actions{display:flex;gap:10px;}
   .remove-img{
     position:absolute;top:8px;right:8px;
     background:rgba(0,0,0,.6);color:#fff;border:none;
@@ -157,7 +167,7 @@
 <body>
 <div class="container">
   <h1>📄 Gemini OCR 小工具</h1>
-  <p class="subtitle">拍照或選圖，透過 Gemini API 依自訂 System Prompt 輸出 OCR JSON 結果</p>
+  <p class="subtitle">拍照或選圖，透過 Gemini API 依 JSON Schema 輸出 OCR JSON 結果</p>
 
   <div class="card">
     <h2>⚙️ API 設定</h2>
@@ -168,16 +178,12 @@
     </div>
     <div class="field">
       <label for="modelName">Model 名稱</label>
-      <input type="text" id="modelName" placeholder="gemini-3.5-flash-lite">
-    </div>
-    <div class="field">
-      <label for="systemPrompt">System Prompt</label>
-      <textarea id="systemPrompt" rows="6"></textarea>
+      <input type="text" id="modelName" placeholder="gemini-3.5-flash">
     </div>
     <div class="field" style="margin-bottom:0;">
       <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
         <input type="checkbox" id="forceJson" style="width:auto;">
-        強制回應為 JSON 格式（response_mime_type）
+        使用 JSON Schema 強制回應為 JSON 格式
       </label>
     </div>
 
@@ -217,6 +223,23 @@
       <div class="preview-empty" id="previewEmpty">尚未選擇圖片</div>
       <img id="previewImg" class="hidden">
       <button type="button" class="remove-img hidden" id="removeImgBtn">✕</button>
+    </div>
+
+    <div class="editor-panel hidden" id="editorPanel">
+      <h3>✂️ 旋轉、裁切與透視校正</h3>
+      <div class="editor-controls">
+        <label for="rotationSlider">旋轉</label>
+        <input type="range" id="rotationSlider" min="-180" max="180" step="0.1" value="0">
+        <span class="rotation-value" id="rotationValue">0.0°</span>
+      </div>
+      <div class="editor-canvas-wrap">
+        <canvas id="editorCanvas"></canvas>
+      </div>
+      <p class="editor-help">1. 先用旋轉 slider 微調歪斜角度。<br>2. 拖曳四個白色圓點，依序對準文件左上、右上、右下、左下；四點內就是裁切範圍。<br>3. 點擊「套用」，系統會裁切圖片並將四邊校正成正面矩形。</p>
+      <div class="editor-actions">
+        <button type="button" class="btn btn-secondary" id="resetEditorBtn">重設編輯</button>
+        <button type="button" class="btn btn-primary" id="applyEditorBtn">套用旋轉／裁切／透視校正</button>
+      </div>
     </div>
   </div>
 
@@ -278,7 +301,6 @@
   var LS_KEYS = {
     apiKey: "geminiOcr.apiKey",
     model: "geminiOcr.model",
-    systemPrompt: "geminiOcr.systemPrompt",
     priceIn: "geminiOcr.priceIn",
     priceOut: "geminiOcr.priceOut",
     fxRate: "geminiOcr.fxRate",
@@ -287,31 +309,33 @@
 
   var DEFAULTS = {
     model: "gemini-3.5-flash-lite",
-    systemPrompt:
-"你是一個專業的 OCR（光學文字辨識）助手。
-請仔細辨識使用者提供圖片中的所有文字內容，並「只」以下列 JSON 格式回覆，不要包含任何 JSON 以外的文字、說明或 Markdown 標記：
-
-{
-  "拍賣市場名稱": "",
-"拍賣日期":"",
-"承銷人號碼":"",
-"承銷人姓名":""
-  "拍賣編號": {}
-}
-",
-    priceIn: 0.1,
-    priceOut: 0.4,
+    priceIn: 0.3,
+    priceOut: 2.5,
     fxRate: 32,
     forceJson: true
   };
 
-  var MAX_IMAGE_DIM = 1600;
+  var OCR_RESPONSE_SCHEMA = {
+    type: "object",
+    properties: {
+      "拍賣市場名稱": { type: "string" },
+      "拍賣日期": { type: "string" },
+      "承銷人號碼": { type: "string" },
+      "承銷人姓名": { type: "string" },
+      "拍賣編號": { type: "array", items: { type: "string" } }
+    },
+    required: ["拍賣市場名稱", "拍賣日期", "承銷人號碼", "承銷人姓名", "拍賣編號"],
+    additionalProperties: false
+  };
+
+  var MAX_EDIT_DIM = 3200;
+  var EDITOR_DISPLAY_DIM = 900;
+  var EDITOR_HANDLE_RADIUS = 16;
 
   var el = {
     apiKey: document.getElementById("apiKey"),
     toggleKey: document.getElementById("toggleKey"),
     modelName: document.getElementById("modelName"),
-    systemPrompt: document.getElementById("systemPrompt"),
     forceJson: document.getElementById("forceJson"),
     priceIn: document.getElementById("priceIn"),
     priceOut: document.getElementById("priceOut"),
@@ -340,17 +364,23 @@
     cameraVideo: document.getElementById("cameraVideo"),
     shutterBtn: document.getElementById("shutterBtn"),
     cancelCamBtn: document.getElementById("cancelCamBtn"),
-    hiddenCanvas: document.getElementById("hiddenCanvas")
+    hiddenCanvas: document.getElementById("hiddenCanvas"),
+    editorPanel: document.getElementById("editorPanel"),
+    rotationSlider: document.getElementById("rotationSlider"),
+    rotationValue: document.getElementById("rotationValue"),
+    editorCanvas: document.getElementById("editorCanvas"),
+    resetEditorBtn: document.getElementById("resetEditorBtn"),
+    applyEditorBtn: document.getElementById("applyEditorBtn")
   };
 
-  var currentImage = null; // { mimeType, base64 }
+  var currentImage = null; // { image, sourceDataUrl, sourceMimeType, sourceBase64 }
   var cameraStream = null;
+  var editorState = null;
+  var editorDragIndex = -1;
 
   function loadSettings(){
     el.apiKey.value = localStorage.getItem(LS_KEYS.apiKey) || "";
     el.modelName.value = localStorage.getItem(LS_KEYS.model) || DEFAULTS.model;
-    var sp = localStorage.getItem(LS_KEYS.systemPrompt);
-    el.systemPrompt.value = (sp !== null && sp !== "") ? sp : DEFAULTS.systemPrompt;
     el.priceIn.value = localStorage.getItem(LS_KEYS.priceIn) || DEFAULTS.priceIn;
     el.priceOut.value = localStorage.getItem(LS_KEYS.priceOut) || DEFAULTS.priceOut;
     el.fxRate.value = localStorage.getItem(LS_KEYS.fxRate) || DEFAULTS.fxRate;
@@ -364,11 +394,48 @@
 
   el.apiKey.addEventListener("input", function(){ persist(LS_KEYS.apiKey, el.apiKey.value); updateSubmitState(); });
   el.modelName.addEventListener("input", function(){ persist(LS_KEYS.model, el.modelName.value); });
-  el.systemPrompt.addEventListener("input", function(){ persist(LS_KEYS.systemPrompt, el.systemPrompt.value); });
   el.priceIn.addEventListener("input", function(){ persist(LS_KEYS.priceIn, el.priceIn.value); });
   el.priceOut.addEventListener("input", function(){ persist(LS_KEYS.priceOut, el.priceOut.value); });
   el.fxRate.addEventListener("input", function(){ persist(LS_KEYS.fxRate, el.fxRate.value); });
   el.forceJson.addEventListener("change", function(){ persist(LS_KEYS.forceJson, el.forceJson.checked); });
+  el.rotationSlider.addEventListener("input", function(){
+    updateRotationValue();
+    editorState = null;
+    drawEditorCanvas();
+  });
+  el.resetEditorBtn.addEventListener("click", function(){
+    clearError();
+    resetEditorState();
+  });
+  el.applyEditorBtn.addEventListener("click", function(){
+    clearError();
+    applyEditorChanges();
+  });
+  el.editorCanvas.addEventListener("pointerdown", function(event){
+    var point = getEditorPoint(event);
+    var handleIndex = findEditorHandle(point);
+    if (handleIndex < 0) return;
+    editorDragIndex = handleIndex;
+    if (el.editorCanvas.setPointerCapture){
+      el.editorCanvas.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+  });
+  el.editorCanvas.addEventListener("pointermove", function(event){
+    if (editorDragIndex < 0 || !editorState) return;
+    var point = getEditorPoint(event);
+    editorState.quad[editorDragIndex] = point;
+    drawEditorOverlay();
+    event.preventDefault();
+  });
+  el.editorCanvas.addEventListener("pointerup", function(event){
+    editorDragIndex = -1;
+    if (el.editorCanvas.releasePointerCapture && el.editorCanvas.hasPointerCapture &&
+        el.editorCanvas.hasPointerCapture(event.pointerId)){
+      el.editorCanvas.releasePointerCapture(event.pointerId);
+    }
+  });
+  el.editorCanvas.addEventListener("pointercancel", function(){ editorDragIndex = -1; });
 
   el.toggleKey.addEventListener("click", function(){
     var isPwd = el.apiKey.type === "password";
@@ -397,6 +464,7 @@
   }
   function clearPreview(){
     currentImage = null;
+    resetEditorState();
     el.previewImg.src = "";
     el.previewImg.classList.add("hidden");
     el.previewEmpty.classList.remove("hidden");
@@ -404,11 +472,352 @@
     updateSubmitState();
   }
 
+  function clamp(value, min, max){
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function distance(a, b){
+    return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+  }
+
+  function createRotatedBitmap(img, angleDegrees, maxDimension){
+    var sourceWidth = img.naturalWidth || img.width;
+    var sourceHeight = img.naturalHeight || img.height;
+    var radians = angleDegrees * Math.PI / 180;
+    var cos = Math.abs(Math.cos(radians));
+    var sin = Math.abs(Math.sin(radians));
+    var boundsWidth = Math.max(1, Math.ceil(sourceWidth * cos + sourceHeight * sin));
+    var boundsHeight = Math.max(1, Math.ceil(sourceWidth * sin + sourceHeight * cos));
+    var scale = Math.min(1, maxDimension / Math.max(boundsWidth, boundsHeight));
+    var width = Math.max(1, Math.round(boundsWidth * scale));
+    var height = Math.max(1, Math.round(boundsHeight * scale));
+    var canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.rotate(radians);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
+    ctx.restore();
+    return { canvas: canvas, width: width, height: height };
+  }
+
+  function makeDefaultQuad(width, height){
+    return [
+      { x: 0, y: 0 },
+      { x: width, y: 0 },
+      { x: width, y: height },
+      { x: 0, y: height }
+    ];
+  }
+
+  function updateRotationValue(){
+    var angle = parseFloat(el.rotationSlider.value) || 0;
+    el.rotationValue.textContent = angle.toFixed(1) + "°";
+  }
+
+  function drawEditorOverlay(){
+    if (!editorState) return;
+    var canvas = el.editorCanvas;
+    var ctx = canvas.getContext("2d");
+    var quad = editorState.quad;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, .45)";
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.moveTo(quad[0].x, quad[0].y);
+    for (var i = 1; i < quad.length; i++){
+      ctx.lineTo(quad[i].x, quad[i].y);
+    }
+    ctx.closePath();
+    ctx.fill("evenodd");
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = "#4d83ff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x, quad[0].y);
+    for (var j = 1; j < quad.length; j++){
+      ctx.lineTo(quad[j].x, quad[j].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    for (var k = 0; k < quad.length; k++){
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#2c56d1";
+      ctx.beginPath();
+      ctx.arc(quad[k].x, quad[k].y, EDITOR_HANDLE_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawEditorCanvas(){
+    if (!currentImage) return;
+    var angle = parseFloat(el.rotationSlider.value) || 0;
+    var bitmap = createRotatedBitmap(currentImage.image, angle, EDITOR_DISPLAY_DIM);
+    var canvas = el.editorCanvas;
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d").drawImage(bitmap.canvas, 0, 0);
+    editorState = {
+      angle: angle,
+      quad: makeDefaultQuad(bitmap.width, bitmap.height),
+      displayWidth: bitmap.width,
+      displayHeight: bitmap.height
+    };
+    drawEditorOverlay();
+  }
+
+  function resetEditorState(){
+    editorDragIndex = -1;
+    el.rotationSlider.value = "0";
+    updateRotationValue();
+    editorState = null;
+    if (!currentImage){
+      el.editorPanel.classList.add("hidden");
+      return;
+    }
+    el.editorPanel.classList.remove("hidden");
+    drawEditorCanvas();
+  }
+
+  function getEditorPoint(event){
+    var canvas = el.editorCanvas;
+    var rect = canvas.getBoundingClientRect();
+    // CSS 設定了 object-fit:contain，當圖片比例與框架比例不同時（例如直式文件照片
+    // 搭配 max-height 限制）畫面會有留白，因此不能直接用 rect 的寬高比例換算座標，
+    // 必須先還原 contain 造成的縮放與置中留白。
+    var scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+    var renderWidth = canvas.width * scale;
+    var renderHeight = canvas.height * scale;
+    var offsetX = (rect.width - renderWidth) / 2;
+    var offsetY = (rect.height - renderHeight) / 2;
+    return {
+      x: clamp((event.clientX - rect.left - offsetX) / scale, 0, canvas.width),
+      y: clamp((event.clientY - rect.top - offsetY) / scale, 0, canvas.height)
+    };
+  }
+
+  function findEditorHandle(point){
+    if (!editorState) return -1;
+    var bestIndex = -1;
+    var bestDistance = EDITOR_HANDLE_RADIUS * EDITOR_HANDLE_RADIUS * 4;
+    for (var i = 0; i < editorState.quad.length; i++){
+      var dx = point.x - editorState.quad[i].x;
+      var dy = point.y - editorState.quad[i].y;
+      var squaredDistance = dx * dx + dy * dy;
+      if (squaredDistance <= bestDistance){
+        bestDistance = squaredDistance;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
+  function isValidQuad(quad){
+    var area = 0;
+    var crosses = [];
+    for (var i = 0; i < quad.length; i++){
+      var next = quad[(i + 1) % quad.length];
+      area += quad[i].x * next.y - next.x * quad[i].y;
+      var afterNext = quad[(i + 2) % quad.length];
+      crosses.push(
+        (next.x - quad[i].x) * (afterNext.y - next.y) -
+        (next.y - quad[i].y) * (afterNext.x - next.x)
+      );
+    }
+    if (Math.abs(area) < 20) return false;
+    var allPositive = crosses.every(function(value){ return value > 0; });
+    var allNegative = crosses.every(function(value){ return value < 0; });
+    return allPositive || allNegative;
+  }
+
+  function solveLinearSystem(matrix, values){
+    var size = values.length;
+    var augmented = matrix.map(function(row, index){ return row.slice().concat(values[index]); });
+    for (var column = 0; column < size; column++){
+      var pivot = column;
+      for (var row = column + 1; row < size; row++){
+        if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivot][column])){
+          pivot = row;
+        }
+      }
+      if (Math.abs(augmented[pivot][column]) < 1e-10) return null;
+      if (pivot !== column){
+        var swap = augmented[column];
+        augmented[column] = augmented[pivot];
+        augmented[pivot] = swap;
+      }
+      for (var below = column + 1; below < size; below++){
+        var factor = augmented[below][column] / augmented[column][column];
+        for (var c = column; c <= size; c++){
+          augmented[below][c] -= factor * augmented[column][c];
+        }
+      }
+    }
+    var result = new Array(size);
+    for (var i = size - 1; i >= 0; i--){
+      var total = augmented[i][size];
+      for (var j = i + 1; j < size; j++){
+        total -= augmented[i][j] * result[j];
+      }
+      result[i] = total / augmented[i][i];
+    }
+    return result;
+  }
+
+  function createDestinationToSourceHomography(sourceQuad, width, height){
+    var destinations = [
+      { x: 0, y: 0 },
+      { x: width - 1, y: 0 },
+      { x: width - 1, y: height - 1 },
+      { x: 0, y: height - 1 }
+    ];
+    var matrix = [];
+    var values = [];
+    for (var i = 0; i < destinations.length; i++){
+      var u = destinations[i].x;
+      var v = destinations[i].y;
+      var x = sourceQuad[i].x;
+      var y = sourceQuad[i].y;
+      matrix.push([u, v, 1, 0, 0, 0, -x * u, -x * v]);
+      values.push(x);
+      matrix.push([0, 0, 0, u, v, 1, -y * u, -y * v]);
+      values.push(y);
+    }
+    return solveLinearSystem(matrix, values);
+  }
+
+  function rectifyPerspective(sourceCanvas, sourceQuad){
+    var topWidth = distance(sourceQuad[0], sourceQuad[1]);
+    var bottomWidth = distance(sourceQuad[3], sourceQuad[2]);
+    var leftHeight = distance(sourceQuad[0], sourceQuad[3]);
+    var rightHeight = distance(sourceQuad[1], sourceQuad[2]);
+    var outputWidth = Math.max(2, Math.round(Math.max(topWidth, bottomWidth)));
+    var outputHeight = Math.max(2, Math.round(Math.max(leftHeight, rightHeight)));
+    var outputScale = Math.min(1, MAX_EDIT_DIM / Math.max(outputWidth, outputHeight));
+    outputWidth = Math.max(2, Math.round(outputWidth * outputScale));
+    outputHeight = Math.max(2, Math.round(outputHeight * outputScale));
+
+    var homography = createDestinationToSourceHomography(sourceQuad, outputWidth, outputHeight);
+    if (!homography) throw new Error("無法計算透視校正參數");
+
+    var sourceCtx = sourceCanvas.getContext("2d");
+    var sourceData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+    var outputCanvas = document.createElement("canvas");
+    outputCanvas.width = outputWidth;
+    outputCanvas.height = outputHeight;
+    var outputData = outputCanvas.getContext("2d").createImageData(outputWidth, outputHeight);
+    var sourceWidth = sourceCanvas.width;
+    var sourceHeight = sourceCanvas.height;
+    var sourcePixels = sourceData.data;
+    var outputPixels = outputData.data;
+
+    for (var y = 0; y < outputHeight; y++){
+      for (var x = 0; x < outputWidth; x++){
+        var denominator = homography[6] * x + homography[7] * y + 1;
+        var sourceX = (homography[0] * x + homography[1] * y + homography[2]) / denominator;
+        var sourceY = (homography[3] * x + homography[4] * y + homography[5]) / denominator;
+        var outputIndex = (y * outputWidth + x) * 4;
+        if (!isFinite(sourceX) || !isFinite(sourceY) || sourceX < 0 || sourceY < 0 ||
+            sourceX >= sourceWidth || sourceY >= sourceHeight){
+          outputPixels[outputIndex] = 255;
+          outputPixels[outputIndex + 1] = 255;
+          outputPixels[outputIndex + 2] = 255;
+          outputPixels[outputIndex + 3] = 255;
+          continue;
+        }
+        var x0 = Math.floor(sourceX);
+        var y0 = Math.floor(sourceY);
+        var x1 = Math.min(sourceWidth - 1, x0 + 1);
+        var y1 = Math.min(sourceHeight - 1, y0 + 1);
+        var xRatio = sourceX - x0;
+        var yRatio = sourceY - y0;
+        var topLeft = (y0 * sourceWidth + x0) * 4;
+        var topRight = (y0 * sourceWidth + x1) * 4;
+        var bottomLeft = (y1 * sourceWidth + x0) * 4;
+        var bottomRight = (y1 * sourceWidth + x1) * 4;
+        for (var channel = 0; channel < 4; channel++){
+          var top = sourcePixels[topLeft + channel] * (1 - xRatio) + sourcePixels[topRight + channel] * xRatio;
+          var bottom = sourcePixels[bottomLeft + channel] * (1 - xRatio) + sourcePixels[bottomRight + channel] * xRatio;
+          outputPixels[outputIndex + channel] = Math.round(top * (1 - yRatio) + bottom * yRatio);
+        }
+      }
+    }
+    outputCanvas.getContext("2d").putImageData(outputData, 0, 0);
+    return outputCanvas;
+  }
+
+  function setEditorBusy(busy){
+    el.rotationSlider.disabled = busy;
+    el.resetEditorBtn.disabled = busy;
+    el.applyEditorBtn.disabled = busy;
+    el.editorCanvas.style.pointerEvents = busy ? "none" : "auto";
+  }
+
+  function applyEditorChanges(){
+    if (!currentImage || !editorState) return;
+    if (!isValidQuad(editorState.quad)){
+      showError("裁切四邊必須形成有效的四邊形，請重新調整四個角點。");
+      return;
+    }
+
+    setEditorBusy(true);
+    try {
+      var rotatedBitmap = createRotatedBitmap(currentImage.image, editorState.angle, MAX_EDIT_DIM);
+      var scaleX = rotatedBitmap.width / editorState.displayWidth;
+      var scaleY = rotatedBitmap.height / editorState.displayHeight;
+      var sourceQuad = editorState.quad.map(function(point){
+        return { x: point.x * scaleX, y: point.y * scaleY };
+      });
+      var transformedCanvas = rectifyPerspective(rotatedBitmap.canvas, sourceQuad);
+      var dataUrl = transformedCanvas.toDataURL("image/jpeg", 0.92);
+      var editedImage = new Image();
+      editedImage.onload = function(){
+        storeSourceImage(editedImage, dataUrl, "image/jpeg");
+        setEditorBusy(false);
+      };
+      editedImage.onerror = function(){
+        setEditorBusy(false);
+        showError("編輯後的圖片無法讀取，請再試一次。");
+      };
+      editedImage.src = dataUrl;
+    } catch(e){
+      setEditorBusy(false);
+      showError("圖片編輯失敗：" + (e && e.message ? e.message : "瀏覽器無法處理這張圖片。"));
+    }
+  }
+
+  function storeSourceImage(img, dataUrl, mimeType){
+    var dataParts = dataUrl.split(",");
+    currentImage = {
+      image: img,
+      sourceDataUrl: dataUrl,
+      sourceMimeType: mimeType || "image/jpeg",
+      sourceBase64: dataParts.length > 1 ? dataParts[1] : ""
+    };
+    resetEditorState();
+    updateSelectedPreview();
+    clearError();
+    updateSubmitState();
+  }
+
   function fileToImage(file, cb){
     var reader = new FileReader();
     reader.onload = function(){
       var img = new Image();
-      img.onload = function(){ cb(img); };
+      img.onload = function(){
+        var mimeMatch = reader.result.match(/^data:([^;]+);/i);
+        cb(img, reader.result, file.type || (mimeMatch && mimeMatch[1]) || "image/jpeg");
+      };
       img.onerror = function(){ showError("圖片讀取失敗，請換一張圖片再試一次。"); };
       img.src = reader.result;
     };
@@ -416,26 +825,22 @@
     reader.readAsDataURL(file);
   }
 
-  function drawToCanvasAndStore(img){
-    var w = img.naturalWidth || img.width;
-    var h = img.naturalHeight || img.height;
-    var scale = Math.min(1, MAX_IMAGE_DIM / Math.max(w, h));
-    var outW = Math.max(1, Math.round(w * scale));
-    var outH = Math.max(1, Math.round(h * scale));
-    var canvas = el.hiddenCanvas;
-    canvas.width = outW;
-    canvas.height = outH;
-    var ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, outW, outH);
-    ctx.drawImage(img, 0, 0, outW, outH);
-    var dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    var base64 = dataUrl.split(",")[1];
-    currentImage = { mimeType: "image/jpeg", base64: base64 };
-    setPreview(dataUrl);
-    clearError();
-    updateSubmitState();
-    canvas.width = 1;
-    canvas.height = 1;
+  function buildImagePayload(){
+    if (!currentImage) return null;
+    return {
+      mimeType: currentImage.sourceMimeType,
+      base64: currentImage.sourceBase64,
+      dataUrl: currentImage.sourceDataUrl
+    };
+  }
+
+  function updateSelectedPreview(){
+    if (!currentImage) return;
+    try {
+      setPreview(buildImagePayload().dataUrl);
+    } catch(e){
+      showError("圖片預覽產生失敗，請換一張圖片再試一次。");
+    }
   }
 
   el.pickImageBtn.addEventListener("click", function(){ el.fileInput.click(); });
@@ -443,13 +848,13 @@
     var file = el.fileInput.files && el.fileInput.files[0];
     el.fileInput.value = "";
     if (!file) return;
-    fileToImage(file, drawToCanvasAndStore);
+    fileToImage(file, storeSourceImage);
   });
   el.cameraFallbackInput.addEventListener("change", function(){
     var file = el.cameraFallbackInput.files && el.cameraFallbackInput.files[0];
     el.cameraFallbackInput.value = "";
     if (!file) return;
-    fileToImage(file, drawToCanvasAndStore);
+    fileToImage(file, storeSourceImage);
   });
   el.removeImgBtn.addEventListener("click", clearPreview);
 
@@ -485,23 +890,20 @@
     var w = video.videoWidth;
     var h = video.videoHeight;
     if (!w || !h){ return; }
-    var scale = Math.min(1, MAX_IMAGE_DIM / Math.max(w, h));
-    var outW = Math.max(1, Math.round(w * scale));
-    var outH = Math.max(1, Math.round(h * scale));
     var canvas = el.hiddenCanvas;
-    canvas.width = outW;
-    canvas.height = outH;
+    canvas.width = w;
+    canvas.height = h;
     var ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, outW, outH);
+    ctx.drawImage(video, 0, 0, w, h);
     var dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    var base64 = dataUrl.split(",")[1];
-    currentImage = { mimeType: "image/jpeg", base64: base64 };
-    setPreview(dataUrl);
-    clearError();
-    updateSubmitState();
     canvas.width = 1;
     canvas.height = 1;
     stopCamera();
+
+    var capturedImage = new Image();
+    capturedImage.onload = function(){ storeSourceImage(capturedImage, dataUrl, "image/jpeg"); };
+    capturedImage.onerror = function(){ showError("拍攝的圖片讀取失敗，請再試一次。"); };
+    capturedImage.src = dataUrl;
   });
 
   function extractJsonText(rawText){
@@ -566,6 +968,7 @@
     el.statusRow.classList.toggle("hidden", !busy);
     el.pickImageBtn.disabled = busy;
     el.openCameraBtn.disabled = busy;
+    setEditorBusy(busy);
   }
 
   el.submitBtn.addEventListener("click", function(){
@@ -574,29 +977,38 @@
 
     var apiKey = el.apiKey.value.trim();
     var model = (el.modelName.value || DEFAULTS.model).trim();
-    var systemPrompt = el.systemPrompt.value || "";
 
     if (!apiKey){ showError("請先輸入 Gemini API Key。"); return; }
     if (!currentImage){ showError("請先選擇圖片或拍照。"); return; }
     if (!model){ showError("請輸入 Model 名稱。"); return; }
 
+    var imagePayload;
+    try {
+      imagePayload = buildImagePayload();
+    } catch(e){
+      showError("圖片處理失敗，請換一張圖片再試一次。");
+      return;
+    }
+
     var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey);
 
     var body = {
-      system_instruction: { parts: [ { text: systemPrompt } ] },
       contents: [
         {
           role: "user",
           parts: [
-            { text: "請依照 system prompt 指示的 JSON 格式，辨識並輸出這張圖片的 OCR 結果。" },
-            { inline_data: { mime_type: currentImage.mimeType, data: currentImage.base64 } }
+            { text: "請辨識這張圖片的 OCR 內容，並依指定的輸出格式回傳結果。" },
+            { inlineData: { mimeType: imagePayload.mimeType, data: imagePayload.base64 } }
           ]
         }
       ]
     };
     if (el.forceJson.checked){
-      body.generationConfig = { response_mime_type: "application/json" };
+      body.generationConfig = {
+        responseMimeType: "application/json",
+        responseJsonSchema: OCR_RESPONSE_SCHEMA
+      };
     }
 
     setBusy(true);
