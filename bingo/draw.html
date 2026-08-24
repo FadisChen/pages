@@ -41,7 +41,7 @@
       <div>
         <div class="eyebrow">Room 02 / host only</div>
         <h1>把號碼，<em>交給今晚。</em></h1>
-        <p class="hero-copy">抽號碼和參加者卡片是獨立流程。每次只抽出一個尚未出現的號碼，結果保存於這台主持人裝置。</p>
+        <p class="hero-copy">每次只抽出一個尚未出現的號碼；中獎名單會依卡片排列與已開出的號碼自動更新，結果保存於這台主持人裝置。</p>
       </div>
       <div class="live-badge">LIVE DRAW ／ 1—24 ／ NO REPEAT</div>
     </section>
@@ -75,6 +75,14 @@
           <div class="progress-meta"><span>START</span><span id="remainingCount">24 REMAINING</span><span>FINISH</span></div>
         </article>
 
+        <article class="panel winners-panel">
+          <header class="history-head">
+            <div><div class="mono-label">Three lines / winner board</div><h2>中獎名單</h2></div>
+            <span class="mono-label"><span id="winnerCount">0</span> WINNERS</span>
+          </header>
+          <div class="winner-list" id="winnerList"></div>
+        </article>
+
         <article class="panel">
           <header class="history-head"><div><div class="mono-label">Call sheet</div><h2>已開出號碼</h2></div><span class="mono-label">ORDER</span></header>
           <div class="history-list" id="historyList"></div>
@@ -100,15 +108,44 @@
   <script>
     BingoAuth.ready.then(function () {
     const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
+    const CARD_COUNT = 120;
+    const CARD_SIZE = 25;
+    const CENTER_INDEX = 12;
+    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v1';
+    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v1';
     const STORAGE_KEY = 't-dept-bingo-draw-state-v3';
     const STORAGE_VERSION = 3;
     const REVEAL_FADE_DURATION = 700;
+    const LINES = (function () {
+      const lines = [];
+      for (let row = 0; row < 5; row += 1) {
+        lines.push([0, 1, 2, 3, 4].map(function (offset) { return row * 5 + offset; }));
+      }
+      for (let col = 0; col < 5; col += 1) {
+        lines.push([0, 1, 2, 3, 4].map(function (offset) { return offset * 5 + col; }));
+      }
+      lines.push([0, 6, 12, 18, 24]);
+      lines.push([4, 8, 12, 16, 20]);
+      return lines;
+    })();
 
     let state = loadState();
+    let cards = loadCardPool();
+    let claimedCards = loadClaimedCards();
     let isDrawing = false;
     let toastTimer;
+    let knownWinnerIds = null;
 
     const $ = function (selector) { return document.querySelector(selector); };
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
 
     function emptyState() {
       return { version: STORAGE_VERSION, drawnNumbers: [], currentNumber: null, updatedAt: null };
@@ -145,6 +182,103 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (error) {
         showToast('無法保存抽號狀態；目前只保留在頁面記憶體。');
+      }
+    }
+
+    function isValidGrid(grid) {
+      if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
+      const numbers = grid.filter(function (value) { return value !== 'T'; });
+      return numbers.length === ALL_NUMBERS.length
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
+        && new Set(numbers).size === ALL_NUMBERS.length;
+    }
+
+    function isValidCardPool(value) {
+      if (!Array.isArray(value) || value.length !== CARD_COUNT) return false;
+      const ids = new Set();
+      return value.every(function (card, index) {
+        if (!card || typeof card.cardId !== 'string' || ids.has(card.cardId) || !isValidGrid(card.grid)) return false;
+        if (card.cardId !== String(index + 1).padStart(3, '0')) return false;
+        ids.add(card.cardId);
+        return true;
+      });
+    }
+
+    function loadCardPool() {
+      try {
+        const raw = localStorage.getItem(CARDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return isValidCardPool(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function loadClaimedCards() {
+      const result = new Map();
+      try {
+        const parsed = JSON.parse(localStorage.getItem(CLAIMED_STORAGE_KEY) || '[]');
+        if (!Array.isArray(parsed)) return result;
+        parsed.forEach(function (entry) {
+          if (typeof entry === 'string' && /^[0-9]{3}$/.test(entry)) {
+            result.set(entry, '');
+            return;
+          }
+          if (!entry || typeof entry.cardId !== 'string' || !/^[0-9]{3}$/.test(entry.cardId)) return;
+          result.set(entry.cardId, typeof entry.name === 'string' ? entry.name.trim().slice(0, 40) : '');
+        });
+      } catch (error) {
+        return result;
+      }
+      return result;
+    }
+
+    function countConnectedLines(card, drawnSet) {
+      return LINES.reduce(function (total, line) {
+        return line.every(function (index) {
+          return index === CENTER_INDEX || drawnSet.has(card.grid[index]);
+        }) ? total + 1 : total;
+      }, 0);
+    }
+
+    function getWinners(drawnSet) {
+      if (!cards.length) return [];
+      return cards.map(function (card) {
+        return {
+          cardId: card.cardId,
+          name: claimedCards.get(card.cardId) || '',
+          lineCount: countConnectedLines(card, drawnSet)
+        };
+      }).filter(function (winner) {
+        return winner.lineCount >= 3 && winner.name;
+      });
+    }
+
+    function renderWinners(drawnSet) {
+      const list = $('#winnerList');
+      const winners = getWinners(drawnSet);
+      const winnerIds = new Set(winners.map(function (winner) { return winner.cardId; }));
+      const newWinners = knownWinnerIds
+        ? winners.filter(function (winner) { return !knownWinnerIds.has(winner.cardId); })
+        : [];
+      knownWinnerIds = winnerIds;
+
+      $('#winnerCount').textContent = winners.length;
+      if (!cards.length) {
+        list.innerHTML = '<div class="empty winner-empty"><strong>找不到卡片池</strong>請先開啟報到發卡台，讓 120 張卡片排列寫入這台裝置。</div>';
+      } else if (!winners.length) {
+        list.innerHTML = '<div class="empty winner-empty"><strong>尚未出現三線</strong>抽出更多號碼後，中獎名單會自動更新。</div>';
+      } else {
+        list.innerHTML = winners.map(function (winner, index) {
+          const isNew = newWinners.some(function (item) { return item.cardId === winner.cardId; });
+          return '<div class="winner-item' + (isNew ? ' is-new-winner' : '') + '"><span class="winner-rank">' + String(index + 1).padStart(2, '0') + '</span><div class="winner-main"><strong>' + escapeHtml(winner.name) + '</strong><small>卡號 ' + escapeHtml(winner.cardId) + '</small></div><span class="winner-lines">' + winner.lineCount + ' <small>LINES</small></span></div>';
+        }).join('');
+      }
+
+      if (newWinners.length) {
+        showToast('新增中獎：' + newWinners.map(function (winner) {
+          return winner.name;
+        }).join('、'));
       }
     }
 
@@ -187,6 +321,8 @@
       $('#poolList').innerHTML = ALL_NUMBERS.map(function (number) {
         return '<div class="pool-number' + (drawnSet.has(number) ? ' is-drawn' : '') + '">' + number + '</div>';
       }).join('');
+
+      renderWinners(drawnSet);
     }
 
     function showToast(message) {
@@ -237,8 +373,8 @@
         state.currentNumber = picked;
         $('#stage').classList.remove('is-rolling');
         saveState();
+        showToast('號碼 ' + picked + ' 已開出；中獎名單已更新。');
         render();
-        showToast('號碼 ' + picked + ' 已開出；參加者卡片不會自動圈選。');
 
         showNumberReveal(picked).then(function () {
           isDrawing = false;
@@ -257,6 +393,21 @@
       saveState();
       render();
       showToast('抽號結果已清除。');
+    });
+
+    window.addEventListener('storage', function (event) {
+      if (event.key === STORAGE_KEY) {
+        state = loadState();
+      }
+      if (event.key === CARDS_STORAGE_KEY) {
+        cards = loadCardPool();
+      }
+      if (event.key === CLAIMED_STORAGE_KEY) {
+        claimedCards = loadClaimedCards();
+      }
+      if ([STORAGE_KEY, CARDS_STORAGE_KEY, CLAIMED_STORAGE_KEY].includes(event.key)) {
+        render();
+      }
     });
 
     render();

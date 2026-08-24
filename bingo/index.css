@@ -314,6 +314,8 @@
       position: relative;
       display: grid;
       place-items: center;
+      align-content: center;
+      gap: 5px;
       min-height: 68px;
       color: var(--ink);
       border: 1px solid var(--line);
@@ -321,6 +323,20 @@
       box-shadow: 2px 3px 0 rgba(33, 25, 26, .08);
       font: 900 21px/.9 var(--display);
       transition: .2s ease;
+    }
+
+    .number-tile-id {
+      font: inherit;
+      line-height: .9;
+    }
+
+    .number-tile-name {
+      max-width: calc(100% - 10px);
+      overflow: hidden;
+      color: var(--jade);
+      font: 800 9px/1.1 var(--sans);
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .number-tile::before {
@@ -342,6 +358,11 @@
 
     .number-tile:hover::before {
       border-color: rgba(247, 240, 223, .55);
+    }
+
+    .number-tile:hover .number-tile-name,
+    .number-tile.is-selected .number-tile-name {
+      color: var(--paper);
     }
 
     .number-tile.is-claimed {
@@ -615,6 +636,183 @@
 
     .qr-url-value:hover { color: var(--vermilion); }
 
+    .selected-recipient {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      padding: 12px 13px;
+      margin-top: 10px;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: rgba(231, 214, 185, .3);
+    }
+
+    .selected-recipient span {
+      color: var(--ink-soft);
+      font: 800 8px/1 var(--mono);
+      letter-spacing: .12em;
+    }
+
+    .selected-recipient strong {
+      max-width: 62%;
+      overflow: hidden;
+      font: 800 12px/1.2 var(--sans);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    body.name-modal-open { overflow: hidden; }
+
+    .name-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(33, 25, 26, .78);
+      backdrop-filter: blur(3px);
+    }
+
+    .name-overlay[hidden] { display: none; }
+
+    .name-dialog {
+      position: relative;
+      width: min(100%, 430px);
+      padding: 30px 30px 27px;
+      color: var(--ink);
+      border: 1px solid var(--ink);
+      background:
+        radial-gradient(circle at 92% 8%, rgba(199, 164, 92, .26), transparent 135px),
+        var(--paper-bright);
+      box-shadow: 9px 9px 0 var(--vermilion), 0 28px 70px rgba(0, 0, 0, .32);
+    }
+
+    .name-dialog::before,
+    .name-dialog::after {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      content: "";
+      border: 1px solid rgba(33, 25, 26, .35);
+    }
+
+    .name-dialog::before {
+      top: 12px;
+      left: 12px;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .name-dialog::after {
+      right: 12px;
+      bottom: 12px;
+      border-top: 0;
+      border-left: 0;
+    }
+
+    .name-dialog-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 21px;
+      color: var(--paper);
+      background: var(--vermilion);
+      border: 1px solid var(--ink);
+      box-shadow: 4px 4px 0 var(--ink);
+      font: 900 23px/1 var(--display);
+      transform: rotate(-7deg);
+    }
+
+    .name-dialog h2 {
+      margin: 11px 0 0;
+      font: 900 clamp(34px, 7vw, 47px)/.9 var(--display);
+      letter-spacing: -.07em;
+    }
+
+    .name-dialog > p {
+      margin: 14px 0 23px;
+      color: var(--ink-soft);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .claim-form { display: grid; gap: 11px; }
+
+    .name-field { display: grid; gap: 7px; }
+
+    .name-field span {
+      color: var(--ink-soft);
+      font: 800 9px/1 var(--mono);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .name-field input {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 13px;
+      color: var(--ink);
+      border: 1px solid rgba(33, 25, 26, .3);
+      outline: 0;
+      background: rgba(255, 250, 240, .78);
+      font: 700 15px/1 var(--sans);
+      transition: .2s ease;
+    }
+
+    .name-field input:focus {
+      border-color: var(--jade);
+      box-shadow: 4px 4px 0 rgba(29, 105, 97, .2);
+    }
+
+    .name-error {
+      min-height: 17px;
+      margin: 0;
+      color: var(--vermilion-dark);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .name-actions {
+      display: grid;
+      grid-template-columns: 1fr 1.35fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .name-cancel,
+    .name-submit {
+      min-height: 46px;
+      border: 1px solid var(--ink);
+      font: 800 10px/1 var(--mono);
+      letter-spacing: .06em;
+      transition: .2s ease;
+    }
+
+    .name-cancel {
+      color: var(--ink);
+      background: transparent;
+    }
+
+    .name-cancel:hover {
+      color: var(--paper);
+      background: var(--ink);
+    }
+
+    .name-submit {
+      color: var(--paper);
+      background: var(--ink);
+      box-shadow: 4px 4px 0 var(--vermilion);
+    }
+
+    .name-submit:hover {
+      background: var(--vermilion);
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+
     .qr-panel-foot {
       margin-top: 16px;
       color: var(--ink-soft);
@@ -691,6 +889,8 @@
       .qr-panel h2 { font-size: 39px; }
       .qr-stage { min-height: 275px; padding: 18px; }
       .qr-stage > div { width: 250px; }
+      .name-overlay { padding: 17px; }
+      .name-dialog { padding: 27px 22px 24px; box-shadow: 6px 6px 0 var(--vermilion), 0 20px 45px rgba(0, 0, 0, .3); }
       .toast { right: 12px; bottom: 12px; left: 12px; max-width: none; }
     }
 

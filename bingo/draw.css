@@ -387,6 +387,92 @@
       font: 700 8px/1 var(--mono);
     }
 
+    .winners-panel {
+      overflow: hidden;
+    }
+
+    .winner-list {
+      display: grid;
+      gap: 8px;
+      max-height: 285px;
+      padding: 14px 19px 18px;
+      overflow: auto;
+    }
+
+    .winner-item {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px 10px;
+      border: 1px solid rgba(217, 75, 63, .26);
+      background: rgba(217, 75, 63, .07);
+    }
+
+    .winner-item.is-new-winner {
+      border-color: var(--vermilion);
+      background: rgba(199, 164, 92, .28);
+      box-shadow: 4px 4px 0 var(--vermilion);
+      animation: winner-pop .55s cubic-bezier(.2, .85, .3, 1.2);
+    }
+
+    .winner-rank {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      color: var(--paper);
+      background: var(--vermilion);
+      font: 800 9px/1 var(--mono);
+    }
+
+    .winner-main {
+      min-width: 0;
+    }
+
+    .winner-main strong,
+    .winner-main small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .winner-main strong {
+      font: 900 17px/.95 var(--display);
+      letter-spacing: -.03em;
+    }
+
+    .winner-main small {
+      margin-top: 5px;
+      color: var(--ink-soft);
+      font: 800 8px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .winner-lines {
+      color: var(--vermilion-dark);
+      font: 900 20px/.8 var(--display);
+      white-space: nowrap;
+    }
+
+    .winner-lines small {
+      color: var(--ink-soft);
+      font: 800 7px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .winner-empty {
+      padding: 5px 2px 3px;
+    }
+
+    .winner-empty strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+      font: 900 19px/.95 var(--display);
+    }
+
     .history-head,
     .pool-head {
       display: flex;
@@ -548,7 +634,12 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .reveal-overlay, .reveal-frame { transition: none !important; }
+      .reveal-overlay, .reveal-frame, .winner-item.is-new-winner { transition: none !important; animation: none !important; }
+    }
+
+    @keyframes winner-pop {
+      0% { opacity: 0; transform: translateY(-8px) scale(.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     .is-rolling .ball { animation: shake .12s linear infinite; }
@@ -588,6 +679,7 @@
       .current { padding: 34px 15px 28px; }
       .stage-foot { gap: 11px; font-size: 7px; }
       .history-list { grid-template-columns: repeat(5, 1fr); }
+      .winner-list { padding: 14px; }
       .pool-list { grid-template-columns: repeat(8, 1fr); padding: 14px; gap: 5px; }
       .pool-number { font-size: 10px; }
       .toast { right: 11px; bottom: 11px; left: 11px; max-width: none; }

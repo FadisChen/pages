@@ -80,6 +80,26 @@
     </section>
   </main>
 
+  <div class="name-overlay" id="nameOverlay" hidden>
+    <section class="name-dialog" role="dialog" aria-modal="true" aria-labelledby="nameDialogTitle" aria-describedby="nameDialogCopy">
+      <div class="name-dialog-mark" aria-hidden="true">B</div>
+      <div class="mono-label">Card handoff / recipient</div>
+      <h2 id="nameDialogTitle">登記領取人</h2>
+      <p id="nameDialogCopy">請填寫這張卡片的領取人姓名，完成後才會標記為已領取。</p>
+      <form id="claimForm" class="claim-form" novalidate>
+        <label class="name-field" for="recipientName">
+          <span>領取人姓名 / Recipient</span>
+          <input id="recipientName" name="recipientName" type="text" maxlength="40" autocomplete="name" required />
+        </label>
+        <p class="name-error" id="nameError" role="alert" hidden></p>
+        <div class="name-actions">
+          <button class="name-cancel" id="nameCancelButton" type="button">取消</button>
+          <button class="name-submit" id="nameSubmitButton" type="submit">確認領取 ↗</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -95,6 +115,8 @@
     let cards = loadCardPool();
     let claimedCards = loadClaimedCards();
     let selectedCardId = null;
+    let pendingCardId = null;
+    let previousSelectedCardId = null;
     let toastTimer;
 
     const $ = function (selector) { return document.querySelector(selector); };
@@ -205,20 +227,30 @@
     }
 
     function loadClaimedCards() {
+      const result = new Map();
       try {
         const parsed = JSON.parse(localStorage.getItem(CLAIMED_STORAGE_KEY) || '[]');
-        if (!Array.isArray(parsed)) return new Set();
-        return new Set(parsed.filter(function (id) {
-          return typeof id === 'string' && /^[0-9]{3}$/.test(id);
-        }));
+        if (!Array.isArray(parsed)) return result;
+        parsed.forEach(function (entry) {
+          if (typeof entry === 'string' && /^[0-9]{3}$/.test(entry)) {
+            result.set(entry, '');
+            return;
+          }
+          if (!entry || typeof entry.cardId !== 'string' || !/^[0-9]{3}$/.test(entry.cardId)) return;
+          const name = typeof entry.name === 'string' ? entry.name.trim().slice(0, 40) : '';
+          result.set(entry.cardId, name);
+        });
       } catch (error) {
-        return new Set();
+        return result;
       }
+      return result;
     }
 
     function saveClaimedCards() {
       try {
-        localStorage.setItem(CLAIMED_STORAGE_KEY, JSON.stringify(Array.from(claimedCards)));
+        localStorage.setItem(CLAIMED_STORAGE_KEY, JSON.stringify(Array.from(claimedCards.entries()).map(function (entry) {
+          return { cardId: entry[0], name: entry[1] };
+        })));
       } catch (error) {
         showToast('無法保存領取狀態；目前只保留在這個頁面的記憶體中。');
       }
@@ -274,8 +306,12 @@
       $('#numberGrid').innerHTML = cards.map(function (card) {
         const claimed = claimedCards.has(card.cardId);
         const selected = selectedCardId === card.cardId;
-        return '<button class="number-tile' + (claimed ? ' is-claimed' : '') + (selected ? ' is-selected' : '') + '" type="button" data-card-id="' + card.cardId + '" aria-label="卡號 ' + card.cardId + (claimed ? ' 已領取，可重新開啟 QR Code' : ' 尚未領取') + '">'
+        const name = claimedCards.get(card.cardId) || '';
+        const nameLabel = name ? '，領取人 ' + name : '';
+        return '<button class="number-tile' + (claimed ? ' is-claimed' : '') + (selected ? ' is-selected' : '') + '" type="button" data-card-id="' + card.cardId + '" aria-label="卡號 ' + card.cardId + (claimed ? ' 已領取' + nameLabel + '，可重新開啟 QR Code' : ' 尚未領取') + '"><span class="number-tile-id">'
           + card.cardId
+          + '</span>'
+          + (claimed && name ? '<span class="number-tile-name">' + escapeHtml(name) + '</span>' : '')
           + '</button>';
       }).join('');
 
@@ -295,34 +331,80 @@
 
       label.textContent = card.cardId;
       const url = cardUrl(card);
-      content.innerHTML = '<div class="selected-state"><span class="signal"></span> ' + (claimedCards.has(card.cardId) ? '已領取' : 'QR 已產生／待領取標記') + '</div><div class="qr-stage"><div id="qrMount" aria-label="卡號 ' + card.cardId + ' 的 QR Code"></div></div><div class="qr-url"><div class="qr-url-label">Scan URL / Card page</div><a class="qr-url-value" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></div>';
+      const recipientName = claimedCards.get(card.cardId) || '';
+      content.innerHTML = '<div class="selected-state"><span class="signal"></span> ' + (claimedCards.has(card.cardId) ? '已領取' : 'QR 已產生／待領取標記') + '</div><div class="selected-recipient"><span>RECIPIENT</span><strong>' + (recipientName ? escapeHtml(recipientName) : '尚未填寫') + '</strong></div><div class="qr-stage"><div id="qrMount" aria-label="卡號 ' + card.cardId + ' 的 QR Code"></div></div><div class="qr-url"><div class="qr-url-label">Scan URL / Card page</div><a class="qr-url-value" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a></div>';
       return renderQr($('#qrMount'), card);
     }
 
-    function selectCard(cardId) {
+    function openClaimDialog(cardId) {
       const card = cards.find(function (item) { return item.cardId === cardId; });
       if (!card) return;
 
-      if (claimedCards.has(cardId)) {
-        selectedCardId = cardId;
-        renderNumberGrid();
-        renderQrPanel(card);
-        showToast('卡號 ' + cardId + ' 已領取，QR Code 可重新開啟。');
+      pendingCardId = cardId;
+      previousSelectedCardId = selectedCardId;
+      const isEditing = claimedCards.has(cardId);
+      $('#nameDialogTitle').textContent = isEditing ? '修改領取人' : '登記領取人';
+      $('#nameDialogCopy').textContent = isEditing
+        ? '這張卡已經登記過領取人，可以直接修改姓名。'
+        : '請填寫這張卡片的領取人姓名，完成後才會標記為已領取。';
+      $('#recipientName').value = claimedCards.get(cardId) || '';
+      $('#nameError').textContent = '';
+      $('#nameError').hidden = true;
+      $('#nameOverlay').hidden = false;
+      document.body.classList.add('name-modal-open');
+      window.setTimeout(function () {
+        $('#recipientName').focus();
+        $('#recipientName').select();
+      }, 0);
+    }
+
+    function closeClaimDialog() {
+      pendingCardId = null;
+      previousSelectedCardId = null;
+      $('#nameOverlay').hidden = true;
+      document.body.classList.remove('name-modal-open');
+    }
+
+    function showNameError(message) {
+      $('#nameError').textContent = message;
+      $('#nameError').hidden = false;
+      $('#recipientName').focus();
+    }
+
+    function saveClaim() {
+      if (!pendingCardId) return;
+      const card = cards.find(function (item) { return item.cardId === pendingCardId; });
+      const name = $('#recipientName').value.trim();
+      if (!name) {
+        showNameError('請填寫領取人姓名。');
+        return;
+      }
+      if (name.length > 40) {
+        showNameError('姓名最多 40 個字元。');
+        return;
+      }
+      if (!card) {
+        closeClaimDialog();
         return;
       }
 
-      selectedCardId = cardId;
+      selectedCardId = card.cardId;
       const qrReady = renderQrPanel(card);
       if (qrReady === false) {
+        selectedCardId = previousSelectedCardId;
+        renderNumberGrid();
+        const previousCard = cards.find(function (item) { return item.cardId === previousSelectedCardId; });
+        renderQrPanel(previousCard || null);
         showToast('QR Code 尚未產生，這張卡不會標記為已領取。');
         return;
       }
 
-      claimedCards.add(cardId);
+      claimedCards.set(card.cardId, name);
       saveClaimedCards();
       renderNumberGrid();
       renderQrPanel(card);
-      showToast('卡號 ' + cardId + ' 已標記為已領取。');
+      closeClaimDialog();
+      showToast('卡號 ' + card.cardId + ' 已登記給 ' + name + '。');
     }
 
     function showToast(message) {
@@ -337,7 +419,42 @@
     $('#numberGrid').addEventListener('click', function (event) {
       const button = event.target.closest('[data-card-id]');
       if (!button) return;
-      selectCard(button.dataset.cardId);
+      openClaimDialog(button.dataset.cardId);
+    });
+
+    $('#claimForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      saveClaim();
+    });
+
+    $('#nameCancelButton').addEventListener('click', closeClaimDialog);
+
+    $('#nameOverlay').addEventListener('click', function (event) {
+      if (event.target === $('#nameOverlay')) closeClaimDialog();
+    });
+
+    document.addEventListener('keydown', function (event) {
+      const overlay = $('#nameOverlay');
+      if (overlay.hidden) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeClaimDialog();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(overlay.querySelectorAll('button, input')).filter(function (element) {
+        return !element.disabled;
+      });
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     });
 
     $('#resetButton').addEventListener('click', function () {
@@ -346,7 +463,7 @@
         return;
       }
       if (!window.confirm('確定要重置全部領取狀態嗎？120 張卡將重新變成可領取。')) return;
-      claimedCards = new Set();
+      claimedCards = new Map();
       selectedCardId = null;
       saveClaimedCards();
       renderNumberGrid();
