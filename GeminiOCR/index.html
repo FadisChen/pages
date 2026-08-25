@@ -106,23 +106,6 @@
     background:rgba(0,0,0,.6);color:#fff;border:none;
     width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;
   }
-  .camera-modal{
-    position:fixed;inset:0;background:#000;z-index:1000;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-  }
-  .camera-modal video{width:100%;max-height:70vh;object-fit:contain;background:#000;}
-  .camera-controls{
-    display:flex;gap:16px;padding:20px;
-  }
-  .camera-controls button{
-    border-radius:50%;width:64px;height:64px;border:4px solid #fff;
-    background:transparent;cursor:pointer;
-  }
-  .camera-controls .shutter{background:#fff;}
-  .camera-controls .cancel-cam{
-    border:none;background:transparent;color:#fff;font-size:.9rem;width:auto;height:auto;
-    position:absolute;top:16px;left:16px;padding:8px 12px;
-  }
   .hidden{display:none !important;}
   .status{
     display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted);
@@ -217,7 +200,7 @@
       <button type="button" class="btn btn-secondary" id="openCameraBtn">開啟相機拍照</button>
     </div>
     <input type="file" id="fileInput" accept="image/*">
-    <input type="file" id="cameraFallbackInput" accept="image/*" capture="environment" class="hidden">
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
 
     <div class="preview-wrap" id="previewWrap">
       <div class="preview-empty" id="previewEmpty">尚未選擇圖片</div>
@@ -281,18 +264,8 @@
     </div>
   </div>
 
-  <div class="camera-modal hidden" id="cameraModal">
-    <button type="button" class="cancel-cam" id="cancelCamBtn">取消</button>
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <div class="camera-controls">
-      <button type="button" class="shutter" id="shutterBtn" aria-label="拍照"></button>
-    </div>
-  </div>
-
   <footer>圖片與 API Key 僅儲存 / 使用於你目前的瀏覽器，直接呼叫 Gemini API，不會經過任何中介伺服器。</footer>
 </div>
-
-<canvas id="hiddenCanvas" class="hidden"></canvas>
 
 <script>
 (function(){
@@ -343,7 +316,7 @@
     pickImageBtn: document.getElementById("pickImageBtn"),
     openCameraBtn: document.getElementById("openCameraBtn"),
     fileInput: document.getElementById("fileInput"),
-    cameraFallbackInput: document.getElementById("cameraFallbackInput"),
+    cameraInput: document.getElementById("cameraInput"),
     previewWrap: document.getElementById("previewWrap"),
     previewEmpty: document.getElementById("previewEmpty"),
     previewImg: document.getElementById("previewImg"),
@@ -360,11 +333,6 @@
     statTotal: document.getElementById("statTotal"),
     costTwd: document.getElementById("costTwd"),
     costUsd: document.getElementById("costUsd"),
-    cameraModal: document.getElementById("cameraModal"),
-    cameraVideo: document.getElementById("cameraVideo"),
-    shutterBtn: document.getElementById("shutterBtn"),
-    cancelCamBtn: document.getElementById("cancelCamBtn"),
-    hiddenCanvas: document.getElementById("hiddenCanvas"),
     editorPanel: document.getElementById("editorPanel"),
     rotationSlider: document.getElementById("rotationSlider"),
     rotationValue: document.getElementById("rotationValue"),
@@ -374,7 +342,6 @@
   };
 
   var currentImage = null; // { image, sourceDataUrl, sourceMimeType, sourceBase64 }
-  var cameraStream = null;
   var editorState = null;
   var editorDragIndex = -1;
 
@@ -850,60 +817,16 @@
     if (!file) return;
     fileToImage(file, storeSourceImage);
   });
-  el.cameraFallbackInput.addEventListener("change", function(){
-    var file = el.cameraFallbackInput.files && el.cameraFallbackInput.files[0];
-    el.cameraFallbackInput.value = "";
+  el.cameraInput.addEventListener("change", function(){
+    var file = el.cameraInput.files && el.cameraInput.files[0];
+    el.cameraInput.value = "";
     if (!file) return;
     fileToImage(file, storeSourceImage);
   });
   el.removeImgBtn.addEventListener("click", clearPreview);
 
-  function stopCamera(){
-    if (cameraStream){
-      cameraStream.getTracks().forEach(function(t){ t.stop(); });
-      cameraStream = null;
-    }
-    el.cameraVideo.srcObject = null;
-    el.cameraModal.classList.add("hidden");
-  }
-
   el.openCameraBtn.addEventListener("click", function(){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      el.cameraFallbackInput.click();
-      return;
-    }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(function(stream){
-        cameraStream = stream;
-        el.cameraVideo.srcObject = stream;
-        el.cameraModal.classList.remove("hidden");
-      })
-      .catch(function(){
-        el.cameraFallbackInput.click();
-      });
-  });
-
-  el.cancelCamBtn.addEventListener("click", stopCamera);
-
-  el.shutterBtn.addEventListener("click", function(){
-    var video = el.cameraVideo;
-    var w = video.videoWidth;
-    var h = video.videoHeight;
-    if (!w || !h){ return; }
-    var canvas = el.hiddenCanvas;
-    canvas.width = w;
-    canvas.height = h;
-    var ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, w, h);
-    var dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    canvas.width = 1;
-    canvas.height = 1;
-    stopCamera();
-
-    var capturedImage = new Image();
-    capturedImage.onload = function(){ storeSourceImage(capturedImage, dataUrl, "image/jpeg"); };
-    capturedImage.onerror = function(){ showError("拍攝的圖片讀取失敗，請再試一次。"); };
-    capturedImage.src = dataUrl;
+    el.cameraInput.click();
   });
 
   function extractJsonText(rawText){
