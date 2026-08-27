@@ -55,7 +55,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .scene-bg { z-index: 0; }
 .scene-shade { position: absolute; z-index: 1; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 38%, transparent 25%, rgba(10,4,2,.27)); }
 .scene-front { z-index: 10; clip-path: inset(53% 0 0); }
-.guest, .guest-hit { position: absolute; width: clamp(96px,var(--guest-width,18.5%),780px); left: var(--x); bottom: 33.5%; transform: translateX(-50%); }
+.guest, .guest-hit { position: absolute; width: clamp(96px,var(--guest-width,18.5%),780px); left: var(--x); bottom: 29%; transform: translateX(-50%); }
 .guest { z-index: var(--depth,2); aspect-ratio:2/3; margin: 0; pointer-events: none; filter: drop-shadow(0 15px 18px rgba(0,0,0,.34)); transition: .25s ease; }
 .guest.is-arriving { animation: arrive .65s cubic-bezier(.16,.8,.2,1) both; }
 .guest img { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
