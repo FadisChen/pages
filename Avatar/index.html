@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f1">
+  <meta name="description" content="Gemini Live Web Avatar — 在瀏覽器裡與會說話、會動的 AI 角色即時對談。">
+  <title>Avatar Friend — Gemini Live Avatar</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Avatar Friend 首頁">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-copy"><strong>AVATAR FRIEND</strong></span>
+      </a>
+      <div class="topbar-meta">
+        <button class="icon-button" id="settingsButton" type="button" aria-label="開啟連線設定" title="連線設定">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6-2.16-.72a7.06 7.06 0 0 0-.53-1.28l1.02-2.04-1.3-1.3-2.04 1.02a7.06 7.06 0 0 0-1.28-.53L14 5h-4l-.72 2.16a7.06 7.06 0 0 0-1.28.53L5.96 6.66l-1.3 1.3 1.02 2.04c-.22.4-.4.83-.53 1.28L3 12v4l2.16.72c.13.45.31.88.53 1.28l-1.02 2.04 1.3 1.3 2.04-1.02c.4.22.83.4 1.28.53L10 23h4l.72-2.16a7.06 7.06 0 0 0 1.28-.53l2.04 1.02 1.3-1.3-1.02-2.04c.22-.4.4-.83.53-1.28L21 16v-4Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="stage-column" aria-label="Avatar 對話舞台">
+        <section class="stage-card" id="stageCard" data-state="idle" aria-label="Avatar 動畫舞台">
+          <div class="stage-grid" aria-hidden="true"></div>
+          <div class="stage-orbit orbit-one" aria-hidden="true"></div>
+          <div class="stage-orbit orbit-two" aria-hidden="true"></div>
+          <div class="stage-visual" id="stageVisual" aria-label="左右拖曳旋轉角色">
+            <div class="visual-state-pill" id="visualStatePill"><span class="state-glyph" aria-hidden="true"></span><span id="avatarStateLabel">待機中</span></div>
+            <div class="visual-metric" aria-label="Gemini 回覆音量">
+              <span class="metric-caption">VOICE ENERGY</span>
+              <span class="metric-value" id="outputLevelValue">0%</span>
+              <span class="metric-line"><i id="outputLevelBar"></i></span>
+            </div>
+            <canvas id="avatarCanvas" width="800" height="800" aria-label="SpringSnow 動畫角色"></canvas>
+            <div class="stage-signal" aria-hidden="true">
+              <span class="signal-ring ring-a"></span><span class="signal-ring ring-b"></span><span class="signal-ring ring-c"></span>
+              <span class="signal-center"></span>
+            </div>
+            <span class="visual-coordinate coord-top">25° 03′ N / 121° 33′ E</span>
+            <span class="visual-coordinate coord-bottom" id="modelStatus">VRM / LOADING</span>
+          </div>
+          <div class="stage-footer">
+            <div>
+              <p class="stage-state-copy" id="stageStateCopy"></p>
+            </div>
+            <div class="waveform" id="waveform" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+        </section>
+
+      </section>
+
+      <aside class="control-column" aria-label="對話控制台">
+        <section class="identity-card">
+          <div class="identity-avatar" aria-hidden="true"><span></span></div>
+          <div class="identity-copy"><h2>Nami</h2></div>
+          <span class="identity-status" id="connectionBadge">OFFLINE</span>
+        </section>
+
+        <section class="conversation-card panel-card">
+          <div class="panel-heading"><div><p class="eyebrow">LIVE TRANSCRIPT</p></div><span class="session-clock" id="sessionClock">00:00</span></div>
+          <div class="transcript" id="transcript" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          <form class="composer" id="textForm">
+            <label class="sr-only" for="textInput">傳送文字給 Nami</label>
+            <input id="textInput" type="text" placeholder="也可以打字給她……" autocomplete="off">
+            <button type="submit" aria-label="傳送文字">↗</button>
+          </form>
+        </section>
+
+        <div class="stage-actions">
+          <button class="primary-button" id="startCall" type="button" aria-label="開始對話" aria-pressed="false" title="開始對話"><span class="button-icon" id="callButtonIcon" aria-hidden="true">◉</span><span id="callButtonLabel">開始對話</span></button>
+        </div>
+
+        <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+          <div class="settings-dialog-card">
+            <div class="dialog-heading"><div><p class="eyebrow">SESSION SETUP</p><h2 id="settingsTitle">連線設定</h2></div><button class="icon-button dialog-close" id="closeSettings" type="button" aria-label="關閉連線設定" title="關閉連線設定">×</button></div>
+          <form id="settingsForm" class="settings-form">
+            <div class="field-group">
+              <label for="apiKey">Gemini API key <small>儲存在此瀏覽器</small></label>
+              <div class="input-with-action"><input id="apiKey" name="apiKey" type="password" placeholder="貼上 AIza… 金鑰" autocomplete="off" spellcheck="false"><button type="button" id="toggleKey" aria-label="顯示或隱藏 API key">show</button></div>
+              <p class="field-hint">開發測試使用，會保存至 localStorage。正式環境請改用 ephemeral token，勿把永久金鑰放進 production bundle。</p>
+            </div>
+            <div class="field-row">
+              <div class="field-group"><label for="model">Live model</label><select id="model" name="model"><option value="gemini-3.1-flash-live-preview">3.1 Flash Live · low latency</option><option value="gemini-2.5-flash-native-audio-preview-12-2025">2.5 Native Audio · sync tools</option></select></div>
+              <div class="field-group"><label for="voice">Voice</label><select id="voice" name="voice"><option value="Zephyr">Zephyr</option><option value="Puck">Puck</option><option value="Charon">Charon</option><option value="Kore">Kore</option><option value="Fenrir">Fenrir</option><option value="Leda">Leda</option><option value="Orus">Orus</option><option value="Aoede">Aoede</option><option value="Callirrhoe">Callirrhoe</option><option value="Autonoe">Autonoe</option><option value="Enceladus">Enceladus</option><option value="Iapetus">Iapetus</option><option value="Umbriel">Umbriel</option><option value="Algieba">Algieba</option><option value="Despina">Despina</option><option value="Erinome">Erinome</option><option value="Algenib">Algenib</option><option value="Rasalgethi">Rasalgethi</option><option value="Laomedeia">Laomedeia</option><option value="Achernar">Achernar</option><option value="Alnilam">Alnilam</option><option value="Schedar">Schedar</option><option value="Gacrux">Gacrux</option><option value="Pulcherrima">Pulcherrima</option><option value="Achird">Achird</option><option value="Zubenelgenubi">Zubenelgenubi</option><option value="Vindemiatrix">Vindemiatrix</option><option value="Sadachbia">Sadachbia</option><option value="Sadaltager">Sadaltager</option><option value="Sulafat">Sulafat</option></select></div>
+            </div>
+            <div class="field-group"><label for="thinking">Thinking level <small>下次連線生效</small></label><select id="thinking" name="thinking"><option value="">Auto</option><option value="MINIMAL">Minimal</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></div>
+            <div class="field-group"><label for="userSystemPrompt">人物設定 <small>下次連線生效</small></label><textarea id="userSystemPrompt" name="userSystemPrompt" rows="6" spellcheck="false"></textarea><p class="field-hint">可調整 Nami 的個性、身份與互動風格。</p></div>
+          </form>
+          </div>
+        </dialog>
+
+      </aside>
+    </main>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="assertive" aria-atomic="true"></div>
+  <noscript><div class="noscript-message">這個 Avatar 需要 JavaScript 才能啟動。請開啟 JavaScript 後重新整理。</div></noscript>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"
+      }
+    }
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
