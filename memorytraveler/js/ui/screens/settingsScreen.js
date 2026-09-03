@@ -39,7 +39,7 @@ export function initSettingsScreen(ctx, router) {
     models.forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m.id;
-      opt.textContent = `${m.displayName}（${m.id}）${m.inputTokenLimit ? `・約 ${Math.round(m.inputTokenLimit / 1000)}K tokens 上限` : ""}`;
+      opt.textContent = `${m.displayName}`;
       modelSelect.appendChild(opt);
     });
     if (preferredId) modelSelect.value = preferredId;
