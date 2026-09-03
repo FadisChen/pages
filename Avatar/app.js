@@ -22,12 +22,13 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const AUDIO_INPUT_RATE = 16000;
   const AUDIO_OUTPUT_RATE = 24000;
   const AVATAR_MODEL_URL = "./SpringSnow無料版.vrm";
+  const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "回應中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "準備好聽你說話", listening: "我正在聽", thinking: "讓我想一下", speaking: "聲音正在變成表情", interrupted: "收到，你可以繼續說" });
-  const DEFAULT_USER_SETTINGS = Object.freeze({ model: "gemini-3.1-flash-live-preview", voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
+  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
 
   function buildSystemInstruction(userSystemPrompt) {
     const personality = String(userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT).trim();
@@ -679,11 +680,11 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       if (this.config.voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } } };
       const thinking = String(this.config.thinking || "").trim().toUpperCase();
       if (thinking) {
-        const option = this.config.model.includes("2.5") ? { thinkingBudget: { MINIMAL: 512, LOW: 1024, MEDIUM: 4096, HIGH: 8192 }[thinking] } : { thinkingLevel: thinking };
+        const option = { thinkingLevel: thinking };
         if (Object.values(option)[0] !== undefined) generationConfig.thinkingConfig = option;
       }
       const setup = {
-        model: `models/${this.config.model}`,
+        model: `models/${GEMINI_LIVE_MODEL}`,
         generationConfig,
         systemInstruction: { parts: [{ text: buildSystemInstruction(this.config.userSystemPrompt) }] },
         realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
@@ -723,7 +724,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         this.ready = true;
         this.failures = 0;
         if (this.initialContextSent || this.sendInitialContext(socket)) this.flushAudioBuffer();
-        this.bus.emit("gemini.connected", { model: this.config.model });
+        this.bus.emit("gemini.connected", { model: GEMINI_LIVE_MODEL });
       }
       const update = message.sessionResumptionUpdate;
       if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
@@ -873,7 +874,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.transcript.clearPartial("model"); });
     }
     applySettings() {
-      this.ui.model.value = this.settings.model;
       this.ui.voice.value = this.settings.voice;
       this.ui.thinking.value = this.settings.thinking;
       this.ui.userSystemPrompt.value = this.settings.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT;
@@ -881,7 +881,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     }
     saveSettings() {
       this.settings = {
-        model: this.ui.model.value,
         voice: this.ui.voice.value,
         thinking: this.ui.thinking.value,
         userSystemPrompt: this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT,
@@ -892,7 +891,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     collectConfig() {
       const apiKey = this.ui.apiKey.value.trim();
       const userSystemPrompt = this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT;
-      return { apiKey, model: this.ui.model.value, voice: this.ui.voice.value, thinking: this.ui.thinking.value, userSystemPrompt };
+      return { apiKey, voice: this.ui.voice.value, thinking: this.ui.thinking.value, userSystemPrompt };
     }
     async startCall() {
       if (this.callActive) return;
@@ -1006,7 +1005,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     const byId = (id) => document.getElementById(id);
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), waveform: byId("waveform"),
-      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), model: byId("model"), voice: byId("voice"), thinking: byId("thinking"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
+      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
     };
   }
 
@@ -1018,7 +1017,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const sessionKey = sessionStorage.getItem(`${SETTINGS_KEY}.apiKey`) || "";
       const saved = { ...DEFAULT_USER_SETTINGS, ...(sessionSaved && typeof sessionSaved === "object" ? sessionSaved : {}), ...(localSaved && typeof localSaved === "object" ? localSaved : {}) };
       if (!saved.apiKey) saved.apiKey = localKey || sessionKey;
-      return { model: saved.model, voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey };
+      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey };
     } catch (_) {
       return { ...DEFAULT_USER_SETTINGS };
     }
