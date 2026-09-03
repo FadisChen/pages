@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f1e9da">
+<title>回憶旅人 · Memory Traveler</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-theme="dawn">
+<div class="app">
+  <header class="topbar">
+    <div class="brand" aria-label="回憶旅人">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+      <span class="brand-copy">
+        <span class="brand-overline">MEMORY TRAVELER / 01</span>
+        <span class="brand-name">回憶旅人</span>
+      </span>
+    </div>
+
+    <div class="topbar-tools">
+      <span class="journey-pulse"><span class="signal-dot" aria-hidden="true"></span> 本機旅程已保存</span>
+      <nav class="nav-btns" aria-label="主要功能">
+        <button class="icon-btn" id="navSettings" type="button"><span class="nav-icon" aria-hidden="true">⚙</span> 設定</button>
+        <button class="icon-btn" id="navOutline" type="button"><span class="nav-icon" aria-hidden="true">↗</span> 大綱</button>
+        <button class="icon-btn" id="navAlbum" type="button"><span class="nav-icon" aria-hidden="true">▣</span> 相簿</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Settings Screen -->
+    <section id="screen-settings" class="screen">
+      <div class="screen-heading compact-heading">
+        <div>
+          <span class="eyebrow">CALIBRATE / 00</span>
+          <h1>旅程的鑰匙。</h1>
+        </div>
+        <div class="heading-index" aria-hidden="true"><strong>00</strong><span>SETUP</span></div>
+      </div>
+
+      <section class="style-picker" aria-labelledby="stylePickerTitle">
+        <div class="style-picker-copy">
+          <span class="eyebrow">CHOOSE A MOOD / 00</span>
+          <h2 id="stylePickerTitle">選一個會陪你走路的樣子。</h2>
+          <div class="style-status" aria-live="polite">
+            <span class="style-status-dot" aria-hidden="true"></span>
+            <span>目前套用</span>
+            <strong id="activeStyleName">曙光手帳</strong>
+          </div>
+        </div>
+
+        <div class="style-options" role="group" aria-label="選擇遊戲外觀">
+          <button class="style-option is-selected" type="button" data-theme-choice="dawn" aria-pressed="true">
+            <span class="style-option-visual style-option-visual-dawn" aria-hidden="true"><span class="style-number">01</span><span class="style-option-check">✓</span></span>
+            <span class="style-option-body">
+              <span class="style-option-name">曙光手帳</span>
+              <span class="style-option-desc">水彩、紙張與海邊月台</span>
+            </span>
+          </button>
+          <button class="style-option" type="button" data-theme-choice="midnight" aria-pressed="false">
+            <span class="style-option-visual style-option-visual-midnight" aria-hidden="true"><span class="style-number">02</span><span class="style-option-check">✓</span></span>
+            <span class="style-option-body">
+              <span class="style-option-name">午夜檔案</span>
+              <span class="style-option-desc">螢光路線、深夜地圖與訊號</span>
+            </span>
+          </button>
+          <button class="style-option" type="button" data-theme-choice="field" aria-pressed="false">
+            <span class="style-option-visual style-option-visual-field" aria-hidden="true"><span class="style-number">03</span><span class="style-option-check">✓</span></span>
+            <span class="style-option-body">
+              <span class="style-option-name">野地剪貼簿</span>
+              <span class="style-option-desc">苔綠、票根與植物標本</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <div class="card settings-card">
+        <div class="card-topline"><span>LOCAL CONFIGURATION</span><span>旅程設定</span></div>
+        <h2>API 設定</h2>
+
+        <div class="character-settings">
+          <div class="character-settings-head">
+            <div>
+              <span class="character-settings-label">CHARACTER DEFAULTS</span>
+              <strong>先決定這趟旅程的同行者</strong>
+            </div>
+            <span class="character-settings-note">用於隨機大綱與正式敘事</span>
+          </div>
+          <div class="field-row">
+            <div class="character-gender-field">
+              <label for="playerGenderSelect">玩家性別</label>
+              <select id="playerGenderSelect">
+                <option value="male">男性</option>
+                <option value="female">女性</option>
+                <option value="nonbinary">非二元</option>
+                <option value="unspecified" selected>不指定</option>
+              </select>
+            </div>
+            <div class="character-gender-field">
+              <label for="friendGenderSelect">朋友性別</label>
+              <select id="friendGenderSelect">
+                <option value="male">男性</option>
+                <option value="female">女性</option>
+                <option value="nonbinary">非二元</option>
+                <option value="unspecified" selected>不指定</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <label for="apiKeyInput">Gemini API Key <span class="req">*</span></label>
+        <div class="key-field">
+          <input type="password" id="apiKeyInput" placeholder="AIza...">
+          <button type="button" id="toggleKeyBtn">顯示</button>
+        </div>
+
+        <label for="modelSelect">Model 名稱 <span class="req">*</span></label>
+        <div class="field-row">
+          <select id="modelSelect"></select>
+          <button class="secondary" type="button" id="fetchModelsBtn">取得可用模型清單</button>
+        </div>
+        <p class="status-msg" id="modelListStatus"></p>
+
+        <div id="manualModelWrap" class="manual-model" hidden>
+          <label for="modelInput">手動輸入 Model 名稱（清單無法取得時使用）</label>
+          <input type="text" id="modelInput" placeholder="gemini-3.5-flash-lite">
+        </div>
+        <button class="chip" id="toggleManualModelBtn" type="button">改用手動輸入 model 名稱</button>
+
+        <p class="hint">🔒 隱私提醒：此為純前端應用，API 請求會直接從你的瀏覽器發送到 Google Gemini API。請勿在公用電腦保存 Key，並定期於 Google AI Studio 檢查金鑰使用狀況。</p>
+
+        <div class="actions">
+          <button class="primary" id="saveSettingsBtn" type="button">儲存設定</button>
+          <button class="secondary" id="testConnBtn" type="button">測試連線</button>
+          <button class="danger-outline" id="clearSettingsBtn" type="button">清除已存設定</button>
+        </div>
+        <p class="status-msg" id="settingsStatus"></p>
+      </div>
+    </section>
+
+    <!-- Outline Setup Screen -->
+    <section id="screen-outline" class="screen">
+      <div class="screen-heading">
+        <div>
+          <span class="eyebrow">FIELD NOTE / 01</span>
+          <h1>旅程。起點</h1>
+          <p>先留下一個起點，剩下的路，交給你和故事裡的朋友一起發現。</p>
+        </div>
+        <div class="heading-aside" aria-hidden="true">
+          <span class="aside-label">ONE STORY</span>
+          <strong>六種<br>結局</strong>
+          <span class="aside-rule"></span>
+          <span class="aside-label">MAKE A TRACE</span>
+        </div>
+      </div>
+
+      <div class="hero-art" role="img" aria-label="旅人把行李放在海邊月台，等待故事開始">
+        <div class="hero-art-top"><span>ROUTE / 01</span><span>MEMORY ATLAS</span></div>
+        <div class="hero-art-bottom">
+          <span class="hero-art-title">留一點空白，讓故事自己靠近。</span>
+          <span class="hero-art-coordinates">24° 09′ N / 120° 40′ E</span>
+        </div>
+      </div>
+
+      <div id="resumeBanner" class="resume-banner" hidden>
+        <span id="resumeBannerText"></span>
+        <div class="resume-banner-actions">
+          <button class="secondary" id="resumeGameBtn" type="button">繼續旅程</button>
+          <button class="danger-outline" id="discardSessionBtn" type="button">放棄</button>
+        </div>
+      </div>
+
+      <div class="card outline-card">
+        <div class="card-topline"><span>WRITE THE FIRST LINE</span><span>故事起點</span></div>
+        <h2>設置劇情大綱</h2>
+        <p class="subtitle">描述這個故事的世界觀與背景，會依此展開劇情，並讓「朋友」角色在關鍵時刻給你選項。</p>
+
+        <div class="outline-top-controls">
+          <div class="outline-tone-control">
+            <label for="toneInput">故事風格／語氣</label>
+            <select id="toneInput">
+              <option value="溫馨日常">溫馨日常</option>
+              <option value="懸疑推理">懸疑推理</option>
+              <option value="奇幻冒險" selected>奇幻冒險</option>
+              <option value="輕鬆幽默">輕鬆幽默</option>
+              <option value="驚悚恐怖">驚悚恐怖</option>
+              <option value="浪漫愛情">浪漫愛情</option>
+            </select>
+          </div>
+          <div class="outline-random-control">
+            <button class="secondary" id="randomOutlineBtn" type="button">🎲 隨機</button>
+          </div>
+        </div>
+
+        <label for="titleInput">故事標題（選填）</label>
+        <input type="text" id="titleInput" placeholder="例如：霧港的最後一班船">
+
+        <label for="outlineInput">劇情大綱 <span class="req">*</span></label>
+        <textarea id="outlineInput" placeholder="例如：主角是剛搬到濱海小鎮的轉學生，鎮上流傳著關於「霧港燈塔」的都市傳說。開學第一天，主角認識了熱心的同學小海，兩人意外捲入一連串神秘事件……"></textarea>
+
+        <div class="field-row">
+          <div>
+            <label for="friendNameInput">朋友角色名稱</label>
+            <input type="text" id="friendNameInput" placeholder="小海" value="小海">
+          </div>
+          <div>
+            <label for="playerNameInput">玩家稱呼</label>
+            <input type="text" id="playerNameInput" placeholder="旅人">
+          </div>
+        </div>
+
+        <label for="friendPersonaInput">朋友角色個性 / 設定（選填）</label>
+        <input type="text" id="friendPersonaInput" placeholder="樂觀開朗、講話有點跳、擅長注意到別人沒發現的細節">
+
+        <div class="actions">
+          <button class="primary" id="startGameBtn" type="button">開始遊戲</button>
+          <button class="ghost" id="saveOutlineBtn" type="button">先儲存草稿</button>
+        </div>
+        <p class="status-msg" id="outlineStatus"></p>
+      </div>
+    </section>
+
+    <!-- Game Screen -->
+    <section id="screen-game" class="screen">
+      <div class="game-screen-intro">
+        <div><span class="eyebrow">LIVE CHAPTER / 02</span><span class="live-label"><span class="signal-dot" aria-hidden="true"></span> 旅程進行中</span></div>
+        <span class="chapter-note">每個選擇都會留下痕跡。</span>
+      </div>
+
+      <div class="card game-card">
+        <div class="game-header">
+          <div class="game-title" id="gameTitle">未命名故事
+            <small id="gameSubtitle">與朋友一起冒險</small>
+          </div>
+          <button class="danger-outline" id="endGameBtn" type="button">結束遊戲</button>
+        </div>
+
+        <div class="stats-row">
+          <div class="affinity-meter">
+            <div class="affinity-label"><span>與朋友的默契</span><span><span id="affinityValue">50</span>/100</span></div>
+            <div class="affinity-bar"><div class="affinity-fill" id="affinityFill" style="width:50%"></div></div>
+          </div>
+          <button class="clues-toggle-btn" id="toggleCluesBtn" type="button"><span aria-hidden="true">⌁</span> 線索 <span id="cluesCount">0</span></button>
+        </div>
+
+        <div class="clues-panel" id="cluesPanel" hidden>
+          <div class="clues-title">已收集的物品／線索</div>
+          <ul class="clues-list" id="cluesList"></ul>
+        </div>
+
+        <div class="story-log" id="storyLog"></div>
+
+        <div class="choices-area">
+          <div class="choices-title"><span>下一步</span><span class="choices-rule" aria-hidden="true"></span></div>
+          <div id="choicesList"></div>
+          <form id="customActionForm" class="custom-action-form" hidden>
+            <label for="customActionInput">自訂行動 <span class="custom-action-hint">按 Enter 送出</span></label>
+            <input type="text" id="customActionInput" placeholder="輸入你想做的事…" autocomplete="off" enterkeyhint="send">
+          </form>
+        </div>
+
+        <p class="status-msg" id="gameStatus"></p>
+      </div>
+    </section>
+
+    <!-- Ending Screen -->
+    <section id="screen-ending" class="screen">
+      <div class="screen-heading compact-heading">
+        <div>
+          <span class="eyebrow">ARCHIVE / 03</span>
+          <h1>旅程結束，回憶才正要開始。</h1>
+          <p>把這一次的選擇收進相簿，下一次可以從另一條路出發。</p>
+        </div>
+        <div class="heading-index" aria-hidden="true"><strong>03</strong><span>KEEP IT</span></div>
+      </div>
+
+      <div class="memory-card">
+        <div class="memory-card-topline"><span>MEMORY / SEALED</span><span>✦ 已封存</span></div>
+        <span class="ending-badge" id="endingTypeBadge" hidden></span>
+        <div class="memory-title" id="memoryTitle">這趟旅程的回憶</div>
+        <div class="memory-summary" id="memorySummary">正在整理回憶中…</div>
+        <ul class="highlight-list" id="memoryHighlights"></ul>
+        <span class="memory-card-mark" aria-hidden="true">MT—03</span>
+      </div>
+      <div class="actions ending-actions">
+        <button class="primary" id="restartSameBtn" type="button">用同樣大綱再玩一次</button>
+        <button class="secondary" id="newStoryBtn" type="button">開新故事</button>
+        <button class="ghost" id="viewAlbumBtn" type="button">查看回憶相簿</button>
+      </div>
+    </section>
+
+    <!-- Memory Album Screen -->
+    <section id="screen-album" class="screen">
+      <div class="screen-heading compact-heading">
+        <div>
+          <span class="eyebrow">MEMORY ALBUM / 04</span>
+          <h1>回憶的篇章，都還在這裡。</h1>
+          <p>收藏每一段旅程，看看還有哪一種結局，等你親手抵達。</p>
+        </div>
+        <div class="heading-index" aria-hidden="true"><strong>04</strong><span>COLLECT</span></div>
+      </div>
+
+      <div class="card album-card">
+        <div class="card-topline"><span>COLLECTED ROUTES</span><span>回憶索引</span></div>
+        <h2>回憶相簿</h2>
+        <p class="subtitle">收藏你玩過的每一段旅程，並解鎖六種不同的結局類型。</p>
+        <div class="album-progress" id="albumProgress"></div>
+        <div class="ending-chips-grid" id="albumUnlockGrid"></div>
+      </div>
+      <div id="albumList"></div>
+      <div class="actions album-actions">
+        <button class="danger-outline" id="clearMemoriesBtn" type="button">清除全部回憶</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

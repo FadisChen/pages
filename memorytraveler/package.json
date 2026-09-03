@@ -1,0 +1,9 @@
+{
+  "name": "memory-traveler-game",
+  "private": true,
+  "type": "module",
+  "description": "回憶旅人",
+  "scripts": {
+    "test": "node --test"
+  }
+}
