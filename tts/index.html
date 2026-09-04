@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="用 Gemini TTS 將繁體中文稿件轉換為自然語音。" />
+    <title>TTS Playground｜Gemini 語音工作台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="paper-grain" aria-hidden="true"></div>
+    <div class="app-shell">
+      <header class="site-header">
+        <div class="brand-lockup">
+          <p class="eyebrow">GEMINI TTS / BROWSER STUDIO</p>
+          <h1>TTS Playground</h1>
+          <p class="brand-description">把文字，讀成有表情的聲音。</p>
+        </div>
+        <div class="header-actions">
+          <span class="connection-state" id="connectionState" data-state="empty">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="connectionLabel">尚未設定 API Key</span>
+          </span>
+          <button class="button button-outline key-button" id="openKeyButton" type="button">
+            <span class="button-icon" aria-hidden="true">⌕</span>
+            API Key
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace" id="mainContent">
+        <section class="panel manuscript-panel" aria-labelledby="manuscriptTitle">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">01 / MANUSCRIPT</p>
+              <h2 id="manuscriptTitle">稿件</h2>
+            </div>
+            <div class="heading-actions">
+              <span class="text-meta" id="scriptMeta">0 字 · 預估 0 tokens</span>
+              <button class="text-action" id="loadExampleButton" type="button">載入範例</button>
+              <button class="text-action" id="clearScriptButton" type="button">清除</button>
+              <button class="wand-button" id="scriptWandButton" type="button" disabled>
+                <svg class="wand-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="m5 19 10.9-10.9" />
+                  <path d="m13.8 5.4 1.1-2.1 1.1 2.1 2.1 1.1-2.1 1.1-1.1 2.1-1.1-2.1-2.1-1.1 2.1-1.1Z" />
+                  <path d="m18.8 14.8.6-1.2.6 1.2 1.2.6-1.2.6-.6 1.2-.6-1.2-1.2-.6 1.2-.6Z" />
+                </svg>
+                <span>優化稿件</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="editor-frame">
+            <div class="editor-gutter" id="lineNumbers" aria-hidden="true">1</div>
+            <textarea
+              id="scriptInput"
+              class="script-editor"
+              aria-label="稿件內容"
+              placeholder="在這裡貼上或輸入想要朗讀的文字……"
+              spellcheck="false"
+            ></textarea>
+            <div class="editor-footnote">
+              <span>建議以段落與標點安排自然停頓</span>
+              <span id="scriptLength">0 / 8,192 tokens</span>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="right-column">
+          <section class="panel settings-panel" aria-labelledby="settingsTitle">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="section-kicker">02 / VOICE DIRECTION</p>
+                <h2 id="settingsTitle">聲音設定</h2>
+              </div>
+              <span class="model-badge" id="modelBadge">免費層可用</span>
+            </div>
+
+            <div class="field-group model-field-group">
+              <label class="field-label" for="ttsModel">TTS 模型</label>
+              <select class="select-control" id="ttsModel">
+                <option value="gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS</option>
+                <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS</option>
+              </select>
+              <p class="field-help" id="modelHelp">低延遲、支援串流與音訊標記。</p>
+            </div>
+
+            <div class="field-group optimizer-field-group">
+              <label class="field-label" for="optimizerModel">Gemini model name <span class="field-label-note">（魔術棒）</span></label>
+              <input class="text-control" id="optimizerModel" type="text" value="gemini-3.5-flash-lite" spellcheck="false" autocomplete="off" />
+              <p class="field-help">供兩個魔術棒產生內容；不會改變上方的 TTS 模型。</p>
+            </div>
+
+            <div class="divider-rule"></div>
+
+            <div class="field-group">
+              <span class="field-label">說話人模式</span>
+              <div class="segmented-control" role="radiogroup" aria-label="說話人模式">
+                <label class="segment-option is-active" id="singleSpeakerOption">
+                  <input type="radio" name="speakerMode" value="single" checked />
+                  <span class="segment-icon" aria-hidden="true">●</span>
+                  單人
+                </label>
+                <label class="segment-option" id="multiSpeakerOption">
+                  <input type="radio" name="speakerMode" value="multi" />
+                  <span class="segment-icon" aria-hidden="true">●●</span>
+                  雙人
+                </label>
+              </div>
+            </div>
+
+            <div class="speaker-config" id="singleSpeakerConfig">
+              <div class="field-group">
+                <div class="field-label-row">
+                  <label class="field-label" for="singleVoice">聲音</label>
+                  <span class="field-label-note">官方預建聲音</span>
+                </div>
+                <select class="select-control" id="singleVoice"></select>
+              </div>
+            </div>
+
+            <div class="speaker-config" id="multiSpeakerConfig" hidden>
+              <div class="speaker-row">
+                <div class="speaker-mark speaker-mark-one">A</div>
+                <div class="speaker-fields">
+                  <label class="sr-only" for="speakerOneName">第一位說話者名稱</label>
+                  <input class="text-control" id="speakerOneName" type="text" value="主持人" />
+                  <label class="sr-only" for="speakerOneVoice">第一位說話者聲音</label>
+                  <select class="select-control" id="speakerOneVoice"></select>
+                </div>
+              </div>
+              <div class="speaker-row">
+                <div class="speaker-mark speaker-mark-two">B</div>
+                <div class="speaker-fields">
+                  <label class="sr-only" for="speakerTwoName">第二位說話者名稱</label>
+                  <input class="text-control" id="speakerTwoName" type="text" value="來賓" />
+                  <label class="sr-only" for="speakerTwoVoice">第二位說話者聲音</label>
+                  <select class="select-control" id="speakerTwoVoice"></select>
+                </div>
+              </div>
+              <p class="field-help">稿件中的說話者名稱需與這裡完全一致。</p>
+            </div>
+
+            <div class="inline-fields">
+              <div class="field-group">
+                <label class="field-label" for="languageSelect">語言</label>
+                <select class="select-control" id="languageSelect">
+                  <option value="auto">自動偵測</option>
+                  <option value="cmn" selected>繁體中文</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="contentType">內容類型</label>
+                <select class="select-control" id="contentType">
+                  <option value="narration" selected>自然旁白</option>
+                  <option value="teaching">教學解說</option>
+                  <option value="customer-support">客服說明</option>
+                  <option value="news">新聞播報</option>
+                  <option value="podcast">Podcast</option>
+                  <option value="advertisement">廣告口播</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="direction-header">
+              <div>
+                <p class="field-label">導演指示</p>
+                <p class="field-help">告訴聲音該怎麼說，而不是要說什麼。</p>
+              </div>
+              <button class="wand-button wand-button-subtle" id="directorWandButton" type="button" disabled>
+                <svg class="wand-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="m5 19 10.9-10.9" />
+                  <path d="m13.8 5.4 1.1-2.1 1.1 2.1 2.1 1.1-2.1 1.1-1.1 2.1-1.1-2.1-2.1-1.1 2.1-1.1Z" />
+                  <path d="m18.8 14.8.6-1.2.6 1.2 1.2.6-1.2.6-.6 1.2-.6-1.2-1.2-.6 1.2-.6Z" />
+                </svg>
+                <span>依稿件產生</span>
+              </button>
+            </div>
+            <textarea
+              id="directorNotes"
+              class="notes-editor"
+              placeholder="點擊旁邊的魔術棒，讓 Gemini 根據左側稿件自動產生適合的語氣、節奏與表演指示。"
+            ></textarea>
+
+            <div class="audio-tags" id="audioTagsGroup" hidden>
+              <div class="field-label-row">
+                <span class="field-label">音訊標記</span>
+                <span class="field-label-note">3.1 專用</span>
+              </div>
+              <div class="tag-list" id="audioTagList"></div>
+            </div>
+
+            <div class="advanced-row">
+              <label class="switch-control" id="streamingControl">
+                <input type="checkbox" id="streamingToggle" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span>串流試聽</span>
+              </label>
+              <span class="advanced-note" id="streamingHelp">3.1 Flash 可邊生成邊播放</span>
+            </div>
+
+            <div class="generate-actions">
+              <button class="generate-button" id="generateButton" type="button">
+                <span aria-hidden="true">✦</span>
+                生成音訊
+              </button>
+              <button class="button button-quiet cancel-button" id="cancelButton" type="button" hidden>取消生成</button>
+            </div>
+          </section>
+
+          <section class="panel output-panel" aria-labelledby="outputTitle">
+            <div class="section-heading output-heading">
+              <div>
+                <p class="section-kicker">03 / OUTPUT</p>
+                <h2 id="outputTitle">生成音訊</h2>
+              </div>
+              <span class="output-status" id="outputStatus">等待生成</span>
+            </div>
+
+            <div class="audio-empty" id="audioEmpty">
+              <div class="empty-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <p>完成設定後，生成的音訊會在這裡出現。</p>
+            </div>
+
+            <div class="audio-result" id="audioResult" hidden>
+              <div class="audio-player-row">
+                <button class="play-button" id="playButton" type="button" aria-label="播放音訊">▶</button>
+                <div class="waveform" id="waveform" aria-hidden="true"></div>
+                <div class="audio-time" id="audioTime">00:00 / 00:00</div>
+              </div>
+              <audio id="audioPlayer" controls preload="metadata"></audio>
+              <div class="output-footer">
+                <span class="output-meta" id="outputMeta">WAV · 24 kHz · 16-bit PCM</span>
+                <a class="button button-primary download-button" id="downloadButton" href="#" download>下載 WAV <span aria-hidden="true">↓</span></a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <span>音訊在瀏覽器端處理，不會上傳至本工具的伺服器。</span>
+        <a href="https://ai.google.dev/gemini-api/docs/speech-generation?hl=zh-tw" target="_blank" rel="noreferrer">Gemini TTS 文件 ↗</a>
+      </footer>
+    </div>
+
+    <dialog class="modal" id="keyDialog" aria-labelledby="keyDialogTitle">
+      <form method="dialog" class="modal-card" id="keyForm">
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">PRIVATE CONNECTION</p>
+            <h2 id="keyDialogTitle">設定 API Key</h2>
+          </div>
+          <button class="icon-button" id="closeKeyButton" value="cancel" type="submit" aria-label="關閉 API Key 設定">×</button>
+        </div>
+        <p class="modal-copy">請貼上自己的 Gemini API Key。按下儲存後會保存至此瀏覽器的 localStorage，重新整理後仍可使用。</p>
+        <div class="key-input-wrap">
+          <label class="sr-only" for="apiKeyInput">Gemini API Key</label>
+          <input id="apiKeyInput" class="text-control" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+          <button class="key-visibility" id="toggleKeyButton" type="button" aria-label="顯示 API Key">顯示</button>
+        </div>
+        <div class="modal-status" id="keyStatus" role="status"></div>
+        <div class="modal-actions">
+          <a class="text-action" href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">前往 AI Studio 取得 Key ↗</a>
+          <div class="modal-button-group">
+            <button class="button button-quiet" id="testKeyButton" type="button">測試連線</button>
+            <button class="button button-primary" id="saveKeyButton" value="default" type="submit">儲存 Key 設定</button>
+          </div>
+        </div>
+        <p class="security-note"><span aria-hidden="true">♢</span> BYOK 安全提示：Key 會以明文保存在此瀏覽器，請勿在公開網站中嵌入自己的共用 Key。</p>
+      </form>
+    </dialog>
+
+    <dialog class="modal script-review-dialog" id="scriptReviewDialog" aria-labelledby="scriptReviewTitle">
+      <div class="modal-card script-review-card">
+        <div class="review-header">
+          <div>
+            <p class="section-kicker">DRAFT REVIEW</p>
+            <h2 id="scriptReviewTitle">確認優化稿件</h2>
+          </div>
+          <button class="icon-button" id="dismissScriptReviewButton" type="button" aria-label="關閉優化稿件預覽">×</button>
+        </div>
+        <p class="review-copy">以下是 Gemini 根據原稿產生的優化版本。左側原稿尚未被修改，請確認是否取代。</p>
+        <div class="review-text" id="scriptReviewText" role="status" aria-live="polite"></div>
+        <div class="review-actions">
+          <button class="button button-quiet" id="discardScriptButton" type="button">保留原稿</button>
+          <button class="button button-primary button-small" id="applyScriptButton" type="button">取代左側內容</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
