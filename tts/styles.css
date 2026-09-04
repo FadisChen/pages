@@ -286,7 +286,6 @@ a {
   min-height: 770px;
   padding: 28px 30px 30px;
   background:
-    linear-gradient(90deg, transparent 0, transparent 54px, rgba(201, 104, 69, 0.14) 55px, transparent 56px),
     repeating-linear-gradient(0deg, rgba(150, 111, 76, 0.05) 0, rgba(150, 111, 76, 0.05) 1px, transparent 1px, transparent 35px),
     rgba(255, 253, 248, 0.68);
 }
@@ -392,23 +391,6 @@ a {
   background: rgba(255, 253, 248, 0.52);
 }
 
-.editor-gutter {
-  position: absolute;
-  z-index: 1;
-  top: 20px;
-  bottom: 44px;
-  left: 0;
-  width: 54px;
-  overflow: hidden;
-  padding: 0 16px 0 0;
-  color: #c2b6a6;
-  font-family: var(--serif);
-  font-size: 0.9rem;
-  line-height: 2.05;
-  text-align: right;
-  user-select: none;
-}
-
 .script-editor,
 .notes-editor,
 .text-control,
@@ -434,7 +416,7 @@ a {
 .script-editor {
   display: block;
   min-height: 620px;
-  padding: 21px 22px 54px 64px;
+  padding: 21px 22px 54px;
   border: 0;
   border-radius: 0;
   resize: vertical;
@@ -1288,14 +1270,7 @@ a {
     justify-content: center;
   }
 
-  .editor-gutter {
-    width: 39px;
-    padding-right: 10px;
-    font-size: 0.78rem;
-  }
-
   .script-editor {
-    padding-left: 46px;
     font-size: 0.98rem;
   }
 

@@ -45,7 +45,6 @@ const els = {
   scriptInput: $("scriptInput"),
   scriptMeta: $("scriptMeta"),
   scriptLength: $("scriptLength"),
-  lineNumbers: $("lineNumbers"),
   loadExampleButton: $("loadExampleButton"),
   clearScriptButton: $("clearScriptButton"),
   scriptWandButton: $("scriptWandButton"),
@@ -175,8 +174,6 @@ function updateScriptMetrics() {
   els.scriptMeta.textContent = `${characters.toLocaleString()} 字 · 預估 ${tokens.toLocaleString()} tokens`;
   els.scriptLength.textContent = `${tokens.toLocaleString()} / ${TOKEN_LIMIT.toLocaleString()} tokens`;
   els.scriptLength.classList.toggle("is-over-limit", tokens > TOKEN_LIMIT);
-  const lineCount = Math.max(1, text.split("\n").length);
-  els.lineNumbers.textContent = Array.from({ length: lineCount }, (_, index) => index + 1).join("\n");
 }
 
 function updateConnection(status, label) {
