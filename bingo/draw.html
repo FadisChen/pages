@@ -43,7 +43,7 @@
         <h1>把號碼，<em>交給今晚。</em></h1>
         <p class="hero-copy">每次只抽出一個尚未出現的號碼；中獎名單會依卡片排列與已開出的號碼自動更新，結果保存於這台主持人裝置。</p>
       </div>
-      <div class="live-badge">LIVE DRAW ／ 1—24 ／ NO REPEAT</div>
+      <div class="live-badge">LIVE DRAW ／ 1—35 ／ NO REPEAT</div>
     </section>
 
     <section class="draw-layout">
@@ -70,9 +70,9 @@
       <aside class="side">
         <article class="panel progress">
           <div class="mono-label">Draw progress</div>
-          <div class="progress-row"><strong class="progress-value"><span id="drawCount">0</span> <small>/ 24</small></strong><span class="mono-label" id="progressStatus">尚未開始</span></div>
+          <div class="progress-row"><strong class="progress-value"><span id="drawCount">0</span> <small>/ 35</small></strong><span class="mono-label" id="progressStatus">尚未開始</span></div>
           <div class="track"><div class="fill" id="progressFill"></div></div>
-          <div class="progress-meta"><span>START</span><span id="remainingCount">24 REMAINING</span><span>FINISH</span></div>
+          <div class="progress-meta"><span>START</span><span id="remainingCount">35 REMAINING</span><span>FINISH</span></div>
         </article>
 
         <article class="panel winners-panel">
@@ -89,7 +89,7 @@
         </article>
 
         <article class="panel">
-          <header class="pool-head"><div><div class="mono-label">Number pool</div><h2>號碼池</h2></div><span class="mono-label">1—24</span></header>
+          <header class="pool-head"><div><div class="mono-label">Number pool</div><h2>號碼池</h2></div><span class="mono-label">1—35</span></header>
           <div class="pool-list" id="poolList"></div>
         </article>
       </aside>
@@ -107,14 +107,14 @@
 
   <script>
     BingoAuth.ready.then(function () {
-    const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
-    const CARD_COUNT = 120;
+    const ALL_NUMBERS = Array.from({ length: 35 }, function (_, index) { return index + 1; });
+    const CARD_COUNT = 200;
     const CARD_SIZE = 25;
     const CENTER_INDEX = 12;
-    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v1';
-    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v1';
-    const STORAGE_KEY = 't-dept-bingo-draw-state-v3';
-    const STORAGE_VERSION = 3;
+    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v2';
+    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v2';
+    const STORAGE_KEY = 't-dept-bingo-draw-state-v4';
+    const STORAGE_VERSION = 4;
     const REVEAL_FADE_DURATION = 700;
     const LINES = (function () {
       const lines = [];
@@ -154,7 +154,7 @@
     function normalizeState(value) {
       if (!value || value.version !== STORAGE_VERSION || !Array.isArray(value.drawnNumbers)) return null;
       const numbers = value.drawnNumbers.filter(function (number) {
-        return Number.isInteger(number) && number >= 1 && number <= 24;
+        return Number.isInteger(number) && number >= 1 && number <= 35;
       });
       const uniqueNumbers = Array.from(new Set(numbers));
       if (uniqueNumbers.length !== numbers.length) return null;
@@ -188,9 +188,9 @@
     function isValidGrid(grid) {
       if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
       const numbers = grid.filter(function (value) { return value !== 'T'; });
-      return numbers.length === ALL_NUMBERS.length
-        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
-        && new Set(numbers).size === ALL_NUMBERS.length;
+      return numbers.length === CARD_SIZE - 1
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 35; })
+        && new Set(numbers).size === CARD_SIZE - 1;
     }
 
     function isValidCardPool(value) {
@@ -265,7 +265,7 @@
 
       $('#winnerCount').textContent = winners.length;
       if (!cards.length) {
-        list.innerHTML = '<div class="empty winner-empty"><strong>找不到卡片池</strong>請先開啟報到發卡台，讓 120 張卡片排列寫入這台裝置。</div>';
+        list.innerHTML = '<div class="empty winner-empty"><strong>找不到卡片池</strong>請先開啟報到發卡台，讓 200 張卡片排列寫入這台裝置。</div>';
       } else if (!winners.length) {
         list.innerHTML = '<div class="empty winner-empty"><strong>尚未出現三線</strong>抽出更多號碼後，中獎名單會自動更新。</div>';
       } else {
@@ -306,7 +306,7 @@
       $('#instruction').textContent = count === 0
         ? '準備好了嗎？把今晚的第一個號碼交給大家。'
         : complete
-          ? '24 個號碼都已經到齊，抽號流程完成。'
+          ? '35 個號碼都已經到齊，抽號流程完成。'
           : '下一個號碼會從尚未開出的清單中隨機出現。';
       $('#drawButton').disabled = isDrawing || complete;
       $('#resetButton').disabled = isDrawing;
@@ -388,7 +388,7 @@
         showToast('目前沒有需要清除的開獎紀錄。');
         return;
       }
-      if (!window.confirm('確定要清除目前的 1～24 抽號結果嗎？')) return;
+      if (!window.confirm('確定要清除目前的 1～35 抽號結果嗎？')) return;
       state = emptyState();
       saveState();
       render();

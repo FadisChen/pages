@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#21191a" />
   <link rel="icon" href="data:," />
   <title>數位賓果卡｜2026 T 部門尾牙</title>
-  <link rel="stylesheet" href="card.css?v=4" />
+  <link rel="stylesheet" href="card.css?v=5" />
 </head>
 <body>
   <main class="page">
@@ -17,8 +17,8 @@
     const ACTIVITY_NAME = '2026 T 部門尾牙';
     const CARD_SIZE = 25;
     const CENTER_INDEX = 12;
-    const CARD_QUERY_STORAGE_KEY = 'bingo-card-query-v1';
-    const MARKS_STORAGE_PREFIX = 'bingo-card-marks-v1:';
+    const CARD_QUERY_STORAGE_KEY = 'bingo-card-query-v2';
+    const MARKS_STORAGE_PREFIX = 'bingo-card-marks-v2:';
     const CONFETTI_COLORS = ['#d94b3f', '#c7a45c', '#1d6961', '#f7f0df', '#21191a'];
     const CONFETTI_PIECE_COUNT = 60;
     const CONFETTI_LIFETIME = 3200;
@@ -64,13 +64,13 @@
       if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
       const numbers = grid.filter(function (value) { return value !== 'T'; });
       return numbers.length === 24
-        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 35; })
         && new Set(numbers).size === 24;
     }
 
     function decodePayload(encoded) {
       const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encoded)));
-      if (payload.version !== 1 || payload.activityName !== ACTIVITY_NAME || typeof payload.cardId !== 'string' || !isValidGrid(payload.grid)) {
+      if (payload.version !== 2 || payload.activityName !== ACTIVITY_NAME || typeof payload.cardId !== 'string' || !isValidGrid(payload.grid)) {
         throw new Error('QR 內容不是有效的 2026 T 部門尾牙卡片。');
       }
       return payload;

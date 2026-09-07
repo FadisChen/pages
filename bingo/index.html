@@ -52,7 +52,7 @@
       </div>
       <div class="hero-stamp" aria-hidden="true">
         <div class="stamp-kicker">CARD EDITION</div>
-        <div class="stamp-number">001—120</div>
+        <div class="stamp-number">001—200</div>
         <div class="stamp-footer"><span>FREE / T</span><span>QR HANDOUT</span></div>
       </div>
     </section>
@@ -61,13 +61,13 @@
       <article class="panel number-wall">
         <div class="panel-head">
           <div>
-            <div class="mono-label">Check-in queue / 120 cards</div>
+            <div class="mono-label">Check-in queue / 200 cards</div>
             <h2 class="panel-title">選擇卡號</h2>
           </div>
-          <div class="mono-label"><span id="claimedCount">0</span> / 120 CLAIMED</div>
+          <div class="mono-label"><span id="claimedCount">0</span> / 200 CLAIMED</div>
         </div>
         <div class="number-grid" id="numberGrid" aria-live="polite"></div>
-        <div class="wall-footer"><span><strong id="availableCount">120</strong> 張尚未領取</span></div>
+        <div class="wall-footer"><span><strong id="availableCount">200</strong> 張尚未領取</span></div>
       </article>
 
       <aside class="panel qr-panel">
@@ -105,12 +105,12 @@
   <script>
     BingoAuth.ready.then(function () {
     const ACTIVITY_NAME = '2026 T 部門尾牙';
-    const CARD_COUNT = 120;
+    const CARD_COUNT = 200;
     const CARD_SIZE = 25;
     const CENTER_INDEX = 12;
-    const ALL_NUMBERS = Array.from({ length: 24 }, function (_, index) { return index + 1; });
-    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v1';
-    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v1';
+    const ALL_NUMBERS = Array.from({ length: 35 }, function (_, index) { return index + 1; });
+    const CARDS_STORAGE_KEY = 't-dept-bingo-card-pool-v2';
+    const CLAIMED_STORAGE_KEY = 't-dept-bingo-claimed-cards-v2';
 
     let cards = loadCardPool();
     let claimedCards = loadClaimedCards();
@@ -151,7 +151,7 @@
     }
 
     function createGrid() {
-      const shuffledNumbers = shuffle(ALL_NUMBERS);
+      const shuffledNumbers = shuffle(ALL_NUMBERS).slice(0, CARD_SIZE - 1);
       const grid = [];
       let numberIndex = 0;
       for (let index = 0; index < CARD_SIZE; index += 1) {
@@ -172,9 +172,9 @@
     function isValidGrid(grid) {
       if (!Array.isArray(grid) || grid.length !== CARD_SIZE || grid[CENTER_INDEX] !== 'T') return false;
       const numbers = grid.filter(function (value) { return value !== 'T'; });
-      return numbers.length === ALL_NUMBERS.length
-        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 24; })
-        && new Set(numbers).size === ALL_NUMBERS.length;
+      return numbers.length === CARD_SIZE - 1
+        && numbers.every(function (value) { return Number.isInteger(value) && value >= 1 && value <= 35; })
+        && new Set(numbers).size === CARD_SIZE - 1;
     }
 
     function isValidCardPool(value) {
@@ -264,7 +264,7 @@
 
     function encodeCardPayload(card) {
       const payload = {
-        version: 1,
+        version: 2,
         activityName: ACTIVITY_NAME,
         cardId: card.cardId,
         grid: card.grid
@@ -274,7 +274,7 @@
 
       function cardUrl(card) {
         const target = new URL('card.html', window.location.href);
-        target.searchParams.set('v', '4');
+        target.searchParams.set('v', '5');
         target.searchParams.set('card', encodeCardPayload(card));
         return target.href;
       }
@@ -462,7 +462,7 @@
         showToast('目前沒有已領取的卡片。');
         return;
       }
-      if (!window.confirm('確定要重置全部領取狀態嗎？120 張卡將重新變成可領取。')) return;
+      if (!window.confirm('確定要重置全部領取狀態嗎？200 張卡將重新變成可領取。')) return;
       claimedCards = new Map();
       selectedCardId = null;
       saveClaimedCards();
