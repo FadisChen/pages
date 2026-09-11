@@ -1,71 +1,34 @@
+import { SEGMENTS } from "./webrtc-link.js";
+import { MicrophoneInput } from "./microphone.js";
+import { GeminiLiveClient } from "./live-session.js";
+import { GeminiAudioPlayer } from "./audio-player.js";
+import { DEFAULT_USER_SYSTEM_PROMPT } from "./host-config.js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import {
-  AVATAR_EMOTION_TOOL,
   AVATAR_EMOTIONS,
-  createAvatarToolResponse,
-  normalizeAvatarEmotion,
 } from "../Avatar/avatar-emotions.js";
-import { shouldPlayLiveAudio } from "../Avatar/live-audio-policy.js";
 import { collectSessionContext } from "../Avatar/session-context.js";
 import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
 
 // 這個檔案是 web/Avatar/app.js 的分支版本：沿用同一套 VRM / Gemini Live / Lip Sync 架構，
 // 但把「使用者開麥克風、伺服器自動偵測講話起訖」改成「工作人員按住按鈕才送話（push-to-talk）」，
-// 並加入尾牙 Rundown 環節切換。共用的小型工具模組（emotion tool、audio policy、session context、
-// transcript 正規化）直接從 ../Avatar/ 匯入，VRM 模型與背景圖也重用 Avatar 資料夾內的檔案，避免
+// 並加入尾牙 Rundown 環節切換。Gemini、收音與播放使用 YearEndParty 共用模組；
+// emotion、session context、transcript 從 ../Avatar/ 匯入，VRM 模型與背景圖也重用其檔案，避免
 // 在 repo 裡重複存放同一份大型二進位資產。
 
 (function () {
   "use strict";
 
-  const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
   const SETTINGS_KEY = "year-end-party.host.settings.v1";
-  const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，今晚尾牙晚會的虛擬主持人。";
-  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文主持，語氣熱情、口條清楚、節奏明快，像真人尾牙司儀一樣炒熱氣氛，但用詞得體、適合公司正式場合，回應通常一到三句，不要長篇獨白。工作人員會不定期用文字訊息告訴你「現在環節」或「現場備註」，那是目前唯一可信的現場狀況來源：只依照工作人員切換的環節主持，不要自己宣布進入下一個環節、不要自己編造得獎名單或抽獎結果。收到環節切換文字時，用一兩句話自然承接、帶動氣氛即可，不要逐字覆誦收到的內容，也不要提到你正在使用的系統。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion，每次語音回覆最多一次；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
-  const DEFAULT_USER_SYSTEM_PROMPT = "活潑風趣、很會帶氣氛的尾牙主持人，講話節奏明快，喜歡跟台下互動、適時搞笑但不失分寸";
-  const AUDIO_INPUT_RATE = 16000;
-  const AUDIO_OUTPUT_RATE = 24000;
   const AVATAR_MODEL_URL = "../Avatar/SpringSnow無料版.vrm";
-  const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "主持中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "按住「按住說話」就能對她下指令", listening: "正在聽工作人員說話", thinking: "讓我想一下", speaking: "主持詞正在變成表情", interrupted: "收到，請繼續說" });
   const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
-
-  // 尾牙 Rundown：環節由工作人員手動切換，AI 不自作主張換環節（見 PLAN.md 第 4 節）。
-  // 每個環節的 context 會在切換當下以 realtimeInput.text 送給 Gemini，作為場控狀態更新。
-  const SEGMENTS = Object.freeze([
-    { id: "opening", label: "開場", context: "[環節切換] 現在進入「開場」。請歡迎大家、簡短介紹今晚主持人與晚會亮點，帶動期待感。" },
-    { id: "lucky_draw", label: "幸運抽獎", context: "[環節切換] 現在進入「幸運抽獎」。請營造懸念、公布獎項亮點；得獎名單會由工作人員另外用文字告訴你，收到後再唸名字恭喜對方。" },
-    { id: "game", label: "遊戲互動", context: "[環節切換] 現在進入「遊戲互動」。請用輕鬆節奏帶大家玩小遊戲、適時搞笑炒熱氣氛。" },
-    { id: "award", label: "頒獎", context: "[環節切換] 現在進入「頒獎」。語氣請轉為稍微正式、恭喜得獎同仁；得獎名單會由工作人員另外用文字提供。" },
-    { id: "freechat", label: "自由聊天", context: "[環節切換] 現在進入「自由聊天」。可以自然跟台下互動、串場聊天，不用趕流程。" },
-    { id: "closing", label: "尾聲", context: "[環節切換] 現在進入「尾聲」。請感謝大家參與、溫馨收尾，預告晚會即將結束。" },
-  ]);
-
-  function buildSystemInstruction(userSystemPrompt) {
-    const personality = String(userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT).trim();
-    return `${REQUIRED_SYSTEM_PROMPT_PREFIX}${personality}。${REQUIRED_SYSTEM_PROMPT}`;
-  }
-
-  function isLocalMicrophoneOrigin() {
-    return ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
-  }
-
-  function formatMicrophoneError(error) {
-    const name = error?.name || "UnknownError";
-    const detail = error?.message ? `（${name}：${error.message}）` : `（${name}）`;
-    if (name === "NotAllowedError" || name === "PermissionDeniedError") return new Error("麥克風權限被拒絕，請在瀏覽器網址列允許麥克風後再試一次。");
-    if (name === "NotFoundError" || name === "DevicesNotFoundError") return new Error("找不到可用的麥克風，請確認裝置已接上且沒有被系統停用。");
-    if (name === "NotReadableError" || name === "TrackStartError") return new Error(`麥克風目前無法讀取，可能正被其他程式占用；請關閉其他使用麥克風的程式後再試。${detail}`);
-    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") return new Error(`目前麥克風不支援要求的音訊設定，請重新插拔裝置後再試。${detail}`);
-    if (name === "SecurityError") return new Error(`瀏覽器阻擋了麥克風，請使用 HTTPS 或 localhost 開啟此頁面。${detail}`);
-    return new Error(`無法開啟麥克風${detail} 請確認系統已選取正確的輸入裝置。`);
-  }
 
   class EventBus {
     constructor() { this.listeners = new Map(); }
@@ -114,141 +77,6 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
     }
     toIdle() {
       if (this.state === STATES.SPEAKING || this.state === STATES.LISTENING || this.state === STATES.THINKING || this.state === STATES.INTERRUPTED) this.transition(STATES.IDLE);
-    }
-  }
-
-  class GeminiAudioPlayer {
-    constructor(bus) {
-      this.bus = bus;
-      this.context = null;
-      this.outputGain = null;
-      this.analyser = null;
-      this.activeSources = new Set();
-      this.nextPlayTime = 0;
-      this.lastEnqueueAt = 0;
-    }
-    async ensureContext() {
-      if (!this.context) {
-        const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!AudioContextClass) throw new Error("此瀏覽器不支援 Web Audio API。");
-        this.context = new AudioContextClass({ latencyHint: "interactive" });
-        this.outputGain = this.context.createGain();
-        this.outputGain.gain.value = .92;
-        this.analyser = this.context.createAnalyser();
-        this.analyser.fftSize = 1024;
-        this.analyser.smoothingTimeConstant = .55;
-        this.outputGain.connect(this.analyser);
-        this.analyser.connect(this.context.destination);
-        this.nextPlayTime = this.context.currentTime;
-      }
-      if (this.context.state === "suspended") await this.context.resume();
-      return this.context;
-    }
-    getContext() { return this.context; }
-    getAnalyser() { return this.analyser; }
-    enqueue(bytes, sampleRate = AUDIO_OUTPUT_RATE) {
-      if (!this.context || !this.outputGain || !bytes?.byteLength) return;
-      const sampleCount = Math.floor(bytes.byteLength / 2);
-      if (!sampleCount) return;
-      const buffer = this.context.createBuffer(1, sampleCount, sampleRate);
-      const channel = buffer.getChannelData(0);
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      for (let index = 0; index < sampleCount; index += 1) channel[index] = view.getInt16(index * 2, true) / 32768;
-      const source = this.context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.outputGain);
-      const startAt = Math.max(this.context.currentTime + .025, this.nextPlayTime);
-      source.start(startAt);
-      this.nextPlayTime = startAt + buffer.duration;
-      this.lastEnqueueAt = performance.now();
-      this.activeSources.add(source);
-      source.onended = () => {
-        this.activeSources.delete(source);
-        try { source.disconnect(); } catch (_) { /* already disconnected */ }
-        if (!this.activeSources.size) this.bus.emit("audio.drained", {});
-      };
-      this.bus.emit("audio.started", { sampleRate, duration: buffer.duration });
-    }
-    isPlaying() { return Boolean(this.context && this.nextPlayTime > this.context.currentTime + .018 && this.activeSources.size); }
-    stop() {
-      for (const source of this.activeSources) { try { source.stop(); } catch (_) { /* already stopped */ } }
-      this.activeSources.clear();
-      if (this.context) this.nextPlayTime = this.context.currentTime;
-      this.lastEnqueueAt = 0;
-      this.bus.emit("audio.stopped", {});
-    }
-    async close() {
-      this.stop();
-      if (this.context && this.context.state !== "closed") await this.context.close();
-      this.context = null;
-      this.outputGain = null;
-      this.analyser = null;
-    }
-  }
-
-  class MicrophoneInput {
-    constructor(audioPlayer, bus) {
-      this.audioPlayer = audioPlayer;
-      this.bus = bus;
-      this.context = null;
-      this.stream = null;
-      this.source = null;
-      this.processor = null;
-      this.muteGain = null;
-      this.running = false;
-      this.onChunk = null;
-    }
-    async start(onChunk) {
-      if (this.running) return;
-      if (!globalThis.isSecureContext && !isLocalMicrophoneOrigin()) throw new Error("麥克風需要安全來源，請使用 HTTPS 或 localhost 開啟此頁面。");
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error("此瀏覽器不提供麥克風擷取 API，請改用最新版 Chrome 或 Edge。");
-      this.context = await this.audioPlayer.ensureContext();
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const track = stream.getAudioTracks()[0];
-        try {
-          await track?.applyConstraints({ echoCancellation: { ideal: true }, noiseSuppression: { ideal: true }, autoGainControl: { ideal: true }, channelCount: { ideal: 1 } });
-        } catch (_) { /* optional enhancements must not prevent microphone access */ }
-      } catch (error) {
-        throw formatMicrophoneError(error);
-      }
-      try {
-        this.stream = stream;
-        this.onChunk = onChunk;
-        this.source = this.context.createMediaStreamSource(stream);
-        this.processor = this.context.createScriptProcessor(2048, 1, 1);
-        this.muteGain = this.context.createGain();
-        this.muteGain.gain.value = 0;
-        this.processor.onaudioprocess = (event) => this.capture(event.inputBuffer.getChannelData(0));
-        this.source.connect(this.processor);
-        this.processor.connect(this.muteGain);
-        this.muteGain.connect(this.context.destination);
-        this.running = true;
-        this.bus.emit("microphone.started", {});
-      } catch (error) {
-        stream.getTracks().forEach((track) => track.stop());
-        this.stream = null;
-        this.onChunk = null;
-        throw new Error(`麥克風音訊管線建立失敗：${error?.message || "未知錯誤"}`);
-      }
-    }
-    capture(samples) {
-      if (!this.running || !this.context) return;
-      const resampled = resample(samples, this.context.sampleRate, AUDIO_INPUT_RATE);
-      this.onChunk?.(floatToPcm16(resampled));
-      let sum = 0;
-      for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
-      this.bus.emit("audio.input-level", { level: Math.min(1, Math.sqrt(sum / samples.length) * 3.5) });
-    }
-    async stop() {
-      this.running = false;
-      if (this.processor) { this.processor.onaudioprocess = null; try { this.processor.disconnect(); } catch (_) {} }
-      try { this.source?.disconnect(); } catch (_) {}
-      try { this.muteGain?.disconnect(); } catch (_) {}
-      this.stream?.getTracks().forEach((track) => track.stop());
-      this.context = null; this.stream = null; this.source = null; this.processor = null; this.muteGain = null; this.onChunk = null;
-      this.bus.emit("microphone.stopped", {});
     }
   }
 
@@ -643,191 +471,6 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
     }
   }
 
-  class GeminiLiveClient {
-    constructor(bus) {
-      this.bus = bus;
-      this.socket = null;
-      this.config = null;
-      this.ready = false;
-      this.stopped = true;
-      this.failures = 0;
-      this.reconnectTimer = null;
-      this.resumptionHandle = "";
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
-      this.runId = 0;
-      this.suppressAudio = false;
-      this.initialContextSent = false;
-    }
-    start(config) {
-      this.disconnect(false);
-      this.config = config;
-      this.stopped = false;
-      this.failures = 0;
-      this.runId += 1;
-      this.suppressAudio = false;
-      this.resumptionHandle = "";
-      this.initialContextSent = false;
-      this.connect(false);
-    }
-    disconnect(notify = true) {
-      this.stopped = true;
-      this.runId += 1;
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-      this.socket?.close(1000, "user hangup");
-      this.socket = null;
-      this.ready = false;
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
-      if (notify) this.bus.emit("gemini.disconnected", { status: "offline" });
-    }
-    isConnected() { return this.ready && this.socket?.readyState === WebSocket.OPEN; }
-    connect(reconnecting) {
-      if (this.stopped || !this.config) return;
-      this.bus.emit("gemini.status", { status: reconnecting ? "reconnecting" : "connecting" });
-      let socket;
-      try { socket = new WebSocket(`${WS_BASE}?key=${encodeURIComponent(this.config.apiKey)}`); }
-      catch (error) { this.fail(error); return; }
-      this.socket = socket;
-      socket.onopen = () => { try { socket.send(JSON.stringify(this.setupMessage())); } catch (error) { this.fail(error); } };
-      socket.onmessage = (event) => this.handleRawMessage(socket, event.data);
-      socket.onclose = (event) => this.handleClose(socket, event);
-    }
-    setupMessage() {
-      const generationConfig = { responseModalities: ["AUDIO"] };
-      if (this.config.voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } } };
-      const thinking = String(this.config.thinking || "").trim().toUpperCase();
-      if (thinking) {
-        const option = { thinkingLevel: thinking };
-        if (Object.values(option)[0] !== undefined) generationConfig.thinkingConfig = option;
-      }
-      const setup = {
-        model: `models/${GEMINI_LIVE_MODEL}`,
-        generationConfig,
-        systemInstruction: { parts: [{ text: buildSystemInstruction(this.config.userSystemPrompt) }] },
-        // 手動語音活動偵測：由工作人員按住/放開按鈕決定何時送話、何時輪到 Gemini 開口，
-        // 而不是讓伺服器自動偵測講話起訖（現場背景音樂與人聲很容易讓自動 VAD 誤判）。
-        realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
-        sessionResumption: this.resumptionHandle ? { handle: this.resumptionHandle } : {},
-        contextWindowCompression: { triggerTokens: 8000, slidingWindow: {} },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL] }],
-      };
-      if (!this.initialContextSent && !this.resumptionHandle) setup.historyConfig = { initialHistoryInClientContent: true };
-      return { setup };
-    }
-    sendAudio(bytes) {
-      if (this.stopped || !bytes?.byteLength) return;
-      if (this.ready && this.socket?.readyState === WebSocket.OPEN) { this.sendAudioNow(bytes); return; }
-      this.audioBuffer.push(bytes);
-      this.audioBufferBytes += bytes.byteLength;
-      const maxBytes = AUDIO_INPUT_RATE * 2 * 15;
-      while (this.audioBufferBytes > maxBytes && this.audioBuffer.length) this.audioBufferBytes -= this.audioBuffer.shift().byteLength;
-    }
-    // 按下 push-to-talk 按鈕時呼叫：手動 VAD 模式下，這個訊號開始使用者這一輪的發言。
-    activityStart() { this.send({ realtimeInput: { activityStart: {} } }); }
-    // 放開 push-to-talk 按鈕時呼叫：這個訊號同時代表「使用者這輪講完了」，
-    // Gemini 收到後才會開始生成語音回覆——這就是「按鈕決定何時輪到 Gemini 說話」的實作。
-    activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
-    sendText(text) {
-      if (!this.isConnected() || !String(text).trim()) return false;
-      this.send({ realtimeInput: { text: String(text).trim() } });
-      this.suppressAudio = false;
-      return true;
-    }
-    sendAudioNow(bytes) { this.send({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: bytesToBase64(bytes) } } }); }
-    flushAudioBuffer() { const queued = this.audioBuffer; this.audioBuffer = []; this.audioBufferBytes = 0; queued.forEach((bytes) => this.sendAudioNow(bytes)); }
-    send(message) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
-    async handleRawMessage(socket, raw) {
-      if (socket !== this.socket) return;
-      try { const text = typeof raw === "string" ? raw : await raw.text(); this.handleMessage(socket, JSON.parse(text)); }
-      catch (error) { this.fail(error); }
-    }
-    handleMessage(socket, message) {
-      if (message.setupComplete) {
-        this.ready = true;
-        this.failures = 0;
-        if (this.initialContextSent || this.sendInitialContext(socket)) this.flushAudioBuffer();
-        this.bus.emit("gemini.connected", { model: GEMINI_LIVE_MODEL });
-      }
-      const update = message.sessionResumptionUpdate;
-      if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
-      const content = message.serverContent;
-      const hasToolCall = Boolean(message.toolCall?.functionCalls?.length);
-      if (message.error) {
-        this.bus.emit("gemini.error", new Error(message.error.message || "Gemini Live 回傳錯誤。"));
-        return;
-      }
-      if (content) {
-        const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data) || [];
-        const playAudio = shouldPlayLiveAudio({ hasToolCall, suppressAudio: this.suppressAudio });
-        if (audioParts.length && playAudio) for (const part of audioParts) this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate: AUDIO_OUTPUT_RATE });
-        const inputText = normalizeTranscript(content.inputTranscription?.text);
-        const outputText = normalizeTranscript(content.outputTranscription?.text);
-        if (inputText) { this.suppressAudio = false; this.bus.emit("gemini.user-transcript", inputText); }
-        if (outputText && !hasToolCall) this.bus.emit("gemini.model-transcript", outputText);
-        if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
-        if (content.interrupted) { this.suppressAudio = false; this.bus.emit("gemini.interrupted", {}); }
-        if (content.turnComplete) { this.suppressAudio = false; this.bus.emit("gemini.turn-complete", {}); }
-      }
-      if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
-      if (message.goAway) socket.close(1000, "server requested reconnect");
-    }
-    sendInitialContext(socket) {
-      if (this.initialContextSent) return true;
-      const text = String(this.config?.sessionContext || "").trim();
-      if (!text || socket?.readyState !== 1) return false;
-      try {
-        socket.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: true } }));
-        this.initialContextSent = true;
-        this.bus.emit("gemini.session-context-sent", {});
-        return true;
-      } catch (error) {
-        this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error)));
-        return false;
-      }
-    }
-    handleToolCalls(socket, calls) {
-      this.bus.emit("gemini.avatar-emotion-tool-call", { calls });
-      let applied = false;
-      for (const call of calls) {
-        let result;
-        if (call?.name !== AVATAR_EMOTION_TOOL.name) {
-          result = { ok: false, error: `不支援的 Avatar tool：${String(call?.name || "")}。` };
-        } else {
-          let args = call.args;
-          if (typeof args === "string") {
-            try { args = JSON.parse(args); } catch (_) { args = null; }
-          }
-          result = normalizeAvatarEmotion(args);
-        }
-        if (result.ok && applied) result = { ok: false, error: "每個回覆最多套用一個 Avatar emotion。" };
-        if (result.ok) {
-          applied = true;
-          this.bus.emit("gemini.avatar-emotion", { emotion: result.emotion });
-        }
-        this.sendToolResponse(socket, call, result);
-      }
-    }
-    sendToolResponse(socket, call, result) {
-      if (socket?.readyState !== 1) return;
-      socket.send(JSON.stringify(createAvatarToolResponse(call, result)));
-    }
-    handleClose(socket, event) {
-      if (socket !== this.socket || this.stopped) return;
-      this.ready = false;
-      this.socket = null;
-      this.failures += 1;
-      if (this.failures >= 3) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", new Error(`Gemini 連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`)); return; }
-      const delay = [1000, 2500, 5000][this.failures - 1];
-      this.bus.emit("gemini.status", { status: "reconnecting", retryIn: delay });
-      this.reconnectTimer = setTimeout(() => this.connect(true), delay);
-    }
-    fail(error) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error))); }
-  }
-
   class TranscriptView {
     constructor(element) { this.element = element; this.last = new Map(); }
     add(role, text, merge = false) {
@@ -905,13 +548,14 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.bus.on("avatar.loading", ({ progress }) => { this.ui.modelStatus.textContent = `VRM / ${progress > 0 ? `${Math.round(progress * 100)}%` : "LOADING"}`; });
       this.bus.on("avatar.ready", () => { this.ui.modelStatus.textContent = "VRM / READY"; });
       this.bus.on("avatar.error", (error) => { this.ui.modelStatus.textContent = "VRM / ERROR"; this.showError(`VRM 載入失敗：${error.message || error}`, true); });
-      this.bus.on("gemini.status", ({ status }) => this.setConnectionStatus(status));
+      this.bus.on("gemini.status", ({ status }) => { this.setConnectionStatus(status); this.updatePttButton(); });
       this.bus.on("gemini.connected", ({ model }) => { this.setConnectionStatus("connected"); this.stateMachine.toListening(); this.updatePttButton(); this.addSystem(`已連上 ${model.replace("-preview", "")}，請按住「按住說話」向 Nami 下指令，或用環節按鈕切換現場狀況。`); });
       this.bus.on("gemini.disconnected", () => { this.setConnectionStatus("offline"); this.updatePttButton(); });
       this.bus.on("gemini.error", (error) => this.showError(error.message));
-      this.bus.on("gemini.avatar-emotion-tool-call", () => { this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.input-start", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.transcript.clearPartial("user"); });
+      this.bus.on("gemini.connection-lost", () => { this.stopPtt(); this.audioPlayer.stop(); this.lipSync.reset(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
-      this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.transcript.clearPartial("user"); this.turnComplete = false; });
+      this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.turnComplete = false; });
       this.bus.on("gemini.model-transcript", (text) => { this.transcript.add("model", text, true); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
@@ -938,20 +582,22 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       button.addEventListener("pointercancel", up);
       button.addEventListener("lostpointercapture", up);
       button.addEventListener("contextmenu", (event) => event.preventDefault());
+      window.addEventListener("blur", () => this.stopPtt());
+      document.addEventListener("visibilitychange", () => { if (document.hidden) this.stopPtt(); });
     }
     startPtt() {
       if (this.pttActive) return;
       if (!this.callActive || !this.gemini.isConnected()) { this.showError("請先按「開始對話」並等待連線完成，才能按住說話。", true); return; }
       this.pttActive = true;
       this.updatePttButton();
-      this.gemini.activityStart();
+      this.mic.begin().catch((error) => { this.stopPtt(); this.showError(error.message); });
       this.stateMachine.toListening();
     }
     stopPtt() {
       if (!this.pttActive) return;
       this.pttActive = false;
       this.updatePttButton();
-      this.gemini.activityEnd();
+      this.mic.end();
       this.stateMachine.toThinking();
     }
     updatePttButton() {
@@ -1007,8 +653,11 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
         if (!this.callActive || callToken !== this.callToken) return;
         this.lipSync.attach();
         // 麥克風串流在通話期間持續開啟（避免每次按 push-to-talk 都重新跳權限視窗），
-        // 但只有 pttActive 為 true（按著按鈕）時才把音訊 chunk 轉送給 Gemini。
-        await this.mic.start((pcm) => { if (this.pttActive) this.gemini.sendAudio(pcm); });
+        // 起訖與 PCM 由 audio thread 依序送出，放開時仍會送完最後一個不足 20ms 的 frame。
+        await this.mic.start((message) => {
+          if (message.type === "ptt") message.active ? this.gemini.activityStart() : this.gemini.activityEnd();
+          else if (message.type === "audio") this.gemini.sendAudio(message.bytes);
+        });
         if (!this.callActive || callToken !== this.callToken) return;
         const sessionContext = await collectSessionContext();
         if (!this.callActive || callToken !== this.callToken) return;
@@ -1125,21 +774,6 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       return { ...DEFAULT_USER_SETTINGS };
     }
   }
-  function resample(input, fromRate, toRate) {
-    if (fromRate === toRate) return input;
-    const ratio = fromRate / toRate;
-    const outputLength = Math.max(1, Math.round(input.length / ratio));
-    const output = new Float32Array(outputLength);
-    for (let index = 0; index < outputLength; index += 1) { const start = Math.floor(index * ratio); const end = Math.min(input.length, Math.max(start + 1, Math.floor((index + 1) * ratio))); let sum = 0; for (let sourceIndex = start; sourceIndex < end; sourceIndex += 1) sum += input[sourceIndex]; output[index] = sum / (end - start); }
-    return output;
-  }
-  function floatToPcm16(samples) {
-    const bytes = new Uint8Array(samples.length * 2); const view = new DataView(bytes.buffer);
-    for (let index = 0; index < samples.length; index += 1) { const sample = clamp(samples[index], -1, 1); view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); }
-    return bytes;
-  }
-  function base64ToBytes(base64) { const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return bytes; }
-  function bytesToBase64(bytes) { let binary = ""; const chunkSize = 0x8000; for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)); return btoa(binary); }
   function bandAverage(data, start, end) { let total = 0; let count = 0; for (let index = start; index < Math.min(end, data.length); index += 1) { total += data[index]; count += 1; } return count ? total / count : 0; }
   function classifyViseme(low, mid, high) { if (low > mid * 1.2 && low > high * 1.15) return "ou"; if (high > mid * 1.1) return high > low * 1.3 ? "ee" : "ih"; if (mid > low * 1.16) return "aa"; return "oh"; }
   function normalizeExpressionName(name) { return String(name).replace(/[^a-z0-9]/gi, "").toLowerCase(); }

@@ -1,9 +1,10 @@
 import { SEGMENTS, createPeer } from "./webrtc-link.js";
+import { MicrophoneInput } from "./microphone.js";
+import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
 
 // operator.js — 手機遙控端：負責 push-to-talk 收音與 Rundown 控制。
 // 不渲染 VRM、不連 Gemini、不播放聲音——所有這些都在投影端（stage.html）處理。
-// 這台裝置只做兩件事：(1) 把麥克風音訊透過 WebRTC 傳給投影端，(2) 把按鈕操作
-// 透過 WebRTC data channel 送出指令。
+// PCM 與 PTT 起訖共用一條 reliable/ordered data channel，避免控制指令超越句尾音訊。
 
 (function () {
   "use strict";
@@ -11,26 +12,19 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "主持中", interrupted: "被打斷" });
   const CONNECTION_LABELS = Object.freeze({ connected: "Gemini 已連線", connecting: "Gemini 連線中…", reconnecting: "Gemini 重新連線中…", failed: "Gemini 連線失敗", offline: "Gemini 尚未連線" });
 
-  function formatMicrophoneError(error) {
-    const name = error?.name || "UnknownError";
-    if (name === "NotAllowedError" || name === "PermissionDeniedError") return new Error("麥克風權限被拒絕，請在瀏覽器設定允許麥克風後再試一次。");
-    if (name === "NotFoundError" || name === "DevicesNotFoundError") return new Error("找不到可用的麥克風。");
-    if (name === "SecurityError") return new Error("瀏覽器阻擋了麥克風，請使用 HTTPS 開啟此頁面。");
-    return new Error(`無法開啟麥克風（${name}）。`);
-  }
-
   class OperatorApp {
     constructor() {
       this.ui = collectUI();
       this.peer = null;
       this.dataConn = null;
-      this.mediaCall = null;
-      this.micStream = null;
+      this.geminiReady = false;
+      this.connectToken = 0;
+      this.mic = new MicrophoneInput(null, { emit: (type, data) => {
+        if (type === "audio.input-level") this.ui.levelBar.style.width = `${Math.round(data.level * 100)}%`;
+      } });
       this.pttActive = false;
       this.currentSegmentId = "";
-      this.levelContext = null;
-      this.levelAnalyser = null;
-      this.levelData = null;
+      this.partial = { user: "", model: "" };
       this.buildSegmentButtons();
       this.bindEvents();
       this.prefillRoomCode();
@@ -60,6 +54,9 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       this.ui.disconnectButton.addEventListener("click", () => this.teardown("已離線，隨時可以重新連線。"));
       this.ui.noteForm.addEventListener("submit", (event) => { event.preventDefault(); this.sendNote(); });
       this.bindPtt();
+      window.addEventListener("blur", () => this.stopPtt());
+      document.addEventListener("visibilitychange", () => { if (document.hidden) this.stopPtt(); });
+      window.addEventListener("pagehide", () => this.teardown(""));
     }
     bindPtt() {
       const button = this.ui.pttButton;
@@ -81,64 +78,85 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       if (!roomCode) { this.showError("請輸入投影端顯示的房號。"); return; }
       this.ui.connectButton.disabled = true;
       this.ui.connectButton.textContent = "連線中…";
+      const token = ++this.connectToken;
       try {
-        // 關閉手機端的即時通話語音處理（AEC/NS/AGC）：手機不會播放現場音響的聲音，AEC 沒有實質作用；
-        // NS/AGC 是為了「人耳聽起來舒服」調校，容易在尾牙現場的音樂/嘈雜聲中誤削語音細節，
-        // 反而讓 Gemini 的辨識結果偏離實際講話內容。改送更接近原始收音的訊號給 Opus 編碼。
-        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
-        this.startLevelMeter(this.micStream);
+        await this.mic.start((message) => {
+          if (token !== this.connectToken || !this.dataConn?.open) return;
+          // Bound transport backlog: do not deliver seconds-old partial instructions after a stall.
+          if (this.dataConn.bufferSize > 50 || this.dataConn.dataChannel?.bufferedAmount > 64000) {
+            this.teardown("網路傳送壅塞，請重新配對後重說這一段。");
+            return;
+          }
+          this.dataConn.send(message);
+        });
+        if (token !== this.connectToken) return;
         if (!this.peer) this.peer = createPeer(undefined);
         await this.waitForPeerOpen();
+        if (token !== this.connectToken) return;
         this.attachPeerHandlers();
         const conn = this.peer.connect(roomCode, { reliable: true });
         this.dataConn = conn;
         conn.on("open", () => {
-          this.mediaCall = this.peer.call(roomCode, this.micStream);
-          this.mediaCall.on("close", () => this.teardown("與投影端的音訊連線已中斷。"));
-          this.mediaCall.on("error", () => this.teardown("與投影端的音訊連線發生錯誤。"));
+          if (this.dataConn !== conn) return;
           this.setConnected(true);
         });
-        conn.on("data", (data) => this.handleStageData(data));
-        conn.on("close", () => this.teardown("與投影端的連線已中斷。"));
-        conn.on("error", (error) => this.showError(`連線發生問題：${error?.message || error}`));
+        conn.on("data", (data) => { if (this.dataConn === conn) this.handleStageData(data); });
+        conn.on("close", () => { if (this.dataConn === conn) this.teardown("與投影端的連線已中斷。"); });
+        conn.on("error", (error) => { if (this.dataConn === conn) this.teardown(`連線發生問題：${error?.message || error}`); });
       } catch (error) {
-        this.showError(error instanceof Error ? error.message : formatMicrophoneError(error).message);
-        this.ui.connectButton.disabled = false;
-        this.ui.connectButton.textContent = "連線";
+        if (token === this.connectToken) this.teardown(error?.message || "無法連線。");
       }
     }
     waitForPeerOpen() {
       if (this.peer.open) return Promise.resolve();
+      const peer = this.peer;
       return new Promise((resolve, reject) => {
         const onOpen = () => { cleanup(); resolve(); };
         const onError = (error) => { cleanup(); reject(error instanceof Error ? error : new Error(String(error?.message || error))); };
-        const cleanup = () => { this.peer.off("open", onOpen); this.peer.off("error", onError); };
-        this.peer.on("open", onOpen);
-        this.peer.on("error", onError);
+        const onClose = () => onError(new Error("配對已取消。"));
+        const cleanup = () => { peer.off("open", onOpen); peer.off("error", onError); peer.off("close", onClose); };
+        peer.on("open", onOpen);
+        peer.on("error", onError);
+        peer.on("close", onClose);
       });
     }
     attachPeerHandlers() {
       if (this.peer._operatorHandlersAttached) return;
       this.peer._operatorHandlersAttached = true;
-      this.peer.on("error", (error) => {
+      const peer = this.peer;
+      peer.on("error", (error) => {
+        if (this.peer !== peer) return;
         if (error?.type === "peer-unavailable") { this.showError("找不到這個房號，請確認投影端已開啟且房號正確。"); this.teardown(""); return; }
         this.showError(`連線發生問題：${error?.message || error}`);
       });
-      this.peer.on("disconnected", () => { if (!this.peer.destroyed) this.peer.reconnect(); });
+      peer.on("disconnected", () => { if (this.peer === peer && !peer.destroyed) peer.reconnect(); });
     }
     handleStageData(message) {
       if (!message || typeof message !== "object") return;
       if (message.type === "status") { this.ui.stateLabel.textContent = STATE_LABELS[message.state] || message.state; return; }
-      if (message.type === "connection") { this.ui.connectionLabel.textContent = CONNECTION_LABELS[message.status] || message.status; return; }
+      if (message.type === "connection") {
+        this.geminiReady = message.status === "connected";
+        if (!this.geminiReady) this.stopPtt();
+        this.ui.connectionLabel.textContent = CONNECTION_LABELS[message.status] || message.status;
+        this.updateControls();
+        return;
+      }
+      if (message.type === "transcript" && ["user", "model"].includes(message.role)) {
+        this.partial[message.role] = mergePartial(this.partial[message.role], normalizeTranscript(message.text));
+        this.ui[message.role === "user" ? "lastHeard" : "lastReply"].textContent = this.partial[message.role];
+        return;
+      }
+      if (message.type === "turn-complete") { this.partial = { user: "", model: "" }; return; }
       if (message.type === "segment-ack") { this.markSegmentActive(message.id); }
     }
     startPtt() {
-      if (this.pttActive || !this.dataConn?.open) return;
+      if (this.pttActive || !this.dataConn?.open || !this.geminiReady) return;
       this.pttActive = true;
       this.ui.pttButton.classList.add("is-active");
       this.ui.pttButton.setAttribute("aria-pressed", "true");
       this.ui.pttLabel.textContent = "放開＝輪到 Nami";
-      this.dataConn.send({ type: "ptt", active: true });
+      this.partial = { user: "", model: "" };
+      this.mic.begin().catch((error) => { this.stopPtt(); this.showError(error.message); });
     }
     stopPtt() {
       if (!this.pttActive) return;
@@ -146,12 +164,11 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       this.ui.pttButton.classList.remove("is-active");
       this.ui.pttButton.setAttribute("aria-pressed", "false");
       this.ui.pttLabel.textContent = "按住說話";
-      this.dataConn?.send({ type: "ptt", active: false });
+      this.mic.end();
     }
     sendSegment(segment) {
-      if (!this.dataConn?.open) return;
+      if (!this.dataConn?.open || !this.geminiReady || this.pttActive) return;
       this.dataConn.send({ type: "segment", id: segment.id });
-      this.markSegmentActive(segment.id);
     }
     markSegmentActive(id) {
       this.currentSegmentId = id;
@@ -159,49 +176,36 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
     }
     sendNote() {
       const text = this.ui.noteInput.value.trim();
-      if (!text || !this.dataConn?.open) return;
+      if (!text || !this.dataConn?.open || !this.geminiReady || this.pttActive) return;
       this.dataConn.send({ type: "note", text });
       this.ui.noteInput.value = "";
-    }
-    startLevelMeter(stream) {
-      try {
-        const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-        this.levelContext = new AudioContextClass();
-        this.levelAnalyser = this.levelContext.createAnalyser();
-        this.levelAnalyser.fftSize = 512;
-        this.levelData = new Uint8Array(this.levelAnalyser.fftSize);
-        this.levelContext.createMediaStreamSource(stream).connect(this.levelAnalyser);
-        const tick = () => {
-          if (!this.levelAnalyser) return;
-          this.levelAnalyser.getByteTimeDomainData(this.levelData);
-          let sum = 0;
-          for (const value of this.levelData) { const sample = (value - 128) / 128; sum += sample * sample; }
-          const level = this.pttActive ? Math.min(1, Math.sqrt(sum / this.levelData.length) * 4) : 0;
-          this.ui.levelBar.style.width = `${Math.round(level * 100)}%`;
-          requestAnimationFrame(tick);
-        };
-        tick();
-      } catch (_) { /* level meter is a nice-to-have, safe to skip on failure */ }
     }
     setConnected(connected) {
       this.ui.pairPanel.hidden = connected;
       this.ui.controlPanel.hidden = !connected;
-      this.ui.pttButton.disabled = !connected;
-      for (const button of this.ui.segmentGrid.querySelectorAll("button")) button.disabled = !connected;
-      this.ui.noteInput.disabled = !connected;
+      this.updateControls();
       this.ui.connectButton.disabled = false;
       this.ui.connectButton.textContent = "連線";
     }
+    updateControls() {
+      const ready = Boolean(this.dataConn?.open && this.geminiReady);
+      this.ui.pttButton.disabled = !ready;
+      for (const button of this.ui.segmentGrid.querySelectorAll("button")) button.disabled = !ready;
+      this.ui.noteInput.disabled = !ready;
+    }
     teardown(message) {
+      this.connectToken++;
       this.stopPtt();
-      try { this.mediaCall?.close(); } catch (_) {}
-      try { this.dataConn?.close(); } catch (_) {}
-      this.mediaCall = null;
+      const conn = this.dataConn;
+      const peer = this.peer;
       this.dataConn = null;
-      this.levelAnalyser = null;
-      if (this.levelContext) { try { this.levelContext.close(); } catch (_) {} this.levelContext = null; }
-      this.micStream?.getTracks().forEach((track) => track.stop());
-      this.micStream = null;
+      this.peer = null;
+      try { conn?.close(); } catch (_) {}
+      try { peer?.destroy(); } catch (_) {}
+      this.mic.stop().catch(() => {});
+      this.geminiReady = false;
+      this.ui.connectionLabel.textContent = CONNECTION_LABELS.offline;
+      this.ui.levelBar.style.width = "0%";
       this.setConnected(false);
       if (message) this.showError(message);
     }
@@ -223,6 +227,7 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       segmentGrid: byId("segmentGrid"),
       pttButton: byId("pttButton"), pttLabel: byId("pttLabel"), levelBar: byId("levelBar"),
       noteForm: byId("noteForm"), noteInput: byId("noteInput"),
+      lastHeard: byId("lastHeard"), lastReply: byId("lastReply"),
       toastRegion: byId("toastRegion"),
     };
   }

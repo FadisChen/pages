@@ -1,49 +1,35 @@
+import { GeminiLiveClient } from "./live-session.js";
+import { GeminiAudioPlayer } from "./audio-player.js";
+import { DEFAULT_USER_SYSTEM_PROMPT } from "./host-config.js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import {
-  AVATAR_EMOTION_TOOL,
   AVATAR_EMOTIONS,
-  createAvatarToolResponse,
-  normalizeAvatarEmotion,
 } from "../Avatar/avatar-emotions.js";
-import { shouldPlayLiveAudio } from "../Avatar/live-audio-policy.js";
 import { collectSessionContext } from "../Avatar/session-context.js";
-import { normalizeTranscript } from "../Avatar/transcript.js";
 import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
 
 // stage.js — 投影端筆電使用：只負責顯示 Avatar、連線 Gemini Live、播放語音（接會場音響）。
 // 不做任何現場控制——push-to-talk 與 Rundown 環節切換的指令，全部來自手機（operator.html）
-// 透過 WebRTC data channel 送過來；麥克風音訊也是透過 WebRTC 從手機即時傳過來的
-// MediaStream，不在這台裝置上呼叫 getUserMedia()。
+// 與 16 kHz PCM 音訊一起透過同一條有序 WebRTC data channel 傳送。
+// 不在這台裝置上呼叫 getUserMedia()，也不重新取樣手機音訊。
 //
 // 這份檔案是 YearEndParty/app.js（單機測試版原型）的姊妹版本：VRM 渲染、Lip Sync、
-// State Machine、Gemini Live client 幾乎原封不動沿用，差異只在「輸入來源」——
+// State Machine 沿用；Gemini Live 與播放使用共用模組。差異在「輸入來源」——
 // 從本機麥克風+本機按鈕，換成 WebRTC 遠端音訊+WebRTC 資料頻道指令。
 
 (function () {
   "use strict";
 
-  const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
   const SETTINGS_KEY = "year-end-party.stage.settings.v1";
-  const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，今晚尾牙晚會的虛擬主持人。";
-  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文主持，語氣熱情、口條清楚、節奏明快，像真人尾牙司儀一樣炒熱氣氛，但用詞得體、適合公司正式場合，回應通常一到三句，不要長篇獨白。工作人員會不定期用文字訊息告訴你「現在環節」或「現場備註」，那是目前唯一可信的現場狀況來源：只依照工作人員切換的環節主持，不要自己宣布進入下一個環節、不要自己編造得獎名單或抽獎結果。收到環節切換文字時，用一兩句話自然承接、帶動氣氛即可，不要逐字覆誦收到的內容，也不要提到你正在使用的系統。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion，每次語音回覆最多一次；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
-  const DEFAULT_USER_SYSTEM_PROMPT = "活潑風趣、很會帶氣氛的尾牙主持人，講話節奏明快，喜歡跟台下互動、適時搞笑但不失分寸";
-  const AUDIO_INPUT_RATE = 16000;
-  const AUDIO_OUTPUT_RATE = 24000;
   const AVATAR_MODEL_URL = "../Avatar/SpringSnow無料版.vrm";
-  const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "主持中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "等待遙控端下指令", listening: "正在聽工作人員說話", thinking: "讓我想一下", speaking: "主持詞正在變成表情", interrupted: "收到，請繼續說" });
   const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
-
-  function buildSystemInstruction(userSystemPrompt) {
-    const personality = String(userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT).trim();
-    return `${REQUIRED_SYSTEM_PROMPT_PREFIX}${personality}。${REQUIRED_SYSTEM_PROMPT}`;
-  }
 
   class EventBus {
     constructor() { this.listeners = new Map(); }
@@ -92,122 +78,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     }
     toIdle() {
       if (this.state === STATES.SPEAKING || this.state === STATES.LISTENING || this.state === STATES.THINKING || this.state === STATES.INTERRUPTED) this.transition(STATES.IDLE);
-    }
-  }
-
-  class GeminiAudioPlayer {
-    constructor(bus) {
-      this.bus = bus;
-      this.context = null;
-      this.outputGain = null;
-      this.analyser = null;
-      this.activeSources = new Set();
-      this.nextPlayTime = 0;
-      this.lastEnqueueAt = 0;
-    }
-    async ensureContext() {
-      if (!this.context) {
-        const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!AudioContextClass) throw new Error("此瀏覽器不支援 Web Audio API。");
-        this.context = new AudioContextClass({ latencyHint: "interactive" });
-        this.outputGain = this.context.createGain();
-        this.outputGain.gain.value = .92;
-        this.analyser = this.context.createAnalyser();
-        this.analyser.fftSize = 1024;
-        this.analyser.smoothingTimeConstant = .55;
-        this.outputGain.connect(this.analyser);
-        this.analyser.connect(this.context.destination);
-        this.nextPlayTime = this.context.currentTime;
-      }
-      if (this.context.state === "suspended") await this.context.resume();
-      return this.context;
-    }
-    getContext() { return this.context; }
-    getAnalyser() { return this.analyser; }
-    enqueue(bytes, sampleRate = AUDIO_OUTPUT_RATE) {
-      if (!this.context || !this.outputGain || !bytes?.byteLength) return;
-      const sampleCount = Math.floor(bytes.byteLength / 2);
-      if (!sampleCount) return;
-      const buffer = this.context.createBuffer(1, sampleCount, sampleRate);
-      const channel = buffer.getChannelData(0);
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      for (let index = 0; index < sampleCount; index += 1) channel[index] = view.getInt16(index * 2, true) / 32768;
-      const source = this.context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.outputGain);
-      const startAt = Math.max(this.context.currentTime + .025, this.nextPlayTime);
-      source.start(startAt);
-      this.nextPlayTime = startAt + buffer.duration;
-      this.lastEnqueueAt = performance.now();
-      this.activeSources.add(source);
-      source.onended = () => {
-        this.activeSources.delete(source);
-        try { source.disconnect(); } catch (_) { /* already disconnected */ }
-        if (!this.activeSources.size) this.bus.emit("audio.drained", {});
-      };
-      this.bus.emit("audio.started", { sampleRate, duration: buffer.duration });
-    }
-    isPlaying() { return Boolean(this.context && this.nextPlayTime > this.context.currentTime + .018 && this.activeSources.size); }
-    stop() {
-      for (const source of this.activeSources) { try { source.stop(); } catch (_) { /* already stopped */ } }
-      this.activeSources.clear();
-      if (this.context) this.nextPlayTime = this.context.currentTime;
-      this.lastEnqueueAt = 0;
-      this.bus.emit("audio.stopped", {});
-    }
-    async close() {
-      this.stop();
-      if (this.context && this.context.state !== "closed") await this.context.close();
-      this.context = null;
-      this.outputGain = null;
-      this.analyser = null;
-    }
-  }
-
-  // 取代 app.js 裡的 MicrophoneInput：不呼叫本機 getUserMedia()，而是把 WebRTC
-  // 從手機傳來的 remote MediaStream 接進 Web Audio pipeline，其餘（resample、轉
-  // PCM16、音量 meter）跟原本本機麥克風管線完全一樣。
-  class RemoteMicInput {
-    constructor(audioPlayer, bus) {
-      this.audioPlayer = audioPlayer;
-      this.bus = bus;
-      this.source = null;
-      this.processor = null;
-      this.muteGain = null;
-      this.onChunk = null;
-      this.running = false;
-    }
-    attach(remoteStream, onChunk) {
-      this.detach();
-      const context = this.audioPlayer.getContext();
-      if (!context) { this.bus.emit("remote-mic.error", new Error("AudioContext 尚未就緒，請先按「開始對話」。")); return; }
-      this.onChunk = onChunk;
-      this.source = context.createMediaStreamSource(remoteStream);
-      this.processor = context.createScriptProcessor(2048, 1, 1);
-      this.muteGain = context.createGain();
-      this.muteGain.gain.value = 0;
-      this.processor.onaudioprocess = (event) => this.capture(context, event.inputBuffer.getChannelData(0));
-      this.source.connect(this.processor);
-      this.processor.connect(this.muteGain);
-      this.muteGain.connect(context.destination);
-      this.running = true;
-      this.bus.emit("remote-mic.attached", {});
-    }
-    capture(context, samples) {
-      if (!this.running) return;
-      const resampled = resample(samples, context.sampleRate, AUDIO_INPUT_RATE);
-      this.onChunk?.(floatToPcm16(resampled));
-      let sum = 0;
-      for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
-      this.bus.emit("audio.input-level", { level: Math.min(1, Math.sqrt(sum / samples.length) * 3.5) });
-    }
-    detach() {
-      this.running = false;
-      if (this.processor) { this.processor.onaudioprocess = null; try { this.processor.disconnect(); } catch (_) {} }
-      try { this.source?.disconnect(); } catch (_) {}
-      try { this.muteGain?.disconnect(); } catch (_) {}
-      this.source = null; this.processor = null; this.muteGain = null; this.onChunk = null;
-      this.bus.emit("remote-mic.detached", {});
     }
   }
 
@@ -599,196 +469,12 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     }
   }
 
-  class GeminiLiveClient {
-    constructor(bus) {
-      this.bus = bus;
-      this.socket = null;
-      this.config = null;
-      this.ready = false;
-      this.stopped = true;
-      this.failures = 0;
-      this.reconnectTimer = null;
-      this.resumptionHandle = "";
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
-      this.runId = 0;
-      this.suppressAudio = false;
-      this.initialContextSent = false;
-    }
-    start(config) {
-      this.disconnect(false);
-      this.config = config;
-      this.stopped = false;
-      this.failures = 0;
-      this.runId += 1;
-      this.suppressAudio = false;
-      this.resumptionHandle = "";
-      this.initialContextSent = false;
-      this.connect(false);
-    }
-    disconnect(notify = true) {
-      this.stopped = true;
-      this.runId += 1;
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-      this.socket?.close(1000, "user hangup");
-      this.socket = null;
-      this.ready = false;
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
-      if (notify) this.bus.emit("gemini.disconnected", { status: "offline" });
-    }
-    isConnected() { return this.ready && this.socket?.readyState === WebSocket.OPEN; }
-    connect(reconnecting) {
-      if (this.stopped || !this.config) return;
-      this.bus.emit("gemini.status", { status: reconnecting ? "reconnecting" : "connecting" });
-      let socket;
-      try { socket = new WebSocket(`${WS_BASE}?key=${encodeURIComponent(this.config.apiKey)}`); }
-      catch (error) { this.fail(error); return; }
-      this.socket = socket;
-      socket.onopen = () => { try { socket.send(JSON.stringify(this.setupMessage())); } catch (error) { this.fail(error); } };
-      socket.onmessage = (event) => this.handleRawMessage(socket, event.data);
-      socket.onclose = (event) => this.handleClose(socket, event);
-    }
-    setupMessage() {
-      const generationConfig = { responseModalities: ["AUDIO"] };
-      if (this.config.voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } } };
-      const thinking = String(this.config.thinking || "").trim().toUpperCase();
-      if (thinking) {
-        const option = { thinkingLevel: thinking };
-        if (Object.values(option)[0] !== undefined) generationConfig.thinkingConfig = option;
-      }
-      const setup = {
-        model: `models/${GEMINI_LIVE_MODEL}`,
-        generationConfig,
-        systemInstruction: { parts: [{ text: buildSystemInstruction(this.config.userSystemPrompt) }] },
-        // 手動語音活動偵測：turn 起訖完全交給遙控端（手機）的 push-to-talk 按鈕決定，
-        // 而不是讓伺服器自動偵測——現場背景音樂與人聲很容易讓自動 VAD 誤判。
-        realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
-        sessionResumption: this.resumptionHandle ? { handle: this.resumptionHandle } : {},
-        contextWindowCompression: { triggerTokens: 8000, slidingWindow: {} },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL] }],
-      };
-      if (!this.initialContextSent && !this.resumptionHandle) setup.historyConfig = { initialHistoryInClientContent: true };
-      return { setup };
-    }
-    sendAudio(bytes) {
-      if (this.stopped || !bytes?.byteLength) return;
-      if (this.ready && this.socket?.readyState === WebSocket.OPEN) { this.sendAudioNow(bytes); return; }
-      this.audioBuffer.push(bytes);
-      this.audioBufferBytes += bytes.byteLength;
-      const maxBytes = AUDIO_INPUT_RATE * 2 * 15;
-      while (this.audioBufferBytes > maxBytes && this.audioBuffer.length) this.audioBufferBytes -= this.audioBuffer.shift().byteLength;
-    }
-    activityStart() { this.send({ realtimeInput: { activityStart: {} } }); }
-    activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
-    sendText(text) {
-      if (!this.isConnected() || !String(text).trim()) return false;
-      this.send({ realtimeInput: { text: String(text).trim() } });
-      this.suppressAudio = false;
-      return true;
-    }
-    sendAudioNow(bytes) { this.send({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: bytesToBase64(bytes) } } }); }
-    flushAudioBuffer() { const queued = this.audioBuffer; this.audioBuffer = []; this.audioBufferBytes = 0; queued.forEach((bytes) => this.sendAudioNow(bytes)); }
-    send(message) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
-    async handleRawMessage(socket, raw) {
-      if (socket !== this.socket) return;
-      try { const text = typeof raw === "string" ? raw : await raw.text(); this.handleMessage(socket, JSON.parse(text)); }
-      catch (error) { this.fail(error); }
-    }
-    handleMessage(socket, message) {
-      if (message.setupComplete) {
-        this.ready = true;
-        this.failures = 0;
-        if (this.initialContextSent || this.sendInitialContext(socket)) this.flushAudioBuffer();
-        this.bus.emit("gemini.connected", { model: GEMINI_LIVE_MODEL });
-      }
-      const update = message.sessionResumptionUpdate;
-      if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
-      const content = message.serverContent;
-      const hasToolCall = Boolean(message.toolCall?.functionCalls?.length);
-      if (message.error) {
-        this.bus.emit("gemini.error", new Error(message.error.message || "Gemini Live 回傳錯誤。"));
-        return;
-      }
-      if (content) {
-        const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data) || [];
-        const playAudio = shouldPlayLiveAudio({ hasToolCall, suppressAudio: this.suppressAudio });
-        if (audioParts.length && playAudio) for (const part of audioParts) this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate: AUDIO_OUTPUT_RATE });
-        const inputText = normalizeTranscript(content.inputTranscription?.text);
-        const outputText = normalizeTranscript(content.outputTranscription?.text);
-        if (inputText) { this.suppressAudio = false; this.bus.emit("gemini.user-transcript", inputText); }
-        if (outputText && !hasToolCall) this.bus.emit("gemini.model-transcript", outputText);
-        if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
-        if (content.interrupted) { this.suppressAudio = false; this.bus.emit("gemini.interrupted", {}); }
-        if (content.turnComplete) { this.suppressAudio = false; this.bus.emit("gemini.turn-complete", {}); }
-      }
-      if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
-      if (message.goAway) socket.close(1000, "server requested reconnect");
-    }
-    sendInitialContext(socket) {
-      if (this.initialContextSent) return true;
-      const text = String(this.config?.sessionContext || "").trim();
-      if (!text || socket?.readyState !== 1) return false;
-      try {
-        socket.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: true } }));
-        this.initialContextSent = true;
-        this.bus.emit("gemini.session-context-sent", {});
-        return true;
-      } catch (error) {
-        this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error)));
-        return false;
-      }
-    }
-    handleToolCalls(socket, calls) {
-      this.bus.emit("gemini.avatar-emotion-tool-call", { calls });
-      let applied = false;
-      for (const call of calls) {
-        let result;
-        if (call?.name !== AVATAR_EMOTION_TOOL.name) {
-          result = { ok: false, error: `不支援的 Avatar tool：${String(call?.name || "")}。` };
-        } else {
-          let args = call.args;
-          if (typeof args === "string") {
-            try { args = JSON.parse(args); } catch (_) { args = null; }
-          }
-          result = normalizeAvatarEmotion(args);
-        }
-        if (result.ok && applied) result = { ok: false, error: "每個回覆最多套用一個 Avatar emotion。" };
-        if (result.ok) {
-          applied = true;
-          this.bus.emit("gemini.avatar-emotion", { emotion: result.emotion });
-        }
-        this.sendToolResponse(socket, call, result);
-      }
-    }
-    sendToolResponse(socket, call, result) {
-      if (socket?.readyState !== 1) return;
-      socket.send(JSON.stringify(createAvatarToolResponse(call, result)));
-    }
-    handleClose(socket, event) {
-      if (socket !== this.socket || this.stopped) return;
-      this.ready = false;
-      this.socket = null;
-      this.failures += 1;
-      if (this.failures >= 3) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", new Error(`Gemini 連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`)); return; }
-      const delay = [1000, 2500, 5000][this.failures - 1];
-      this.bus.emit("gemini.status", { status: "reconnecting", retryIn: delay });
-      this.reconnectTimer = setTimeout(() => this.connect(true), delay);
-    }
-    fail(error) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error))); }
-  }
-
-  // 手機遙控端連線：PeerJS DataConnection（指令）+ MediaConnection（手機麥克風音訊）。
   class PeerLink {
     constructor(bus) {
       this.bus = bus;
       this.peer = null;
       this.roomCode = "";
       this.dataConn = null;
-      this.remoteStream = null;
     }
     start() {
       this.roomCode = randomRoomCode();
@@ -799,11 +485,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.peer = peer;
       peer.on("open", (peerId) => { this.roomCode = peerId; this.bus.emit("peerlink.ready", { roomCode: peerId }); });
       peer.on("connection", (conn) => this.attachDataConnection(conn));
-      peer.on("call", (call) => {
-        call.answer();
-        call.on("stream", (remoteStream) => { this.remoteStream = remoteStream; this.bus.emit("peerlink.stream", { remoteStream }); });
-        call.on("close", () => { this.remoteStream = null; this.bus.emit("peerlink.stream-closed", {}); });
-      });
       peer.on("error", (error) => {
         if (error?.type === "unavailable-id") { try { peer.destroy(); } catch (_) {} this.openPeer(randomRoomCode()); return; }
         this.bus.emit("peerlink.error", error instanceof Error ? error : new Error(String(error?.message || error)));
@@ -811,11 +492,12 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       peer.on("disconnected", () => { this.bus.emit("peerlink.status", { status: "reconnecting" }); if (!peer.destroyed) peer.reconnect(); });
     }
     attachDataConnection(conn) {
-      this.dataConn?.close();
+      const previous = this.dataConn;
       this.dataConn = conn;
-      conn.on("open", () => this.bus.emit("peerlink.connected", {}));
-      conn.on("data", (data) => this.bus.emit("peerlink.data", data));
-      conn.on("close", () => { if (this.dataConn === conn) this.dataConn = null; this.bus.emit("peerlink.disconnected", {}); });
+      if (previous) { previous.close(); this.bus.emit("peerlink.disconnected", {}); }
+      conn.on("open", () => { if (this.dataConn === conn) this.bus.emit("peerlink.connected", {}); });
+      conn.on("data", (data) => { if (this.dataConn === conn) this.bus.emit("peerlink.data", data); });
+      conn.on("close", () => { if (this.dataConn !== conn) return; this.dataConn = null; this.bus.emit("peerlink.disconnected", {}); });
       conn.on("error", (error) => this.bus.emit("peerlink.error", error instanceof Error ? error : new Error(String(error?.message || error))));
     }
     send(message) {
@@ -830,7 +512,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.ui = collectUI();
       this.stateMachine = new AvatarStateMachine(this.bus);
       this.audioPlayer = new GeminiAudioPlayer(this.bus);
-      this.remoteMic = new RemoteMicInput(this.audioPlayer, this.bus);
       this.lipSync = new LipSyncEngine(this.audioPlayer, this.bus);
       this.avatar = new VRMAvatarController(this.ui.avatarCanvas, this.ui.stageVisual, this.bus);
       this.gemini = new GeminiLiveClient(this.bus);
@@ -843,7 +524,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.pttActive = false;
       this.currentSegmentId = "";
       this.hasEverPaired = false;
-      this.pendingRemoteStream = null;
       this.lastFrame = performance.now();
       this.fps = 60;
       this.bindEvents();
@@ -868,40 +548,39 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.bus.on("avatar.loading", ({ progress }) => { this.ui.modelStatus.textContent = `VRM / ${progress > 0 ? `${Math.round(progress * 100)}%` : "LOADING"}`; });
       this.bus.on("avatar.ready", () => { this.ui.modelStatus.textContent = "VRM / READY"; });
       this.bus.on("avatar.error", (error) => { this.ui.modelStatus.textContent = "VRM / ERROR"; this.showError(`VRM 載入失敗：${error.message || error}`, true); });
-      this.bus.on("remote-mic.error", (error) => this.showError(error.message, true));
 
       this.bus.on("gemini.status", ({ status }) => this.setConnectionStatus(status));
       this.bus.on("gemini.connected", ({ model }) => { this.setConnectionStatus("connected"); this.stateMachine.toListening(); this.showToast(`已連上 ${model.replace("-preview", "")}。`); });
       this.bus.on("gemini.disconnected", () => this.setConnectionStatus("offline"));
       this.bus.on("gemini.error", (error) => this.showError(error.message));
-      this.bus.on("gemini.avatar-emotion-tool-call", () => { this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.input-start", () => { this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.connection-lost", () => { this.pttActive = false; this.audioPlayer.stop(); this.lipSync.reset(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
       this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.turnComplete = false; this.peerLink.send({ type: "transcript", role: "user", text }); });
       this.bus.on("gemini.model-transcript", (text) => { this.peerLink.send({ type: "transcript", role: "model", text }); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
       this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); });
-      this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; });
+      this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.peerLink.send({ type: "turn-complete" }); });
 
       this.bus.on("peerlink.ready", ({ roomCode }) => this.showRoomCode(roomCode));
-      this.bus.on("peerlink.connected", () => { this.hasEverPaired = true; this.setPeerStatus(true); this.setPairPanelVisible(false); });
-      this.bus.on("peerlink.disconnected", () => { this.setPeerStatus(false); this.stopPtt(); this.remoteMic.detach(); if (!this.hasEverPaired) this.setPairPanelVisible(true); });
-      this.bus.on("peerlink.stream", ({ remoteStream }) => this.attachRemoteStream(remoteStream));
-      this.bus.on("peerlink.stream-closed", () => { this.pendingRemoteStream = null; this.remoteMic.detach(); });
+      this.bus.on("peerlink.connected", () => {
+        this.hasEverPaired = true; this.setPeerStatus(true); this.setPairPanelVisible(false);
+        this.peerLink.send({ type: "connection", status: this.gemini.isConnected() ? "connected" : "offline" });
+        this.peerLink.send({ type: "status", state: this.stateMachine.state });
+      });
+      this.bus.on("peerlink.disconnected", () => { this.setPeerStatus(false); this.stopPtt(); if (!this.hasEverPaired) this.setPairPanelVisible(true); });
       this.bus.on("peerlink.error", (error) => this.showError(`遙控端連線發生問題：${error.message}`));
       this.bus.on("peerlink.data", (message) => this.handlePeerData(message));
-    }
-    // 手機的 WebRTC 音訊有可能在筆電還沒按「開始對話」（AudioContext 尚未建立）前就先連上；
-    // 先記住這個 stream，等 startCall() 建立好 AudioContext 之後再補接上去，不會漏接。
-    attachRemoteStream(remoteStream) {
-      this.pendingRemoteStream = remoteStream;
-      if (!this.audioPlayer.getContext()) return;
-      this.remoteMic.attach(remoteStream, (pcm) => { if (this.pttActive) this.gemini.sendAudio(pcm); });
-      this.pendingRemoteStream = null;
     }
     handlePeerData(message) {
       if (!message || typeof message !== "object") return;
       if (message.type === "ptt") { message.active ? this.startPtt() : this.stopPtt(); return; }
+      if (message.type === "audio") {
+        const bytes = message.bytes instanceof ArrayBuffer ? new Uint8Array(message.bytes) : message.bytes;
+        if (this.pttActive && bytes instanceof Uint8Array && bytes.byteLength <= 640 && bytes.byteLength % 2 === 0) this.gemini.sendAudio(bytes);
+        return;
+      }
       if (message.type === "segment") { const segment = SEGMENTS.find((item) => item.id === message.id); if (segment) this.activateSegment(segment); return; }
       if (message.type === "note") { const text = String(message.text || "").trim(); if (text && this.gemini.sendText(text)) this.stateMachine.toThinking(); }
     }
@@ -961,7 +640,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
         await this.audioPlayer.ensureContext();
         if (!this.callActive || callToken !== this.callToken) return;
         this.lipSync.attach();
-        if (this.pendingRemoteStream) this.attachRemoteStream(this.pendingRemoteStream);
         const sessionContext = await collectSessionContext();
         if (!this.callActive || callToken !== this.callToken) return;
         this.gemini.start({ ...config, sessionContext });
@@ -1082,21 +760,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       return { ...DEFAULT_USER_SETTINGS };
     }
   }
-  function resample(input, fromRate, toRate) {
-    if (fromRate === toRate) return input;
-    const ratio = fromRate / toRate;
-    const outputLength = Math.max(1, Math.round(input.length / ratio));
-    const output = new Float32Array(outputLength);
-    for (let index = 0; index < outputLength; index += 1) { const start = Math.floor(index * ratio); const end = Math.min(input.length, Math.max(start + 1, Math.floor((index + 1) * ratio))); let sum = 0; for (let sourceIndex = start; sourceIndex < end; sourceIndex += 1) sum += input[sourceIndex]; output[index] = sum / (end - start); }
-    return output;
-  }
-  function floatToPcm16(samples) {
-    const bytes = new Uint8Array(samples.length * 2); const view = new DataView(bytes.buffer);
-    for (let index = 0; index < samples.length; index += 1) { const sample = clamp(samples[index], -1, 1); view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); }
-    return bytes;
-  }
-  function base64ToBytes(base64) { const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return bytes; }
-  function bytesToBase64(bytes) { let binary = ""; const chunkSize = 0x8000; for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)); return btoa(binary); }
   function bandAverage(data, start, end) { let total = 0; let count = 0; for (let index = start; index < Math.min(end, data.length); index += 1) { total += data[index]; count += 1; } return count ? total / count : 0; }
   function classifyViseme(low, mid, high) { if (low > mid * 1.2 && low > high * 1.15) return "ou"; if (high > mid * 1.1) return high > low * 1.3 ? "ee" : "ih"; if (mid > low * 1.16) return "aa"; return "oh"; }
   function normalizeExpressionName(name) { return String(name).replace(/[^a-z0-9]/gi, "").toLowerCase(); }

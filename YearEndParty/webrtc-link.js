@@ -5,7 +5,7 @@
 // 兩台不同瀏覽器的裝置直接互相發現、對話——需要一個「牽線」機制。這裡用 WebRTC
 // （透過 PeerJS 套件簡化 API），PeerJS 的免費公用雲端 broker 只負責「配對／交換連線
 // 資訊」這件事本身，一旦兩台裝置的 P2P 連線建立起來，麥克風音訊與控制指令就直接在
-// 兩台裝置之間傳送（或在 P2P 打不通時透過 PeerJS 的 TURN 中繼），完全不會流經任何
+// 兩台裝置之間傳送（有自行配置 TURN 時才可中繼），完全不會流經任何
 // 我們自己架設的伺服器。
 //
 // 已知風險：若會場 Wi-Fi 對同網段裝置做「用戶隔離」（很多飯店/場地會這樣設定），
@@ -35,7 +35,8 @@ const SEGMENTS = Object.freeze([
 ]);
 
 // operator → stage 的訊息（走 PeerJS DataConnection）：
-//   { type: "ptt", active: true|false }        按住/放開 push-to-talk
+//   { type: "ptt", active: true|false }        AudioWorklet 產生的發話起訖
+//   { type: "audio", bytes: Uint8Array }      16 kHz mono PCM16 LE，每包最多 640 bytes
 //   { type: "segment", id: "lucky_draw" }       切換 Rundown 環節
 //   { type: "note", text: "..." }               現場備註／文字訊息
 //
@@ -43,7 +44,10 @@ const SEGMENTS = Object.freeze([
 //   { type: "status", state: "idle"|"listening"|"thinking"|"speaking"|"interrupted" }
 //   { type: "connection", status: "connected"|"connecting"|"reconnecting"|"failed"|"offline" }
 //   { type: "transcript", role: "user"|"model", text: "..." }
+//   { type: "turn-complete" }                 清除本輪逐字稿合併狀態
 //   { type: "segment-ack", id: "lucky_draw" }   確認環節已套用
+// 音訊與起訖必須使用同一條 reliable:true DataConnection，最後一包 PCM 先於 active:false。
+// 不再建立 MediaConnection，也不在投影端重新擷取/取樣遠端 MediaStream。
 
 function randomRoomCode() {
   const random = Math.random().toString(36).slice(2, 8);

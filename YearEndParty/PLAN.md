@@ -1,5 +1,7 @@
 # 計劃書 — 尾牙主持人 Nami（Gemini Live + VRM Avatar）
 
+> 2026-09-11 更新：本文件保留第一版設計紀錄。語音傳輸已由 MediaStream 改為有序 PCM data channel，Gemini／收音／播放已集中為共用模組。**目前實作、問題證據與後續計畫以 [ARCHITECTURE_PLAN.md](./ARCHITECTURE_PLAN.md) 為準。**
+
 ## 0. 與既有專案的關係
 
 `Avatar/` 資料夾不只是一份 PRD，而是一個已經可以動的完整實作——`Avatar/index.html` + `Avatar/app.js`（three.js + `@pixiv/three-vrm` + Gemini Live WebSocket + client-side lip sync，全部串好了）、`Avatar/SpringSnow無料版.vrm`（實際的 VRM 模型檔）、以及一組共用小工具模組。**YearEndParty 不是從 PRD 重新做一個 Avatar 系統，而是直接 fork `Avatar/app.js` 這份已驗證可動的程式碼，在上面加尾牙主持人需要的行為。**
