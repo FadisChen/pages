@@ -1,7 +1,7 @@
-function shouldPlayLiveAudio({ hasToolCall = false, suppressAudio = false } = {}) {
-  // A synchronous tool call resumes the same model turn after the tool response.
-  // Drop any pre-tool audio so the resumed turn cannot be heard twice.
-  return !hasToolCall && !suppressAudio;
+function shouldPlayLiveAudio({ interrupted = false, suppressAudio = false } = {}) {
+  // Emotion tools affect the avatar, not the validity of already received PCM.
+  // Only a real interruption or explicit suppression invalidates output audio.
+  return !interrupted && !suppressAudio;
 }
 
 export { shouldPlayLiveAudio };

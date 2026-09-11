@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { VRMLoaderPlugin } from "@pixiv/three-vrm";
+import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
 import {
   AVATAR_EMOTION_TOOL,
   AVATAR_EMOTIONS,
@@ -19,16 +19,22 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，";
   const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion，每次語音回覆最多一次；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
   const DEFAULT_USER_SYSTEM_PROMPT = "一位溫柔、敏銳、簡潔的臺灣 AI 朋友";
-  const AUDIO_INPUT_RATE = 16000;
   const AUDIO_OUTPUT_RATE = 24000;
-  const AVATAR_MODEL_URL = "./SpringSnow無料版.vrm";
+  const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
+  const AVATAR_MODELS = Object.freeze([
+    { id: "springsnow", name: "SpringSnow", url: "./SpringSnow無料版.vrm" },
+    { id: "mia", name: "Mia", url: "./mia.vrm" },
+    { id: "sha", name: "Sha", url: "./sha.vrm" },
+    { id: "su", name: "Su", url: "./su.vrm" },
+  ]);
+  const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "回應中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "準備好聽你說話", listening: "我正在聽", thinking: "讓我想一下", speaking: "聲音正在變成表情", interrupted: "收到，你可以繼續說" });
-  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
+  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "", avatarModel: DEFAULT_AVATAR_MODEL_ID });
 
   function buildSystemInstruction(userSystemPrompt) {
     const personality = String(userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT).trim();
@@ -140,7 +146,8 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const source = this.context.createBufferSource();
       source.buffer = buffer;
       source.connect(this.outputGain);
-      const startAt = Math.max(this.context.currentTime + .025, this.nextPlayTime);
+      // Absorb short arrival jitter once, then schedule subsequent chunks contiguously.
+      const startAt = Math.max(this.context.currentTime + (this.activeSources.size ? 0 : .12), this.nextPlayTime);
       source.start(startAt);
       this.nextPlayTime = startAt + buffer.duration;
       this.lastEnqueueAt = performance.now();
@@ -154,7 +161,10 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     }
     isPlaying() { return Boolean(this.context && this.nextPlayTime > this.context.currentTime + .018 && this.activeSources.size); }
     stop() {
-      for (const source of this.activeSources) { try { source.stop(); } catch (_) { /* already stopped */ } }
+      for (const source of this.activeSources) {
+        source.onended = null;
+        try { source.stop(); source.disconnect(); } catch (_) { /* already stopped */ }
+      }
       this.activeSources.clear();
       if (this.context) this.nextPlayTime = this.context.currentTime;
       this.lastEnqueueAt = 0;
@@ -180,57 +190,68 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.muteGain = null;
       this.running = false;
       this.onChunk = null;
+      this.generation = 0;
     }
     async start(onChunk) {
       if (this.running) return;
+      const generation = ++this.generation;
       if (!globalThis.isSecureContext && !isLocalMicrophoneOrigin()) throw new Error("麥克風需要安全來源，請使用 HTTPS 或 localhost 開啟此頁面。");
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("此瀏覽器不提供麥克風擷取 API，請改用最新版 Chrome 或 Edge。");
-      this.context = await this.audioPlayer.ensureContext();
+      const context = await this.audioPlayer.ensureContext();
+      if (generation !== this.generation) return;
+      this.context = context;
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        if (generation !== this.generation) { stream.getTracks().forEach((track) => track.stop()); return; }
+        this.stream = stream;
         const track = stream.getAudioTracks()[0];
         try {
           await track?.applyConstraints({ echoCancellation: { ideal: true }, noiseSuppression: { ideal: true }, autoGainControl: { ideal: true }, channelCount: { ideal: 1 } });
         } catch (_) { /* optional enhancements must not prevent microphone access */ }
       } catch (error) {
+        if (generation !== this.generation) return;
         throw formatMicrophoneError(error);
       }
       try {
-        this.stream = stream;
+        if (generation !== this.generation) return;
+        await context.audioWorklet.addModule(AUDIO_WORKLET_URL);
+        if (generation !== this.generation) return;
         this.onChunk = onChunk;
-        this.source = this.context.createMediaStreamSource(stream);
-        this.processor = this.context.createScriptProcessor(2048, 1, 1);
-        this.muteGain = this.context.createGain();
+        this.source = context.createMediaStreamSource(stream);
+        this.processor = new AudioWorkletNode(context, "avatar-pcm-capture", { channelCount: 1, channelCountMode: "explicit" });
+        this.muteGain = context.createGain();
         this.muteGain.gain.value = 0;
-        this.processor.onaudioprocess = (event) => this.capture(event.inputBuffer.getChannelData(0));
+        this.processor.port.onmessage = ({ data }) => {
+          if (!this.running || generation !== this.generation) return;
+          this.onChunk?.(data.bytes);
+          this.bus.emit("audio.input-level", { level: data.level });
+        };
         this.source.connect(this.processor);
         this.processor.connect(this.muteGain);
         this.muteGain.connect(this.context.destination);
         this.running = true;
         this.bus.emit("microphone.started", {});
       } catch (error) {
-        stream.getTracks().forEach((track) => track.stop());
-        this.stream = null;
-        this.onChunk = null;
+        if (generation !== this.generation) return;
+        await this.stop();
         throw new Error(`麥克風音訊管線建立失敗：${error?.message || "未知錯誤"}`);
       }
     }
-    capture(samples) {
-      if (!this.running || !this.context) return;
-      const resampled = resample(samples, this.context.sampleRate, AUDIO_INPUT_RATE);
-      this.onChunk?.(floatToPcm16(resampled));
-      let sum = 0;
-      for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
-      this.bus.emit("audio.input-level", { level: Math.min(1, Math.sqrt(sum / samples.length) * 3.5) });
-    }
     async stop() {
+      this.generation++;
       this.running = false;
-      if (this.processor) { this.processor.onaudioprocess = null; try { this.processor.disconnect(); } catch (_) {} }
+      if (this.processor) {
+        this.processor.port.onmessage = null;
+        this.processor.port.postMessage({ type: "stop" });
+        this.processor.port.close();
+        try { this.processor.disconnect(); } catch (_) {}
+      }
       try { this.source?.disconnect(); } catch (_) {}
       try { this.muteGain?.disconnect(); } catch (_) {}
       this.stream?.getTracks().forEach((track) => track.stop());
       this.context = null; this.stream = null; this.source = null; this.processor = null; this.muteGain = null; this.onChunk = null;
+      this.bus.emit("audio.input-level", { level: 0 });
       this.bus.emit("microphone.stopped", {});
     }
   }
@@ -295,16 +316,18 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   }
 
   class VRMAvatarController {
-    constructor(canvas, interactionSurface, bus) {
+    constructor(canvas, interactionSurface, bus, modelUrl) {
       this.canvas = canvas;
       this.interactionSurface = interactionSurface || canvas.parentElement || canvas;
       this.bus = bus;
+      this.modelUrl = modelUrl || AVATAR_MODELS[0].url;
       this.renderer = null;
       this.scene = null;
       this.camera = null;
       this.vrm = null;
       this.loaded = false;
       this.loadProgress = 0;
+      this.loadToken = 0;
       this.bones = {};
       this.restPose = new Map();
       this.expressionAliases = {};
@@ -432,20 +455,36 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         queueMicrotask(() => this.bus.emit("avatar.error", error instanceof Error ? error : new Error(String(error))));
       }
     }
+    async switchModel(url) {
+      if (!url || url === this.modelUrl) return;
+      this.modelUrl = url;
+      await this.loadModel();
+    }
     async loadModel() {
       if (!this.renderer) return;
+      const requestToken = ++this.loadToken;
+      this.loaded = false;
+      if (this.vrm?.scene) {
+        this.scene.remove(this.vrm.scene);
+        VRMUtils.deepDispose(this.vrm.scene);
+      }
+      this.vrm = null;
+      this.bones = {};
+      this.restPose.clear();
+      this.expressionAliases = {};
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
       this.bus.emit("avatar.loading", { progress: 0 });
       try {
-        const gltf = await loader.loadAsync(AVATAR_MODEL_URL, (progress) => {
+        const gltf = await loader.loadAsync(this.modelUrl, (progress) => {
           const total = Number(progress.total) || 0;
           const loaded = Number(progress.loaded) || 0;
           this.loadProgress = total ? clamp(loaded / total, 0, 1) : this.loadProgress;
           this.bus.emit("avatar.loading", { progress: this.loadProgress });
         });
+        if (requestToken !== this.loadToken) return;
         const vrm = gltf.userData.vrm;
-        if (!vrm?.scene) throw new Error("SpringSnow無料版.vrm 沒有可顯示的 VRM scene。");
+        if (!vrm?.scene) throw new Error(`${this.modelUrl} 沒有可顯示的 VRM scene。`);
         this.vrm = vrm;
         this.vrm.scene.rotation.y = Math.PI;
         this.scene.add(this.vrm.scene);
@@ -453,6 +492,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         this.loaded = true;
         this.bus.emit("avatar.ready", { expressionNames: Object.keys(this.expressionAliases).filter((name) => this.expressionAliases[name]) });
       } catch (error) {
+        if (requestToken !== this.loadToken) return;
         this.loaded = false;
         this.bus.emit("avatar.error", error instanceof Error ? error : new Error(String(error)));
       }
@@ -634,33 +674,25 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.failures = 0;
       this.reconnectTimer = null;
       this.resumptionHandle = "";
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
-      this.runId = 0;
-      this.suppressAudio = false;
       this.initialContextSent = false;
     }
     start(config) {
       this.disconnect(false);
-      this.config = config;
+      this.config = { ...config, voice: String(config.voice || "Aoede").trim() || "Aoede" };
       this.stopped = false;
       this.failures = 0;
-      this.runId += 1;
-      this.suppressAudio = false;
       this.resumptionHandle = "";
       this.initialContextSent = false;
       this.connect(false);
     }
     disconnect(notify = true) {
       this.stopped = true;
-      this.runId += 1;
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
-      this.socket?.close(1000, "user hangup");
+      const socket = this.socket;
       this.socket = null;
+      socket?.close(1000, "user hangup");
       this.ready = false;
-      this.audioBuffer = [];
-      this.audioBufferBytes = 0;
       if (notify) this.bus.emit("gemini.disconnected", { status: "offline" });
     }
     isConnected() { return this.ready && this.socket?.readyState === WebSocket.OPEN; }
@@ -671,13 +703,15 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       try { socket = new WebSocket(`${WS_BASE}?key=${encodeURIComponent(this.config.apiKey)}`); }
       catch (error) { this.fail(error); return; }
       this.socket = socket;
-      socket.onopen = () => { try { socket.send(JSON.stringify(this.setupMessage())); } catch (error) { this.fail(error); } };
-      socket.onmessage = (event) => this.handleRawMessage(socket, event.data);
+      socket.binaryType = "arraybuffer";
+      socket.onopen = () => { if (socket !== this.socket) return; try { socket.send(JSON.stringify(this.setupMessage())); } catch (error) { this.fail(error); } };
+      let messages = Promise.resolve();
+      socket.onmessage = (event) => { messages = messages.then(() => this.handleRawMessage(socket, event.data)); };
       socket.onclose = (event) => this.handleClose(socket, event);
     }
     setupMessage() {
       const generationConfig = { responseModalities: ["AUDIO"] };
-      if (this.config.voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } } };
+      generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice || "Aoede" } } };
       const thinking = String(this.config.thinking || "").trim().toUpperCase();
       if (thinking) {
         const option = { thinkingLevel: thinking };
@@ -698,56 +732,58 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       return { setup };
     }
     sendAudio(bytes) {
-      if (this.stopped || !bytes?.byteLength) return;
-      if (this.ready && this.socket?.readyState === WebSocket.OPEN) { this.sendAudioNow(bytes); return; }
-      this.audioBuffer.push(bytes);
-      this.audioBufferBytes += bytes.byteLength;
-      const maxBytes = AUDIO_INPUT_RATE * 2 * 15;
-      while (this.audioBufferBytes > maxBytes && this.audioBuffer.length) this.audioBufferBytes -= this.audioBuffer.shift().byteLength;
+      // Continuous capture is only forwarded to a ready session. Never replay offline speech.
+      if (!this.isConnected() || !bytes?.byteLength) return;
+      this.sendAudioNow(bytes);
     }
     sendText(text) {
       if (!this.isConnected() || !String(text).trim()) return false;
       this.send({ realtimeInput: { text: String(text).trim() } });
-      this.suppressAudio = false;
       return true;
     }
     sendAudioNow(bytes) { this.send({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: bytesToBase64(bytes) } } }); }
-    flushAudioBuffer() { const queued = this.audioBuffer; this.audioBuffer = []; this.audioBufferBytes = 0; queued.forEach((bytes) => this.sendAudioNow(bytes)); }
     send(message) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
     async handleRawMessage(socket, raw) {
       if (socket !== this.socket) return;
-      try { const text = typeof raw === "string" ? raw : await raw.text(); this.handleMessage(socket, JSON.parse(text)); }
-      catch (error) { this.fail(error); }
+      try {
+        const text = typeof raw === "string" ? raw : raw instanceof ArrayBuffer ? new TextDecoder().decode(raw) : await raw.text();
+        if (socket === this.socket) this.handleMessage(socket, JSON.parse(text));
+      } catch (error) { if (socket === this.socket) this.fail(error); }
     }
     handleMessage(socket, message) {
+      if (socket !== this.socket || this.stopped) return;
       if (message.setupComplete) {
         this.ready = true;
         this.failures = 0;
-        if (this.initialContextSent || this.sendInitialContext(socket)) this.flushAudioBuffer();
+        if (!this.resumptionHandle) this.sendInitialContext(socket);
         this.bus.emit("gemini.connected", { model: GEMINI_LIVE_MODEL });
       }
       const update = message.sessionResumptionUpdate;
       if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
       const content = message.serverContent;
-      const hasToolCall = Boolean(message.toolCall?.functionCalls?.length);
       if (message.error) {
-        this.bus.emit("gemini.error", new Error(message.error.message || "Gemini Live 回傳錯誤。"));
+        this.fail(new Error(message.error.message || "Gemini Live 回傳錯誤。"));
         return;
       }
       if (content) {
-        const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data) || [];
-        const playAudio = shouldPlayLiveAudio({ hasToolCall, suppressAudio: this.suppressAudio });
-        if (audioParts.length && playAudio) for (const part of audioParts) this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate: AUDIO_OUTPUT_RATE });
+        if (content.interrupted) this.bus.emit("gemini.interrupted", {});
+        const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
+        const playAudio = shouldPlayLiveAudio({ interrupted: content.interrupted });
+        if (audioParts.length && playAudio) for (const part of audioParts) {
+          const sampleRate = Number(/(?:^|;)rate=(\d+)/.exec(part.inlineData.mimeType)?.[1]) || AUDIO_OUTPUT_RATE;
+          this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate });
+        }
         const inputText = normalizeTranscript(content.inputTranscription?.text);
         const outputText = normalizeTranscript(content.outputTranscription?.text);
-        if (inputText) { this.suppressAudio = false; this.bus.emit("gemini.user-transcript", inputText); }
-        if (outputText && !hasToolCall) this.bus.emit("gemini.model-transcript", outputText);
+        if (inputText) this.bus.emit("gemini.user-transcript", inputText);
+        if (outputText && playAudio) this.bus.emit("gemini.model-transcript", outputText);
         if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
-        if (content.interrupted) { this.suppressAudio = false; this.bus.emit("gemini.interrupted", {}); }
-        if (content.turnComplete) { this.suppressAudio = false; this.bus.emit("gemini.turn-complete", {}); }
+        if (content.turnComplete) this.bus.emit("gemini.turn-complete", {});
       }
       if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
-      if (message.goAway) socket.close(1000, "server requested reconnect");
+      // Automatic VAD cannot tell us locally whether the user has finished speaking.
+      // Receive until the server closes, then resume; this notice must not cut off speech.
+      if (message.goAway) this.bus.emit("gemini.go-away", { timeLeft: message.goAway.timeLeft });
     }
     sendInitialContext(socket) {
       if (this.initialContextSent) return true;
@@ -764,7 +800,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       }
     }
     handleToolCalls(socket, calls) {
-      this.bus.emit("gemini.avatar-emotion-tool-call", { calls });
       let applied = false;
       for (const call of calls) {
         let result;
@@ -793,13 +828,20 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       if (socket !== this.socket || this.stopped) return;
       this.ready = false;
       this.socket = null;
+      if (!this.resumptionHandle) this.initialContextSent = false;
+      this.bus.emit("gemini.connection-lost", {});
       this.failures += 1;
       if (this.failures >= 3) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", new Error(`Gemini 連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`)); return; }
       const delay = [1000, 2500, 5000][this.failures - 1];
       this.bus.emit("gemini.status", { status: "reconnecting", retryIn: delay });
       this.reconnectTimer = setTimeout(() => this.connect(true), delay);
     }
-    fail(error) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error))); }
+    fail(error) {
+      this.disconnect(false);
+      this.bus.emit("gemini.connection-lost", {});
+      this.bus.emit("gemini.status", { status: "failed" });
+      this.bus.emit("gemini.error", error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   class TranscriptView {
@@ -826,14 +868,16 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     constructor() {
       this.bus = new EventBus();
       this.ui = collectUI();
+      populateAvatarModelSelect(this.ui.avatarModel);
+      this.settings = loadSettings();
       this.stateMachine = new AvatarStateMachine(this.bus);
       this.audioPlayer = new GeminiAudioPlayer(this.bus);
       this.mic = new MicrophoneInput(this.audioPlayer, this.bus);
       this.lipSync = new LipSyncEngine(this.audioPlayer, this.bus);
-      this.avatar = new VRMAvatarController(this.ui.avatarCanvas, this.ui.stageVisual, this.bus);
+      const initialModel = AVATAR_MODELS.find((model) => model.id === this.settings.avatarModel) || AVATAR_MODELS[0];
+      this.avatar = new VRMAvatarController(this.ui.avatarCanvas, this.ui.stageVisual, this.bus, initialModel.url);
       this.gemini = new GeminiLiveClient(this.bus);
       this.transcript = new TranscriptView(this.ui.transcript);
-      this.settings = loadSettings();
       this.callActive = false;
       this.callToken = 0;
       this.turnComplete = false;
@@ -856,6 +900,11 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ui.settingsDialog.addEventListener("click", (event) => { if (event.target === this.ui.settingsDialog) this.closeSettings(); });
       this.ui.toggleKey.addEventListener("click", () => { const visible = this.ui.apiKey.type === "text"; this.ui.apiKey.type = visible ? "password" : "text"; this.ui.toggleKey.textContent = visible ? "show" : "hide"; });
       this.ui.settingsForm.addEventListener("input", () => this.saveSettings());
+      this.ui.avatarModel.addEventListener("change", () => {
+        this.saveSettings();
+        const model = AVATAR_MODELS.find((entry) => entry.id === this.settings.avatarModel);
+        if (model) this.avatar.switchModel(model.url);
+      });
       this.ui.textForm.addEventListener("submit", (event) => { event.preventDefault(); this.sendText(); });
       this.bus.on("avatar.loading", ({ progress }) => { this.ui.modelStatus.textContent = `VRM / ${progress > 0 ? `${Math.round(progress * 100)}%` : "LOADING"}`; });
       this.bus.on("avatar.ready", ({ expressionNames }) => { this.ui.modelStatus.textContent = "VRM / READY"; });
@@ -864,27 +913,30 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.bus.on("gemini.connected", ({ model }) => { this.setConnectionStatus("connected"); this.stateMachine.toListening(); this.addSystem(`已連上 ${model.replace("-preview", "")}，可以開始說話。`); });
       this.bus.on("gemini.disconnected", () => this.setConnectionStatus("offline"));
       this.bus.on("gemini.error", (error) => this.showError(error.message));
-      this.bus.on("gemini.avatar-emotion-tool-call", () => { this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.connection-lost", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.transcript.clearPartial("user"); this.transcript.clearPartial("model"); this.stateMachine.toListening(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
-      this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toListening(); this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.transcript.clearPartial("user"); this.turnComplete = false; });
+      this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toListening(); this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.turnComplete = false; });
       this.bus.on("gemini.model-transcript", (text) => { this.transcript.add("model", text, true); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
       this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); this.transcript.clearPartial("model"); });
-      this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.transcript.clearPartial("model"); });
+      this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.transcript.clearPartial("user"); this.transcript.clearPartial("model"); });
     }
     applySettings() {
       this.ui.voice.value = this.settings.voice;
       this.ui.thinking.value = this.settings.thinking;
       this.ui.userSystemPrompt.value = this.settings.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT;
       this.ui.apiKey.value = this.settings.apiKey || "";
+      this.ui.avatarModel.value = this.settings.avatarModel;
     }
     saveSettings() {
+      const avatarModel = AVATAR_MODELS.some((entry) => entry.id === this.ui.avatarModel.value) ? this.ui.avatarModel.value : DEFAULT_AVATAR_MODEL_ID;
       this.settings = {
         voice: this.ui.voice.value,
         thinking: this.ui.thinking.value,
         userSystemPrompt: this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT,
         apiKey: this.ui.apiKey.value.trim(),
+        avatarModel,
       };
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch (_) { /* storage may be blocked */ }
     }
@@ -1005,8 +1057,18 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     const byId = (id) => document.getElementById(id);
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), waveform: byId("waveform"),
-      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
+      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
     };
+  }
+
+  function populateAvatarModelSelect(select) {
+    select.innerHTML = "";
+    for (const model of AVATAR_MODELS) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.name;
+      select.append(option);
+    }
   }
 
   function loadSettings() {
@@ -1017,23 +1079,11 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const sessionKey = sessionStorage.getItem(`${SETTINGS_KEY}.apiKey`) || "";
       const saved = { ...DEFAULT_USER_SETTINGS, ...(sessionSaved && typeof sessionSaved === "object" ? sessionSaved : {}), ...(localSaved && typeof localSaved === "object" ? localSaved : {}) };
       if (!saved.apiKey) saved.apiKey = localKey || sessionKey;
-      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey };
+      const avatarModel = AVATAR_MODELS.some((model) => model.id === saved.avatarModel) ? saved.avatarModel : DEFAULT_AVATAR_MODEL_ID;
+      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey, avatarModel };
     } catch (_) {
       return { ...DEFAULT_USER_SETTINGS };
     }
-  }
-  function resample(input, fromRate, toRate) {
-    if (fromRate === toRate) return input;
-    const ratio = fromRate / toRate;
-    const outputLength = Math.max(1, Math.round(input.length / ratio));
-    const output = new Float32Array(outputLength);
-    for (let index = 0; index < outputLength; index += 1) { const start = Math.floor(index * ratio); const end = Math.min(input.length, Math.max(start + 1, Math.floor((index + 1) * ratio))); let sum = 0; for (let sourceIndex = start; sourceIndex < end; sourceIndex += 1) sum += input[sourceIndex]; output[index] = sum / (end - start); }
-    return output;
-  }
-  function floatToPcm16(samples) {
-    const bytes = new Uint8Array(samples.length * 2); const view = new DataView(bytes.buffer);
-    for (let index = 0; index < samples.length; index += 1) { const sample = clamp(samples[index], -1, 1); view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); }
-    return bytes;
   }
   function base64ToBytes(base64) { const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return bytes; }
   function bytesToBase64(bytes) { let binary = ""; const chunkSize = 0x8000; for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)); return btoa(binary); }
