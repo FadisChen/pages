@@ -22,10 +22,10 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
   const AVATAR_MODELS = Object.freeze([
-    { id: "springsnow", name: "SpringSnow", url: "./SpringSnow無料版.vrm" },
-    { id: "mia", name: "Mia", url: "./mia.vrm" },
-    { id: "sha", name: "Sha", url: "./sha.vrm" },
-    { id: "su", name: "Su", url: "./su.vrm" },
+    { id: "springsnow", name: "SpringSnow", url: "./SpringSnow無料版.vrm", mouthIntensity: 1 },
+    { id: "mia", name: "Mia", url: "./mia.vrm", mouthIntensity: .6 },
+    { id: "sha", name: "Sha", url: "./sha.vrm", mouthIntensity: .45 },
+    { id: "su", name: "Su", url: "./su.vrm", mouthIntensity: .45 },
   ]);
   const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
@@ -348,6 +348,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.emotionMix = 1;
       this.viseme = "none";
       this.mouthWeight = 0;
+      this.mouthIntensity = 1;
       this.inputLevel = 0;
       this.outputLevel = 0;
       this.elapsed = 0;
@@ -464,6 +465,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       if (!this.renderer) return;
       const requestToken = ++this.loadToken;
       this.loaded = false;
+      this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
       if (this.vrm?.scene) {
         this.scene.remove(this.vrm.scene);
         VRMUtils.deepDispose(this.vrm.scene);
@@ -568,7 +570,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         const weight = name === this.emotion ? this.emotionMix : name === this.emotionFrom ? 1 - this.emotionMix : 0;
         this.setExpression(name, weight);
       }
-      for (const name of ["aa", "ih", "ou", "ee", "oh"]) this.setExpression(name, name === this.viseme ? this.mouthWeight : 0);
+      for (const name of ["aa", "ih", "ou", "ee", "oh"]) this.setExpression(name, name === this.viseme ? this.mouthWeight * this.mouthIntensity : 0);
       this.applyBlink();
     }
     applyBoneOffset(name, x = 0, y = 0, z = 0) {
@@ -913,13 +915,13 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.bus.on("gemini.connected", ({ model }) => { this.setConnectionStatus("connected"); this.stateMachine.toListening(); this.addSystem(`已連上 ${model.replace("-preview", "")}，可以開始說話。`); });
       this.bus.on("gemini.disconnected", () => this.setConnectionStatus("offline"));
       this.bus.on("gemini.error", (error) => this.showError(error.message));
-      this.bus.on("gemini.connection-lost", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.transcript.clearPartial("user"); this.transcript.clearPartial("model"); this.stateMachine.toListening(); });
+      this.bus.on("gemini.connection-lost", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); this.transcript.clearPartial("user"); this.transcript.clearPartial("model"); this.stateMachine.toListening(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
       this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toListening(); this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.turnComplete = false; });
       this.bus.on("gemini.model-transcript", (text) => { this.transcript.add("model", text, true); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
-      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); this.transcript.clearPartial("model"); });
+      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); this.transcript.clearPartial("model"); });
       this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.transcript.clearPartial("user"); this.transcript.clearPartial("model"); });
     }
     applySettings() {
@@ -1049,8 +1051,9 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ui.outputLevelBar.style.width = `${Math.round(output * 100)}%`;
       if (this.sessionStartedAt) { const seconds = Math.floor((now - this.sessionStartedAt) / 1000); this.ui.sessionClock.textContent = formatClock(seconds); } else this.ui.sessionClock.textContent = "00:00";
       this.ui.waveform.querySelectorAll("i").forEach((bar, index) => { const pulse = .4 + ((Math.sin(now / 170 + index * 1.4) + 1) / 2) * (state === STATES.SPEAKING ? .6 : .22); bar.style.setProperty("--wave", String(pulse)); });
-      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) this.stateMachine.toListening();
+      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
   }
 
   function collectUI() {
