@@ -1,20 +1,59 @@
 # 計劃書 — 尾牙主持人 Nami（Gemini Live + VRM Avatar）
 
-## 0. 與既有專案的關係（重要修正）
+## 0. 與既有專案的關係
 
-規劃這個資料夾之前，先完整看過 `Avatar/` 資料夾才發現：它**不只是一份 PRD**，而是一個已經可以動的完整實作——`Avatar/index.html` + `Avatar/app.js`（three.js + `@pixiv/three-vrm` + Gemini Live WebSocket + client-side lip sync，全部串好了）、`Avatar/SpringSnow無料版.vrm`（實際的 VRM 模型檔）、以及一組共用小工具模組。這個發現改變了原本的規劃方向：**YearEndParty 不是從 PRD 重新做一個 Avatar 系統，而是直接 fork `Avatar/app.js` 這份已驗證可動的程式碼，在上面加尾牙主持人需要的行為。**
+`Avatar/` 資料夾不只是一份 PRD，而是一個已經可以動的完整實作——`Avatar/index.html` + `Avatar/app.js`（three.js + `@pixiv/three-vrm` + Gemini Live WebSocket + client-side lip sync，全部串好了）、`Avatar/SpringSnow無料版.vrm`（實際的 VRM 模型檔）、以及一組共用小工具模組。**YearEndParty 不是從 PRD 重新做一個 Avatar 系統，而是直接 fork `Avatar/app.js` 這份已驗證可動的程式碼，在上面加尾牙主持人需要的行為。**
 
 | 來源 | 提供什麼 | 在本專案中的角色 |
 | --- | --- | --- |
-| `Avatar/app.js`（1049 行） | 完整、已可運作的 VRM 渲染、State Machine、Lip Sync、Gemini Live WebSocket client、情緒 tool call、逐字稿、設定面板 | **直接 fork 並修改**，是 YearEndParty/app.js 的基礎 |
+| `Avatar/app.js`（1049 行） | 完整、已可運作的 VRM 渲染、State Machine、Lip Sync、Gemini Live WebSocket client、情緒 tool call、逐字稿、設定面板 | **直接 fork 並修改**，是 `stage.js`／`app.js` 的基礎 |
 | `Avatar/SpringSnow無料版.vrm`（15.6 MB） | 實際的 VRM 角色模型 | 透過相對路徑 `../Avatar/...` 重用同一份檔案，**不複製** |
 | `Avatar/washi-enso.png`、`Avatar/favicon.svg` | 舞台背景圖、favicon | 同樣以相對路徑重用 |
 | `Avatar/avatar-emotions.js`、`live-audio-policy.js`、`session-context.js`、`transcript.js` | Emotion function-calling tool、音訊播放策略、session 環境上下文、逐字稿正規化等小工具模組 | 以 ES module 相對匯入重用，不重複貼一份程式碼 |
-| `Avatar/PRD — Gemini Live Web Avatar.md`、`TECHNICAL_SPEC.md` | 原始架構設計文件 | 佐證 `app.js` 的設計決策（分層、State Machine、Lip Sync 原理），本文件不重複抄錄 |
 
-**為什麼重用檔案而不是複製一份：** VRM（15.6 MB）與背景圖（1.8 MB）都是大型二進位檔，repo 裡重複存放同一份角色資產既浪費空間、也會讓兩邊之後各自修改角色時不同步。程式碼邏輯檔（`avatar-emotions.js` 等）體積小、功能單純穩定，用 ES module 相對匯入即可，不需要複製。真正需要「fork 而非重用」的只有 `app.js`／`index.html`／`styles.css`——因為 push-to-talk、Rundown 環節、主持人人設是這個專案獨有的行為，屬於必要的改動。
+核心決策：**push-to-talk 由工作人員決定收音**，用 Gemini Live 的 **手動語音活動偵測**（`automaticActivityDetection.disabled: true` + 手動送 `activityStart` / `activityEnd`）實作「按下才聽、放開才輪到 Gemini 講話」。
 
-核心決策沿用上一輪對話的結論：**push-to-talk 由工作人員決定收音**，用 Gemini Live 的 **手動語音活動偵測**（`automaticActivityDetection.disabled: true` + 手動送 `activityStart` / `activityEnd`）實作「按下才聽、放開才輪到 Gemini 講話」——這與 `Avatar/app.js` 目前使用的自動 VAD（`disabled: false`）不同，是這次 fork 的核心修改點。
+---
+
+## 0.1 架構修正：投影端與操作端要拆成兩台裝置
+
+第一版原型（`index.html`／`app.js`）把 Avatar 舞台、設定、push-to-talk 按鈕、Rundown 按鈕、逐字稿全部放在同一個網頁——這在討論後發現不符合實際使用情境：**工作人員拿的是手機、投影出去的是另一台接在投影機（與會場音響）上的筆電**，兩者是不同裝置，不能靠同一個瀏覽器內分頁互傳（`BroadcastChannel` 之類的方案只能在同一瀏覽器內的分頁之間用）。
+
+因此拆成三個網頁：
+
+| 檔案 | 裝置 | 職責 |
+| --- | --- | --- |
+| `stage.html` + `stage.js` + `stage.css` | 投影端筆電（接投影機＋會場音響） | 顯示 VRM Avatar、連線 Gemini Live、播放語音。**不含任何現場控制項**，不顯示字幕/逐字稿。 |
+| `operator.html` + `operator.js` + `operator.css` | 工作人員手機 | push-to-talk 收音、Rundown 環節按鈕、現場備註文字、簡易狀態回饋。**不渲染 Avatar、不連 Gemini、不播放聲音**。 |
+| `index.html` + `app.js` + `styles.css` | 任何一台裝置（單機） | 保留作為「單機測試模式」：不用兩台裝置、不用配對，直接在同一頁測試 push-to-talk／Rundown 的邏輯是否符合預期，適合正式上場前先驗證行為，不用每次都拉兩台裝置對接。 |
+
+`webrtc-link.js` 是 `stage.js` 與 `operator.js` 共用的小模組，定義配對用的房號產生規則、ICE 伺服器設定、Rundown 環節清單，確保兩邊不會各自漂移。
+
+### 兩台裝置怎麼「牽線」
+
+手機錄到的音訊要送到筆電、筆電才能把音訊丟給 Gemini；Gemini 回覆的語音則在筆電這邊播放（接會場音響），不是手機喇叭。純靜態網頁沒辦法讓兩台不在同一個瀏覽器裡的裝置直接對話，中間需要一個牽線機制——採用 **WebRTC**：
+
+```text
+┌─────────────┐   WebRTC 音訊 track（手機麥克風→筆電）      ┌──────────────────┐
+│  手機         │ ───────────────────────────────────────▶ │  投影端筆電          │
+│ operator.html│                                            │  stage.html         │
+│              │   WebRTC data channel（ptt/segment/note）  │                     │
+│  收音、按鈕    │ ───────────────────────────────────────▶ │  Gemini Live / VRM   │
+│              │ ◀─────────────────────────────────────── │  (播放語音、渲染Avatar)│
+│              │   data channel（status/connection/逐字稿） │                     │
+└─────────────┘                                            └──────────────────┘
+        ▲                                                            ▲
+        └───────────── 透過 PeerJS 免費公用訊號伺服器交換連線資訊 ─────┘
+                （只負責「牽線」，牽好線之後音訊直接兩機互傳）
+```
+
+- 用 **PeerJS** 套件包裝原生 WebRTC API，靠它的免費公用雲端 broker 做「配對」（交換 SDP/ICE 連線資訊），配對成功後音訊與指令直接在兩台裝置間傳送（P2P 打不通時走 PeerJS 的 TURN 中繼），不經過我們自己架的伺服器。
+- 投影端筆電開啟 `stage.html` 後自動產生一組房號（例如 `yep-8f3k2a`）並顯示 QR code；手機開啟 `operator.html`，掃碼或輸入房號、按「連線」（同時會跳出麥克風授權），就配對完成。
+- 配對成功後，`stage.html` 的配對面板會自動收起，投影出去的畫面只剩 Avatar，不會讓觀眾看到房號或 QR code；筆電右上角有個小圖示可以隨時再打開配對面板（例如手機需要重新配對時）。
+
+### 已知風險
+
+**很多飯店／會場的 Wi-Fi 會做「用戶隔離」**（同網段裝置互相看不到，只能連外網），這種情況下純 STUN 可能打不通，需要 TURN 中繼才能連上；PeerJS 免費雲端不保證提供穩定的 TURN。**正式上場前務必在實際會場網路測過配對**；如果測試發現連不上，`webrtc-link.js` 裡的 `ICE_SERVERS` 陣列已經預留位置，補上自己買的 TURN 服務憑證（例如 Twilio Network Traversal Service、metered.ca 等）即可。
 
 ---
 
@@ -22,230 +61,118 @@
 
 ### 1.1 目標
 
-打造一個瀏覽器端的「尾牙主持人」網頁應用：沿用 Avatar 資料夾裡的 VRM 虛擬角色 Nami，由現場工作人員用 push-to-talk 按鈕跟她對話／下指令，她負責串場、抽獎、帶氣氛、跟台下互動的口白，聲音與嘴型／表情即時同步。
+打造一個瀏覽器端的「尾牙主持人」網頁應用：沿用 Avatar 資料夾裡的 VRM 虛擬角色 Nami，由現場工作人員用手機 push-to-talk 遙控，她負責串場、抽獎、帶氣氛、跟台下互動的口白，聲音（透過會場音響）與嘴型／表情即時同步，畫面投影給全場看。
 
-### 1.2 使用情境
+### 1.2 非目標
 
-尾牙主持人跟原本 Avatar 頁面最大的不同，是它不是「一人一機」的私人對話，而是**有觀眾**的現場演出，操作者（工作人員）與「聽眾」（台下來賓）是分開的兩群人。目前這版原型仍是單一頁面（工作人員自己手上的筆電/平板），畫面同時包含控制項與 Avatar；日後若要投影到大螢幕給全場看，建議另外拆一支「乾淨畫面」（只有 Avatar + 字幕，沒有任何控制項），見第 9 節 Roadmap。
-
-### 1.3 非目標
-
-沿用 Avatar PRD 的原則：不做自建 Backend、GPU Server、伺服器端 Lip Sync/TTS、AI 影片生成、AI 即時生成骨骼動畫。一切維持純前端、Client-side 運算，這點 `Avatar/app.js` 已經完整做到。
+沿用 Avatar PRD 的原則：不做自建 Backend、GPU Server、伺服器端 Lip Sync/TTS、AI 影片生成、AI 即時生成骨骼動畫。WebRTC 配對用的 PeerJS 公用 broker 只做「牽線」，不算違反這個原則——它不處理任何 AI／音訊／渲染邏輯，純粹是交換連線資訊的中介。
 
 ---
 
-## 2. 系統架構
+## 2. Gemini Live 音訊/State Machine 架構（stage.js）
 
-沿用 `Avatar/app.js` 已經實作的分層（`GeminiLiveClient` → `EventBus` → `AvatarStateMachine` / `VRMAvatarController` / `LipSyncEngine`，彼此解耦），本專案在這個架構上疊加兩塊新東西：**Push-to-talk 控制**與**Rundown 環節狀態**。
+沿用 `Avatar/app.js` 已經實作的分層（`GeminiLiveClient` → `EventBus` → `AvatarStateMachine` / `VRMAvatarController` / `LipSyncEngine`，彼此解耦）。跟原本 Avatar 頁面的差異只在「輸入來源」：
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│                            Browser                              │
-│                                                                   │
-│  工作人員操作                                                      │
-│   ├─ 「按住說話」按鈕（pointerdown/up，新增）                        │
-│   ├─ Rundown 環節按鈕（開場／抽獎／遊戲／頒獎／自由聊天／尾聲，新增）    │
-│   └─ 文字輸入框（沿用既有 composer，可當「現場備註」用）              │
-│         │                                                        │
-│         ▼                                                        │
-│  ┌────────────────────────┐   手動 VAD（本次修改）：                │
-│  │ GeminiLiveClient        │   activityStart / audio chunk / activityEnd │
-│  │（fork 自 Avatar/app.js） │   文字：realtimeInput.text（環節狀態，沿用既有 sendText）│
-│  └───────────┬─────────────┘                                    │
-│              │ Gemini Audio 24kHz + function call（沿用既有）        │
-│              ▼                                                   │
-│  ┌────────────────────┐        ┌──────────────────────┐         │
-│  │ GeminiAudioPlayer    │──────▶│ AnalyserNode           │        │
-│  │（沿用既有）           │        │（沿用既有 RMS+頻段分類）  │        │
-│  └────────────────────┘        └──────────┬───────────┘         │
-│                                             ▼                     │
-│                                    AvatarStateMachine              │
-│                                    （沿用既有 IDLE/LISTENING/       │
-│                                     THINKING/SPEAKING/INTERRUPTED）│
-│                                             │                     │
-│                                             ▼                     │
-│                                  VRMAvatarController                │
-│                                  （沿用既有：呼吸、眨眼、頭部微動、   │
-│                                   表情 crossfade、viseme 嘴型）      │
-│                                             │                     │
-│                                             ▼                     │
-│                         Three.js + ../Avatar/SpringSnow無料版.vrm  │
-└────────────────────────────────────────────────────────────────┘
-```
+- **音訊輸入**：原本是本機 `getUserMedia()`；`stage.js` 換成 `RemoteMicInput`，把 WebRTC 從手機傳來的 `MediaStream` 接進 Web Audio pipeline（`createMediaStreamSource` → `ScriptProcessor` → resample → PCM16），其餘完全一樣。
+- **控制輸入**：原本是本機按鈕；`stage.js` 改成監聽 `PeerLink`（PeerJS 包裝）送來的 data channel 訊息（`ptt` / `segment` / `note`）。
+- **輸出回饋**：`stage.js` 額外把 `avatar.state`、`gemini.status`、逐字稿透過 data channel 廣播回手機，讓操作者知道現在狀態、Gemini 有沒有連線、剛剛聽到/講了什麼。
 
----
+### 2.1 Push-to-talk（手動 VAD）
 
-## 3. 語音互動設計：Push-to-talk（手動 VAD）
-
-### 3.1 為什麼不用自動 VAD
-
-`Avatar/app.js` 目前用 `realtimeInputConfig: { automaticActivityDetection: { disabled: false } }`，讓伺服器自己偵測「使用者講完了」。尾牙現場有背景音樂、群眾噪音、多人同時講話，伺服器端 VAD 很容易誤判，導致主持人搶話或該回應時沒反應。
-
-### 3.2 實際改動（對照 `Avatar/app.js` → `YearEndParty/app.js`）
-
-`GeminiLiveClient.setupMessage()`：
-
-```diff
-- realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
-+ realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
-```
-
-`GeminiLiveClient` 新增兩個方法：
+`GeminiLiveClient.setupMessage()` 用 `realtimeInputConfig: { automaticActivityDetection: { disabled: true } }`，並新增：
 
 ```js
 activityStart() { this.send({ realtimeInput: { activityStart: {} } }); }
 activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
 ```
 
-`App` 新增 push-to-talk 按鈕邏輯（用 Pointer Capture，確保放開時一定收得到 `pointerup`，即使手指/滑鼠移出了按鈕範圍——寫法跟 `VRMAvatarController.bindViewControls()` 裡角色拖曳旋轉的作法一致）：
+手機端按下 push-to-talk → data channel 送 `{type:'ptt', active:true}` → `stage.js` 呼叫 `gemini.activityStart()`；放開 → 送 `{type:'ptt', active:false}` → `stage.js` 呼叫 `gemini.activityEnd()`（這個訊號同時代表「這輪講完了」，Gemini 收到後才會開始生成語音回覆）。手機的麥克風音訊在整個配對期間持續透過 WebRTC 傳給筆電，筆電只有在 `pttActive` 為真時才把音訊 chunk 轉送給 Gemini——沒按按鈕時，即使音訊「有送到筆電」，也絕不會送進 Gemini。
 
-- **按下**：`gemini.activityStart()` → `stateMachine.toListening()`。
-- **放開**：`gemini.activityEnd()` → `stateMachine.toThinking()`。這個訊號同時代表「使用者這輪講完了」，Gemini 收到後才會開始生成語音回覆——這就是「按鈕決定何時輪到 Gemini 說話」的具體實作。
+### 2.2 Rundown 環節與情境感知
 
-麥克風串流本身**在整場通話期間持續開啟**（沿用 `Avatar/app.js` 既有的 `MicrophoneInput`，避免每次按 push-to-talk 都重新跳出瀏覽器權限視窗），只有實際送到 Gemini 的那一步用 `pttActive` 旗標把關：
-
-```diff
-- await this.mic.start((pcm) => this.gemini.sendAudio(pcm));
-+ await this.mic.start((pcm) => { if (this.pttActive) this.gemini.sendAudio(pcm); });
-```
-
-在完全沒有按下按鈕的期間，即使麥克風硬體是開的，也**不會有任何 audio 送進 Gemini**，Gemini 也就完全不會生成語音。
-
-### 3.3 情境感知的落差與補償
-
-session 的對話記憶不會因為沒送 audio 而消失（同一條 WebSocket 內，之前每輪的逐字稿都留著，`Avatar/app.js` 本來就有 `sessionResumption` 與 `contextWindowCompression`）；但 Gemini **無法感知「按鈕沒按時」現場發生的事**，這是協定本質限制，不是靠一直開麥克風能解決的。
-
-因此語音跟文字分工：
-
-- **語音（push-to-talk）**：只負責「這一句要她回應的內容」。
-- **文字**：Rundown 環節切換時，把狀態餵給 Gemini。這條路徑**不需要新機制**——`Avatar/app.js` 原本就有 `GeminiLiveClient.sendText(text)`，走 `realtimeInput.text`（原本是給使用者在文字輸入框打字用的），本專案直接重用同一個方法，環節按鈕點擊時呼叫 `gemini.sendText(segment.context)` 即可。原本的文字輸入框則保留給「現場備註」自由填寫使用。
-
-### 3.4 Barge-in（打斷）
-
-`activityHandling` 預設是「新的 `activityStart` 會打斷 Gemini 正在講的話」，這次沒有特別調整這個設定，維持預設——對主持人情境是優點（工作人員隨時能按按鈕搶話喊卡）。原型裡 push-to-talk 按鈕在 Gemini 講話中仍可按下（允許搶話），沒有額外鎖定；是否要加鎖定視覺提示留給日後彩排時依實際體感調整。
+環節清單（id/label/context）定義在 `webrtc-link.js` 的 `SEGMENTS`，operator.js 只用 id/label 畫按鈕，stage.js 收到 `{type:'segment', id}` 後查出對應的 `context` 文字，透過既有的 `gemini.sendText()`（`realtimeInput.text`）送給 Gemini。環節切換由工作人員手動決定，系統提示詞（`REQUIRED_SYSTEM_PROMPT`）明確要求 Gemini 不要自己宣布換環節、不要自己編造得獎名單。
 
 ---
 
-## 4. Rundown 環節系統
+## 3. Function-calling Tools
 
-尾牙有既定流程，這是 `Avatar/app.js` 原本沒有、本專案新增的部分。
+沿用 `Avatar/avatar-emotions.js` 的 `set_avatar_emotion`（原封不動匯入）。規劃中、原型未實作的擴充：
 
-```js
-const SEGMENTS = [
-  { id: "opening",    label: "開場",     context: "…" },
-  { id: "lucky_draw",  label: "幸運抽獎", context: "…" },
-  { id: "game",        label: "遊戲互動", context: "…" },
-  { id: "award",       label: "頒獎",     context: "…" },
-  { id: "freechat",    label: "自由聊天", context: "…" },
-  { id: "closing",     label: "尾聲",     context: "…" },
-];
-```
-
-- 每個環節對應一段文字（見 `YearEndParty/app.js` 內 `SEGMENTS` 常數的實際內容），切換時透過 `gemini.sendText(segment.context)` 送出。
-- 環節切換由工作人員手動點擊，**不**讓 Gemini 自己決定要不要換環節——這條規則寫進了 `REQUIRED_SYSTEM_PROMPT`（系統固定的行為規則，不對工作人員開放編輯），明確要求 Gemini 只依照工作人員切換的環節主持、不要自己宣布換環節、不要自己編造得獎名單。
-- 未來可擴充：讓 Gemini 透過 function call 建議換下一段，但由工作人員按確認鍵才真的切換——維持「AI 建議、人決定」。原型未實作。
+| Tool | 用途 |
+| --- | --- |
+| `draw_winner` | 從名單中抽出一位得獎者（抽獎邏輯在前端做，Gemini 只負責觸發與口播） |
+| `play_sound_effect` | 播放音效（歡呼、鼓聲，可參考 `Bartender/js/audio.js` 的 sound asset 機制） |
+| `suggest_next_segment` | 建議切換環節，仍需工作人員在手機上按確認才真的切換 |
 
 ---
 
-## 5. Function-calling Tools
+## 4. Avatar / Lip Sync
 
-沿用 `Avatar/avatar-emotions.js` 的 `set_avatar_emotion`（原封不動匯入，見 `YearEndParty/app.js` 開頭的 import），並規劃尾牙場景需要的擴充（原型只接了情緒，其餘列為之後階段）：
-
-| Tool | 用途 | 狀態 |
-| --- | --- | --- |
-| `set_avatar_emotion` | 表情（neutral/happy/sad/angry/surprised） | 已接上（沿用既有實作） |
-| `draw_winner` | 從名單中抽出一位得獎者（實際抽獎邏輯在前端做，Gemini 只負責觸發與口播） | 待做 |
-| `play_sound_effect` | 播放音效（歡呼、鼓聲、答錯音，可參考 `Bartender/js/audio.js` 的 sound asset 機制） | 待做 |
-| `suggest_next_segment` | 建議切換環節，需工作人員確認 | 待做（可選） |
+完全沿用 `Avatar/app.js` 已經做好的實作（VRM 載入、骨骼綁定、表情別名解析、呼吸/眨眼/頭部微動 idle 動畫、以頻段能量分類 viseme 的 lip sync、State Machine 動畫權重混合、情緒 crossfade）。`stage.js` 唯一改動是把 `AVATAR_MODEL_URL` 指到 `../Avatar/SpringSnow無料版.vrm`，其餘渲染／動畫程式碼沒有動。
 
 ---
 
-## 6. Avatar / Lip Sync
+## 5. 三個入口的實際涵蓋範圍
 
-**這部分不是本次新開發的內容**，完全沿用 `Avatar/app.js` 已經做好、且結構完整的實作，原型直接繼承：
+### 5.1 `stage.html`（投影端，正式上場用）
+- 沿用 Avatar 的 VRM 渲染／Lip Sync／State Machine／Gemini Live client。
+- `RemoteMicInput`：從 WebRTC 遠端 `MediaStream` 擷取音訊，取代本機麥克風。
+- `PeerLink`：PeerJS 配對、自動產生房號、QR code、data channel 收發、斷線自動嘗試 reconnect（`peer.reconnect()`）。
+- 配對面板：顯示房號＋QR，配對成功後自動收起；右上角圖示可再打開（重新配對用）。
+- 「開始對話」按鈕：啟動 AudioContext（需要使用者手勢，瀏覽器 autoplay 政策要求）＋建立 Gemini Live session，活動開始前按一次即可，之後不需要再操作這台筆電。
+- 設定面板（API Key／Voice／人設文字）保留，因為 Gemini 連線設定是「事前在筆電上設好一次」的事，不是現場即時控制。
 
-- VRM 載入、骨骼綁定、表情別名解析（`resolveBones` / `resolveExpressions`）。
-- Idle 動畫：呼吸（sin 波）、眨眼（隨機間隔 + easing）、頭部/視線微動（低頻疊加正弦波，非逐 frame 隨機）。
-- Lip Sync：分析 `GeminiAudioPlayer` 的 `AnalyserNode`，用三段頻率能量（低/中/高頻平均）分類 viseme（`aa`/`ih`/`ou`/`ee`/`oh`），攻擊/釋放不同速率平滑嘴型權重，避免抖動。
-- State Machine：`IDLE → LISTENING → THINKING → SPEAKING`，加上 `INTERRUPTED` 分支，各狀態間的動畫權重（`stateWeights`）用指數平滑混合，驅動頭部姿態、身體微晃、呼吸幅度。
-- 情緒表情用 300ms 左右的 crossfade（`emotionMix`），不是瞬間切換。
+### 5.2 `operator.html`（手機遙控端，正式上場用）
+- 配對畫面：輸入/掃碼房號 → 連線（會跳出麥克風授權）。
+- Push-to-talk 大按鈕（按住＝送話，放開＝結束這輪換 Gemini 講）。
+- 麥克風音量小進度條（視覺回饋「你正在被收音」）。
+- Rundown 環節按鈕（跟 `SEGMENTS` 清單一致）。
+- 現場備註文字輸入（透過 data channel `note` 轉發成 `gemini.sendText`）。
+- 簡易狀態回饋：目前 Nami 狀態（聆聽中/思考中/主持中）、Gemini 連線狀態、最近幾句對話摘要。
+- 沒有 VRM、沒有 three.js、沒有 Gemini 連線——頁面很輕，適合手機瀏覽器。
 
-本專案唯一在這塊的改動，只有把 `AVATAR_MODEL_URL` 從 `./SpringSnow無料版.vrm` 改成 `../Avatar/SpringSnow無料版.vrm`（重用同一份 VRM 檔），其餘渲染／動畫程式碼完全沒動。
+### 5.3 `index.html`（單機測試模式，開發/彩排前快速驗證用）
+- 維持第一版原型的設計：同一台裝置上同時有 Avatar、push-to-talk 按鈕、Rundown 按鈕、逐字稿，方便一個人快速測試「按住說話→放開→Gemini 回應」「切環節→Gemini 承接」的行為是否正確，不必每次都找兩台裝置、走配對流程。
 
----
+### 5.4 尚未做的部分
+- `draw_winner` / `play_sound_effect` / `suggest_next_segment` 擴充 tool。
+- Ephemeral token / 正式環境金鑰保護（原型沿用「開發測試用 localStorage 金鑰」模式，設定在 `stage.html`）。
+- 多支手機同時操作、或操作權轉移。
+- 現場實機的 FPS / 延遲 / 噪音 / WebRTC 連通性實測。
 
-## 7. UI 設計
+### 5.5 如何測試
 
-原型是**單頁**（工作人員自己使用的操作端），在 `Avatar/index.html` 的版面基礎上新增兩塊：
+**單機測試模式**：從 repo 根目錄起靜態伺服器（例如 `python3 -m http.server 4173`），開 `http://localhost:4173/YearEndParty/index.html`（一定要從 repo 根目錄起服務，`../Avatar/` 相對路徑才解析得到）。
 
-```text
-┌───────────────────────────────────────────────┐
-│ YEAR END PARTY HOST（原型）      設定 icon        │
-├───────────────────────────────┬─────────────────┤
-│                                │ Nami／連線狀態      │
-│                                ├─────────────────┤
-│         Avatar 舞台             │ [開始對話／結束對話] │
-│      （沿用既有 VRM 渲染）        ├─────────────────┤
-│                                │  ●按住說話         │← 新增，大按鈕
-│                                │  (手動VAD說明文字)   │
-├───────────────────────────────┤├─────────────────┤
-│ RUNDOWN                       │  LIVE TRANSCRIPT  │
-│ [開場][抽獎][遊戲][頒獎]         │  （逐字稿，沿用既有） │
-│ [自由聊天][尾聲]      ← 新增     │  [文字輸入/現場備註] │
-└───────────────────────────────┴─────────────────┘
-```
+**兩機模式**：
+1. 同樣從 repo 根目錄起服務，且**必須是 HTTPS 或至少讓兩台裝置都能連到同一個可公開存取的網址**——`localhost` 只在同一台機器上有效，手機開不到筆電的 `localhost`。正式測試建議直接部署到 GitHub Pages（本身就是 HTTPS）之後用手機開真正的網址；本機測試可以用 `ngrok`／類似的內網穿透工具暫時給一個 HTTPS 網址。
+2. 筆電開 `stage.html`，貼 API Key（設定 icon）、按「開始對話」。
+3. 記下畫面上的房號／掃 QR code。
+4. 手機開 `operator.html?room=<房號>`（掃碼會自動帶入），按「連線」，允許麥克風。
+5. 手機按住「按住說話」說話、放開，確認筆電那邊 Avatar 有反應、語音有播放；點 Rundown 按鈕，確認 Nami 有承接環節切換。
 
-投影端（Stage Display，給觀眾看的乾淨畫面）**規劃但未實作**：只留 Avatar + 字幕，沒有任何控制項；等操作端在真實環境驗證過 push-to-talk 節奏後再拆，避免同時改兩塊互相干擾除錯。
-
----
-
-## 8. 原型（`index.html` / `app.js` / `styles.css`）實際涵蓋範圍
-
-**有做（可直接測試）：**
-- 完整 fork `Avatar/app.js`：VRM 渲染、Lip Sync、State Machine、Gemini Live WebSocket、情緒 tool call、逐字稿、設定面板（API Key / Voice / 主持人人設文字）全部繼承，**不是佔位符，是真的 VRM 角色**。
-- 手動 VAD push-to-talk：`realtimeInputConfig.automaticActivityDetection.disabled: true`，按住＝`activityStart`+送audio，放開＝`activityEnd`。
-- Rundown 環節按鈕（6 個環節），點擊透過 `realtimeInput.text` 送出環節狀態文字，並在畫面上顯示目前環節。
-- 系統提示詞（`REQUIRED_SYSTEM_PROMPT`）已針對尾牙場景調整：熱情口條、不自作主張換環節、收到環節切換文字時簡短承接而非逐字覆誦。
-- 沿用既有的斷線自動重試、`sessionResumption`、麥克風錯誤訊息、AudioContext user-gesture 啟動流程。
-- 資產重用：VRM／背景圖／favicon／emotion tool／audio policy／session context／transcript 工具全部透過相對路徑指向 `../Avatar/`，沒有複製任何大型二進位檔進這個資料夾。
-
-**沒做（留給後續階段，見第 9 節）：**
-- `draw_winner` / `play_sound_effect` / `suggest_next_segment` 等擴充 tool。
-- 投影端獨立頁面（Stage Display）。
-- Ephemeral token / 正式環境金鑰保護（原型沿用 Avatar 既有的「開發測試用 localStorage 金鑰」模式）。
-- 多人（多工作人員）協作、多裝置同步狀態。
-- 現場實機的 FPS / 延遲 / 噪音實測與調整。
-
-### 8.1 如何測試
-
-1. 這個原型**不是獨立可攜的資料夾**——它透過相對路徑依賴 `../Avatar/` 底下的檔案，所以必須從 repo 根目錄（`pages/`）起一個涵蓋兩個資料夾的靜態伺服器，例如在 repo 根目錄執行 `python3 -m http.server 4173`，然後開 `http://localhost:4173/YearEndParty/index.html`（不能只把 `YearEndParty/` 資料夾單獨複製出去用）。需要 `https://` 或 `localhost` 才能用麥克風。
-2. 點右上角設定 icon，貼上已開通 Gemini Live API 的 API Key，按「開始對話」，允許麥克風權限。
-3. 等待狀態變成 `CONNECTED`，按住「按住說話」按鈕說一句話、放開，觀察：狀態變化（LISTENING→THINKING→SPEAKING）、VRM 嘴型與頭部動畫、逐字稿是否正確、放開瞬間是否很快進入回覆（驗證手動 VAD 沒有多等一段靜音判斷時間）。
-4. 點 Rundown 環節按鈕，觀察逐字稿面板裡是否出現「環節切換：xxx」的系統訊息，並在下一次對話中觀察 Nami 是否用一兩句話自然承接、而不是逐字複誦。
-5. 測試 barge-in：Nami 講話中再按一次「按住說話」，確認會被打斷並回到聆聽狀態。
-
-**這次交付過程中的測試限制說明**：本機驗證了檔案正確部署（HTML/JS/CSS 皆可正常存取、`app.js` 語法檢查通過、HTML 與 JS 之間所有 DOM id 一一對應、VRM／圖片／共用模組的相對路徑皆可正確解析到 `../Avatar/`）。但這個沙箱環境的對外網路政策封鎖了 `cdnjs.cloudflare.com` 與 `cdn.jsdelivr.net`（three.js / `@pixiv/three-vrm` 的來源），所以沒有在這裡實際跑出畫面確認 VRM 有渲染出來——這是**沙箱環境的限制，不是頁面本身的問題**：這兩個 CDN 網域跟 `Avatar/index.html` 原本使用的完全相同，那個頁面本來就能正常動，所以理論上這裡也會動，但請你在自己的瀏覽器上實際打開測試一次以確認。
+**這次交付過程中的測試限制**：本機驗證了檔案正確部署（`stage.html`/`operator.html`/`webrtc-link.js` 等皆可正常存取、JS 語法檢查通過、HTML 與 JS 之間所有 DOM id 一一對應）。但這個開發沙箱環境的對外網路政策封鎖了 CDN（three.js／PeerJS／QRCode 的來源）與跨裝置測試所需的真實網路環境，沒有辦法在這裡實際跑出兩台裝置配對成功的畫面——這需要你在自己的環境（兩支真實裝置＋可公開存取的網址）測試一次以確認。
 
 ---
 
-## 9. 開發階段 Roadmap
+## 6. 開發階段 Roadmap
 
 | Phase | 內容 | 狀態 |
 | --- | --- | --- |
-| 0 | Fork `Avatar/app.js`：手動 VAD push-to-talk + Rundown 環節文字通道 + 尾牙系統提示詞 | **本次交付** |
-| 1 | 擴充 Tools：`draw_winner`、`play_sound_effect`、`suggest_next_segment` | 待開始 |
-| 2 | 投影端獨立頁面（Stage Display，只有 Avatar + 字幕） | 待開始 |
-| 3 | 現場網路降級方案、金鑰保護（ephemeral token，若要脫離內部測試環境） | 待開始 |
-| 4 | 現場彩排：實機 FPS / 延遲 / 噪音下的 push-to-talk 節奏調整 | 待開始 |
+| 0 | 單機原型：手動 VAD push-to-talk + Rundown 環節文字通道 + 尾牙系統提示詞 | 已交付（`index.html`） |
+| 1 | 兩裝置分離：`stage.html`（投影端）+ `operator.html`（手機遙控端）+ WebRTC 配對 | **本次交付** |
+| 2 | 擴充 Tools：`draw_winner`、`play_sound_effect`、`suggest_next_segment` | 待開始 |
+| 3 | 金鑰保護（ephemeral token，若要脫離內部測試環境） | 待開始 |
+| 4 | 現場彩排：實機 FPS / 延遲 / 噪音 / 會場 Wi-Fi 下的 WebRTC 連通性測試，必要時補 TURN | 待開始 |
 
 ---
 
-## 10. 風險與待決策事項
+## 7. 風險與待決策事項
 
-- **API Key 曝露**：沿用 Avatar 既有模式，開發測試用 localStorage 儲存金鑰。若僅在內部封閉網路、限定活動當天使用可接受；要更廣泛使用需導入 ephemeral token。
-- **現場網路穩定性**：Gemini Live 走 WebSocket，會場 Wi-Fi 不穩時需要斷線重連（已沿用既有重試邏輯），正式上場前建議實測會場網路。
-- **CDN 依賴**：VRM 渲染依賴 `cdnjs.cloudflare.com` 與 `cdn.jsdelivr.net` 兩個外部 CDN（跟 Avatar 頁面相同），若尾牙現場網路對這兩個網域有防火牆限制，頁面會整個載入失敗，建議提前在會場網路環境測試，必要時考慮把 three.js / three-vrm 改成本機打包。
-- **噪音環境對麥克風輸入品質的影響**：即使是 push-to-talk，按著按鈕時若背景音樂太大聲，仍可能讓 Gemini 聽錯內容，建議搭配指向性麥克風或降噪 headset mic。
+- **WebRTC 連通性（新增，見 0.1 節）**：會場 Wi-Fi 用戶隔離可能讓純 STUN 打不通，需要實測，必要時自備 TURN。
+- **API Key 曝露**：沿用 Avatar 既有模式，開發測試用 localStorage 儲存金鑰，設定在 `stage.html`（投影端筆電）。若僅在內部封閉網路、限定活動當天使用可接受；要更廣泛使用需導入 ephemeral token。
+- **現場網路穩定性**：Gemini Live 走 WebSocket，會場 Wi-Fi 不穩時需要斷線重連（已沿用既有重試邏輯）；WebRTC 連線本身也可能斷（已加 `peer.reconnect()` 與 UI 重新配對機制），正式上場前建議實測會場網路。
+- **噪音環境對麥克風輸入品質的影響**：即使是 push-to-talk，按著按鈕時若背景音樂太大聲，仍可能讓 Gemini 聽錯內容，建議搭配指向性麥克風或降噪 headset mic（接到操作手機上）。
 - **VRM 效能**：投影機/現場筆電效能不明，需要實機測試 FPS（Avatar PRD 目標 desktop ≥55、最低 30 FPS）。
 - **語音延遲的現場容忍度**：主持人若「思考」太久，現場會冷場，THINKING 狀態已有頭部微動/眨眼掩飾空檔，實際效果仍需現場驗證。
 - **決定權歸屬**：目前設計是「環節切換由人決定，AI 不自作主張換環節」，這是為了活動可控性犧牲一些 AI 自主性，需要跟主辦方確認這個取捨是否符合期待。
