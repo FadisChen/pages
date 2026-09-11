@@ -43,12 +43,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--matcha-dark
 .op-state-pill { padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 99px; color: var(--ink); background: var(--panel); font-size: 12px; font-weight: 650; }
 .op-link-button { padding: 8px 4px; border: 0; color: var(--muted); background: transparent; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
 
-.op-feed { height: 128px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-y: auto; }
-.op-feed:empty::before { content: "Nami 的對話會顯示在這裡。"; color: var(--faint); font-size: 11px; }
-.feed-line { margin: 0 0 8px; color: #47534c; font-size: 12px; line-height: 1.55; }
-.feed-line:last-child { margin-bottom: 0; }
-.feed-line.feed-model { color: var(--matcha-dark); font-weight: 600; }
-
 .op-ptt-button { width: 100%; min-height: 148px; margin-top: 16px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 20px; color: var(--matcha-dark); background: var(--panel); font-size: 20px; font-weight: 700; letter-spacing: .04em; box-shadow: 0 16px 34px rgba(63,76,67,.08); touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .12s ease, border-color .15s ease, color .15s ease, background .15s ease, box-shadow .15s ease; }
 .op-ptt-button.is-active { border-color: var(--sakura-dark); color: #fffdf8; background: var(--sakura-dark); box-shadow: 0 0 0 8px rgba(173,111,116,.16); transform: scale(.99); animation: ptt-pulse 1s ease-in-out infinite; }
 @keyframes ptt-pulse { 50% { box-shadow: 0 0 0 14px rgba(173,111,116,.08); } }

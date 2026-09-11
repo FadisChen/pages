@@ -486,7 +486,9 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.vrm.scene.position.z -= scaledCenter.z;
       this.basePosition.copy(this.vrm.scene.position);
 
-      const targetY = targetHeight * .80;
+      // targetY 稍微高於畫面中心（.83 而非 .80），讓頭頂跟畫面上緣之間留一點空間，
+      // 不然原本 .80 會讓頭頂正好貼齊可視範圍上緣，看起來像被裁到。
+      const targetY = targetHeight * .83;
       const visibleHeight = targetHeight * .40;
       const distance = visibleHeight / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
       this.baseCameraTarget.set(0, targetY, 0);
