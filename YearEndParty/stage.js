@@ -442,7 +442,9 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.vrm.scene.position.z -= scaledCenter.z;
       this.basePosition.copy(this.vrm.scene.position);
 
-      const targetY = targetHeight * .80;
+      // targetY 稍微高於畫面中心（.83 而非 .80），讓頭頂跟畫面上緣之間留一點空間，
+      // 不然原本 .80 會讓頭頂正好貼齊可視範圍上緣，看起來像被裁到。
+      const targetY = targetHeight * .83;
       const visibleHeight = targetHeight * .40;
       const distance = visibleHeight / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
       this.baseCameraTarget.set(0, targetY, 0);
@@ -862,7 +864,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.ui.settingsDialog.addEventListener("click", (event) => { if (event.target === this.ui.settingsDialog) this.closeSettings(); });
       this.ui.toggleKey.addEventListener("click", () => { const visible = this.ui.apiKey.type === "text"; this.ui.apiKey.type = visible ? "password" : "text"; this.ui.toggleKey.textContent = visible ? "show" : "hide"; });
       this.ui.settingsForm.addEventListener("input", () => this.saveSettings());
-      this.ui.pairButton.addEventListener("click", () => this.setPairPanelVisible(!this.ui.pairPanel.hidden));
 
       this.bus.on("avatar.loading", ({ progress }) => { this.ui.modelStatus.textContent = `VRM / ${progress > 0 ? `${Math.round(progress * 100)}%` : "LOADING"}`; });
       this.bus.on("avatar.ready", () => { this.ui.modelStatus.textContent = "VRM / READY"; });
@@ -1068,7 +1069,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), currentSegmentLabel: byId("currentSegmentLabel"),
       startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
-      pairButton: byId("pairButton"), pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), peerBadge: byId("peerBadge"),
+      pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), peerBadge: byId("peerBadge"),
     };
   }
 

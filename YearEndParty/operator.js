@@ -82,7 +82,10 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       this.ui.connectButton.disabled = true;
       this.ui.connectButton.textContent = "連線中…";
       try {
-        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+        // 關閉手機端的即時通話語音處理（AEC/NS/AGC）：手機不會播放現場音響的聲音，AEC 沒有實質作用；
+        // NS/AGC 是為了「人耳聽起來舒服」調校，容易在尾牙現場的音樂/嘈雜聲中誤削語音細節，
+        // 反而讓 Gemini 的辨識結果偏離實際講話內容。改送更接近原始收音的訊號給 Opus 編碼。
+        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
         this.startLevelMeter(this.micStream);
         if (!this.peer) this.peer = createPeer(undefined);
         await this.waitForPeerOpen();
@@ -127,18 +130,7 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       if (!message || typeof message !== "object") return;
       if (message.type === "status") { this.ui.stateLabel.textContent = STATE_LABELS[message.state] || message.state; return; }
       if (message.type === "connection") { this.ui.connectionLabel.textContent = CONNECTION_LABELS[message.status] || message.status; return; }
-      if (message.type === "segment-ack") { this.markSegmentActive(message.id); return; }
-      if (message.type === "transcript") { this.appendTranscript(message.role, message.text); }
-    }
-    appendTranscript(role, text) {
-      const clean = String(text || "").trim();
-      if (!clean) return;
-      const line = document.createElement("p");
-      line.className = `feed-line feed-${role === "model" ? "model" : "user"}`;
-      line.textContent = `${role === "model" ? "Nami" : "現場"}：${clean}`;
-      this.ui.feed.append(line);
-      while (this.ui.feed.children.length > 8) this.ui.feed.firstElementChild.remove();
-      this.ui.feed.scrollTop = this.ui.feed.scrollHeight;
+      if (message.type === "segment-ack") { this.markSegmentActive(message.id); }
     }
     startPtt() {
       if (this.pttActive || !this.dataConn?.open) return;
@@ -169,7 +161,6 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       const text = this.ui.noteInput.value.trim();
       if (!text || !this.dataConn?.open) return;
       this.dataConn.send({ type: "note", text });
-      this.appendTranscript("user", text);
       this.ui.noteInput.value = "";
     }
     startLevelMeter(stream) {
@@ -232,7 +223,7 @@ import { SEGMENTS, createPeer } from "./webrtc-link.js";
       segmentGrid: byId("segmentGrid"),
       pttButton: byId("pttButton"), pttLabel: byId("pttLabel"), levelBar: byId("levelBar"),
       noteForm: byId("noteForm"), noteInput: byId("noteInput"),
-      feed: byId("feed"), toastRegion: byId("toastRegion"),
+      toastRegion: byId("toastRegion"),
     };
   }
 
