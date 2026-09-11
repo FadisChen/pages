@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f1">
+  <meta name="description" content="尾牙主持人 Nami — 手機遙控端，負責 push-to-talk 收音與 Rundown 環節切換。">
+  <title>尾牙主持人 Nami（遙控端）</title>
+  <link rel="icon" href="../Avatar/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./operator.css">
+</head>
+<body>
+  <div class="op-shell">
+    <header class="op-header">
+      <span class="op-title">尾牙主持人 · 遙控端</span>
+      <span class="op-connection" id="connectionLabel">Gemini 尚未連線</span>
+    </header>
+
+    <section class="op-panel" id="pairPanel" aria-label="配對投影端">
+      <p class="op-hint">在投影端筆電開啟 stage.html，掃 QR code 或直接輸入畫面上顯示的房號。</p>
+      <form id="connectForm" class="op-connect-form">
+        <label class="sr-only" for="roomInput">投影端房號</label>
+        <input id="roomInput" type="text" inputmode="text" autocapitalize="off" autocomplete="off" placeholder="輸入房號，例如 yep-8f3k2a">
+        <button type="submit" id="connectButton" class="op-primary-button">連線</button>
+      </form>
+      <p class="op-hint op-hint-small">連線時會請求麥克風權限，請允許——這支手機接下來就是收音用的遙控器。</p>
+    </section>
+
+    <section class="op-panel" id="controlPanel" hidden aria-label="主持控制">
+      <div class="op-status-row">
+        <span class="op-state-pill" id="stateLabel">待機中</span>
+        <button type="button" id="disconnectButton" class="op-link-button">離線</button>
+      </div>
+
+      <div class="op-feed" id="feed" role="log" aria-live="polite"></div>
+
+      <button type="button" id="pttButton" class="op-ptt-button" aria-pressed="false" disabled>
+        <span id="pttLabel">按住說話</span>
+      </button>
+      <div class="op-level-track"><i id="levelBar"></i></div>
+      <p class="op-hint">按住＝把麥克風送給 Nami 聽；放開＝結束這一輪、輪到 Nami 開口回應。</p>
+
+      <div class="op-segment-block">
+        <p class="op-block-title">環節切換</p>
+        <div class="op-segment-grid" id="segmentGrid"></div>
+      </div>
+
+      <form id="noteForm" class="op-note-form">
+        <label class="sr-only" for="noteInput">現場備註／文字訊息</label>
+        <input id="noteInput" type="text" placeholder="現場備註／文字訊息……" autocomplete="off" disabled>
+        <button type="submit" class="op-link-button">送出</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="assertive" aria-atomic="true"></div>
+  <noscript><div class="op-noscript">這個頁面需要 JavaScript 才能使用。</div></noscript>
+
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script type="module" src="./operator.js"></script>
+</body>
+</html>
