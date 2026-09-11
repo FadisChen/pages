@@ -1,6 +1,6 @@
 import { GameSession, NAMES, SYMBOLS, LESSONS } from './game.js';
 import { ChessBoard } from './board.js';
-import { DEFAULT_SETTINGS, readSettings, saveSettings, requestCoach, coachPrompt } from './coach.js';
+import { DEFAULT_SETTINGS, readSettings, saveSettings, requestCoach, coachPrompt, coachSystemInstruction } from './coach.js';
 
 const $ = id => document.getElementById(id);
 let settings;
@@ -149,6 +149,7 @@ export function startNewGame() {
   $('coach-messages').replaceChildren();
   addMessage('新冒險開始了！先占領中央、讓騎士與主教出動，再想想如何保護國王。','coach','入門提示 · 本機');
   refresh(); scheduleNpc();
+  triggerAutomaticCoach(null);
 }
 
 function confirm(title, description, action, accept = '確定') {
@@ -177,12 +178,24 @@ async function performMove(move, human) {
   await board.animateMove(result);
   if (current !== revision) return;
   busy = false; refresh();
-  if (settings.enabled && ((human && settings.everyMove) || (settings.alerts && (game.chess.isCheck() || isLastPieceThreatened(result))))) askCoach('請簡短解釋最近一步的意圖或風險。', true);
+  triggerAutomaticCoach(result);
   if (game.over) showResult(); else scheduleNpc();
 }
 
 function isLastPieceThreatened(move) {
   return move.color === game.side && game.chess.isAttacked(move.to, game.side === 'w' ? 'b' : 'w');
+}
+
+function triggerAutomaticCoach(result) {
+  if (!settings.enabled) return;
+  const threatened = result && isLastPieceThreatened(result);
+  if (settings.alerts && (game.chess.isCheck() || threatened)) {
+    askCoach('請簡短解釋最近一步的意圖或風險。', true, 'Gemini · 局面提醒（將軍／受威脅）');
+    return;
+  }
+  if (settings.autoGuide && !game.over && game.humanTurn) {
+    askCoach('請給我一個簡短的走法方向建議，幫助我想想下一步可以怎麼走；不用直接告訴我完整的座標走法。', true, 'Gemini · 自動導引建議');
+  }
 }
 
 function scheduleNpc() {
@@ -242,7 +255,7 @@ function addMessage(text, type = 'coach', label = 'Gemini · AI 建議') {
   if (hasStarted && activeDrawer!=='coach' && type!=='user') $('coach-unread').hidden=false;
 }
 
-async function askCoach(question = '現在我應該注意什麼？請給我一個容易理解的建議。', automatic = false) {
+async function askCoach(question = '現在我應該注意什麼？請給我一個容易理解的建議。', automatic = false, label = null) {
   if (coachController) { if (!automatic) toast('路米正在思考，請稍候一下。'); return; }
   if (!settings.enabled || !settings.apiKey || !settings.model) {
     if (automatic) return;
@@ -257,8 +270,8 @@ async function askCoach(question = '現在我應該注意什麼？請給我一�
   if (!automatic) addMessage(question,'user','');
   $('ask-coach').disabled = true; $('ask-coach').textContent = '路米正在思考…';
   try {
-    const result = await requestCoach({ settings, prompt: coachPrompt(game.chess,game.side,question), signal: coachController.signal });
-    if (generation === coachGeneration) addMessage(result,'coach',`Gemini · 第 ${moveNumber} 手局面 · AI 建議`);
+    const result = await requestCoach({ settings, prompt: coachPrompt(game.chess,question), systemInstruction: coachSystemInstruction(game.side), signal: coachController.signal });
+    if (generation === coachGeneration) addMessage(result,'coach',label || `Gemini · 第 ${moveNumber} 手局面 · AI 建議`);
   } catch (error) {
     if (generation === coachGeneration) addMessage(error.message,'error','教練暫時離線 · 棋局不受影響');
   } finally {
@@ -273,7 +286,7 @@ function openSettings() {
   $('quality').value = settings.quality; $('sound').checked = settings.sound; $('music').checked = settings.music;
   $('coach-enabled').checked = settings.enabled; $('api-key').value = settings.apiKey;
   $('model').value = settings.model; $('remember-key').checked = settings.remember;
-  $('every-move').checked = settings.everyMove; $('coach-alerts').checked = settings.alerts;
+  $('auto-guide').checked = settings.autoGuide; $('coach-alerts').checked = settings.alerts;
   $('settings-dialog').showModal();
 }
 
@@ -341,7 +354,7 @@ function bindUI() {
       (!$('api-key').value.trim()?$('api-key'):$('model')).focus(); return;
     }
     stopCoach();
-    Object.assign(settings,{ quality:$('quality').value, sound:$('sound').checked, music:$('music').checked, enabled:$('coach-enabled').checked, apiKey:$('api-key').value.trim(), model:$('model').value.trim(), remember:$('remember-key').checked, everyMove:$('every-move').checked, alerts:$('coach-alerts').checked });
+    Object.assign(settings,{ quality:$('quality').value, sound:$('sound').checked, music:$('music').checked, enabled:$('coach-enabled').checked, apiKey:$('api-key').value.trim(), model:$('model').value.trim(), remember:$('remember-key').checked, autoGuide:$('auto-guide').checked, alerts:$('coach-alerts').checked });
     persist(); board.setQuality(settings.quality); updateCoachMode(); syncBackgroundMusic(); $('settings-dialog').close();
     $('api-key').value=''; toast('設定已儲存，繼續你的冒險吧。');
   });
