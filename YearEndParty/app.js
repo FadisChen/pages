@@ -588,13 +588,13 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.bus.on("gemini.disconnected", () => { this.setConnectionStatus("offline"); this.updatePttButton(); });
       this.bus.on("gemini.error", (error) => this.showError(error.message));
       this.bus.on("gemini.input-start", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.transcript.clearPartial("user"); });
-      this.bus.on("gemini.connection-lost", () => { this.stopPtt(); this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.connection-lost", () => { this.stopPtt(); this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
       this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.transcript.add("user", text, true); this.turnComplete = false; });
       this.bus.on("gemini.model-transcript", (text) => { this.transcript.add("model", text, true); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
-      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); this.transcript.clearPartial("model"); });
+      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); this.transcript.clearPartial("model"); });
       this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.transcript.clearPartial("model"); });
     }
     // Push-to-talk：用 Pointer Capture 確保放開時一定能收到 pointerup，
@@ -720,6 +720,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       await this.mic.stop();
       this.audioPlayer.stop();
       this.lipSync.reset();
+      this.resetEmotion();
       this.stateMachine.toIdle();
       this.updateCallButton(false);
       this.updatePttButton();
@@ -786,8 +787,9 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.ui.outputLevelBar.style.width = `${Math.round(output * 100)}%`;
       if (this.sessionStartedAt) { const seconds = Math.floor((now - this.sessionStartedAt) / 1000); this.ui.sessionClock.textContent = formatClock(seconds); } else this.ui.sessionClock.textContent = "00:00";
       this.ui.waveform.querySelectorAll("i").forEach((bar, index) => { const pulse = .4 + ((Math.sin(now / 170 + index * 1.4) + 1) / 2) * (state === STATES.SPEAKING ? .6 : .22); bar.style.setProperty("--wave", String(pulse)); });
-      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) this.stateMachine.toListening();
+      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
   }
 
   function collectUI() {

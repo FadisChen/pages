@@ -556,20 +556,25 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.hasEverPaired = false;
       this.lastFrame = performance.now();
       this.fps = 60;
+      this.pipWindow = null;
+      this.pipPlaceholder = null;
+      this.loopGeneration = 0;
       this.bindEvents();
       this.applySettings();
       this.updateCallButton(false);
       this.setPairPanelVisible(true);
+      this.setupPip();
       this.peerLink.start();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden && this.callActive) this.audioPlayer.ensureContext().catch((error) => this.showError(`AudioContext 無法恢復：${error.message}`));
       });
-      window.addEventListener("pagehide", () => { this.gemini.disconnect(false); this.audioPlayer.close(); this.avatar.dispose(); });
-      this.renderLoop();
+      window.addEventListener("pagehide", () => { this.pipWindow?.close(); this.gemini.disconnect(false); this.audioPlayer.close(); this.avatar.dispose(); });
+      this.startRenderLoop();
     }
     bindEvents() {
       this.ui.startCall.addEventListener("click", () => { if (this.callActive) this.endCall(); else this.startCall(); });
       this.ui.settingsButton.addEventListener("click", () => this.openSettings());
+      this.ui.pipButton?.addEventListener("click", () => this.togglePip());
       this.ui.closeSettings.addEventListener("click", () => this.closeSettings());
       this.ui.settingsDialog.addEventListener("click", (event) => { if (event.target === this.ui.settingsDialog) this.closeSettings(); });
       this.ui.toggleKey.addEventListener("click", () => { const visible = this.ui.apiKey.type === "text"; this.ui.apiKey.type = visible ? "password" : "text"; this.ui.toggleKey.textContent = visible ? "show" : "hide"; });
@@ -698,6 +703,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.gemini.disconnect();
       this.audioPlayer.stop();
       this.lipSync.reset();
+      this.resetEmotion();
       this.stateMachine.toIdle();
       this.updateCallButton(false);
       this.sessionStartedAt = 0;
@@ -710,6 +716,75 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     closeSettings() {
       if (typeof this.ui.settingsDialog.close === "function" && this.ui.settingsDialog.open) this.ui.settingsDialog.close();
       else this.ui.settingsDialog.removeAttribute("open");
+    }
+    // 浮動視窗（Document Picture-in-Picture）：把 #stageVisual 這塊 DOM 原地搬進一個獨立的
+    // 常駐頂層小視窗，可拖曳、可縮放，切換分頁去開小遊戲／抽獎頁面時仍浮在最上層。
+    // 純附加功能——不支援的瀏覽器直接隱藏按鈕，其餘連線／播放／狀態機邏輯完全不受影響；
+    // 只有 renderLoop 的 requestAnimationFrame 來源會跟著目前畫面所在的視窗切換，
+    // 這是避免分頁被切到背景時動畫被瀏覽器節流卡住的必要作法。
+    setupPip() {
+      if (!this.ui.pipButton || !("documentPictureInPicture" in window)) return;
+      this.ui.pipButton.hidden = false;
+    }
+    async togglePip() {
+      if (this.pipWindow) {
+        const pipWindow = this.pipWindow;
+        this.exitPip();
+        pipWindow.close();
+        return;
+      }
+      await this.enterPip();
+    }
+    async enterPip() {
+      const stageVisual = this.ui.stageVisual;
+      const rect = stageVisual.getBoundingClientRect();
+      let pipWindow;
+      try {
+        pipWindow = await documentPictureInPicture.requestWindow({
+          width: Math.max(240, Math.round(rect.width) || 360),
+          height: Math.max(240, Math.round(rect.height) || 480),
+        });
+      } catch (error) {
+        this.showError(`無法開啟浮動視窗：${error.message || error}`, true);
+        return;
+      }
+      this.pipWindow = pipWindow;
+      for (const styleSheet of document.styleSheets) {
+        if (!styleSheet.href) continue;
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = styleSheet.href;
+        pipWindow.document.head.append(link);
+      }
+      pipWindow.document.title = document.title;
+      pipWindow.document.body.classList.add("stage-pip-body");
+      this.pipPlaceholder = document.createComment("stage-visual-placeholder");
+      stageVisual.before(this.pipPlaceholder);
+      pipWindow.document.body.append(stageVisual);
+      this.avatar.resize();
+      this.startRenderLoop();
+      pipWindow.addEventListener("resize", () => this.avatar.resize());
+      pipWindow.addEventListener("pagehide", () => { if (this.pipWindow === pipWindow) this.exitPip(); }, { once: true });
+      this.updatePipButton(true);
+      this.closeSettings();
+    }
+    exitPip() {
+      if (!this.pipWindow) return;
+      const stageVisual = this.ui.stageVisual;
+      if (this.pipPlaceholder?.parentNode) {
+        this.pipPlaceholder.replaceWith(stageVisual);
+      }
+      this.pipPlaceholder = null;
+      this.pipWindow = null;
+      this.avatar.resize();
+      this.startRenderLoop();
+      this.updatePipButton(false);
+    }
+    updatePipButton(active) {
+      if (!this.ui.pipButton) return;
+      this.ui.pipButton.classList.toggle("is-active", active);
+      this.ui.pipButton.setAttribute("aria-pressed", String(active));
+      this.ui.pipButton.title = active ? "取消浮動視窗" : "浮動視窗（切換分頁時仍會顯示在最上層）";
     }
     setEmotion(emotion) {
       if (!EMOTIONS.includes(emotion)) return;
@@ -754,7 +829,20 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       const toast = document.createElement("div"); toast.className = "toast"; toast.textContent = message; this.ui.toastRegion.append(toast);
       setTimeout(() => toast.remove(), persistent ? 7200 : 4800);
     }
-    renderLoop() {
+    // startRenderLoop 用世代編號（loopGeneration）保護：進出浮動視窗時會重新呼叫它，
+    // 讓迴圈立刻改綁到目前正確的視窗。舊迴圈下一次要排下一幀時發現世代編號已經變了就
+    // 自行停止，避免浮動視窗關閉瞬間「上一輪排給它的 requestAnimationFrame 永遠不會觸發」
+    // 導致整個動畫迴圈跟著停擺、Avatar 搬回原本視窗後卻不會再更新畫面。
+    startRenderLoop() {
+      const generation = ++this.loopGeneration;
+      const step = () => {
+        if (generation !== this.loopGeneration) return;
+        this.renderFrame();
+        (this.pipWindow || window).requestAnimationFrame(step);
+      };
+      step();
+    }
+    renderFrame() {
       const now = performance.now();
       const delta = Math.min(.1, Math.max(.001, (now - this.lastFrame) / 1000));
       this.lastFrame = now;
@@ -762,7 +850,6 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.lipSync.update(delta);
       this.avatar.update(delta);
       this.updateUI(now);
-      requestAnimationFrame(() => this.renderLoop());
     }
     updateUI(now) {
       const state = this.stateMachine.getState();
@@ -787,6 +874,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), currentSegmentLabel: byId("currentSegmentLabel"),
       startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
       pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), peerBadge: byId("peerBadge"),
+      pipButton: byId("pipButton"),
     };
   }
 
