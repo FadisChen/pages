@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VRM 虛擬主播疊加層</title>
+<link rel="stylesheet" href="css/style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js",
+    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs"
+  }
+}
+</script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>VRM 虛擬主播疊加層 (VTuber-lite)</h1>
+    <select id="model-select">
+      <option value="su.vrm">Su</option>
+      <option value="mia.vrm">Mia</option>
+      <option value="sha.vrm">Sha</option>
+      <option value="SpringSnow.vrm">SpringSnow</option>
+    </select>
+    <select id="bg-select">
+      <option value="transparent">透明背景 (OBS 用)</option>
+      <option value="green">綠幕</option>
+      <option value="dark">深色</option>
+    </select>
+    <span class="status-pill"><span class="status-dot" id="status-dot"></span><span id="status-text">尚未啟動</span></span>
+    <nav>
+      <a href="index.html">首頁</a>
+      <a href="configurator.html">預覽展示台</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <div class="viewport" id="viewport">
+      <canvas id="canvas"></canvas>
+      <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">模型載入中…</div>
+      </div>
+      <div class="webcam-preview" id="webcam-preview">
+        <video id="webcam-video" autoplay playsinline muted></video>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h2>攝影機</h2>
+        <button id="toggle-camera" class="primary" style="width:100%;">啟動攝影機追蹤</button>
+        <div class="toggle-row" style="margin-top:10px;">
+          <span>鏡像模式</span>
+          <button id="toggle-mirror" class="toggled">開啟</button>
+        </div>
+        <div class="toggle-row">
+          <span>顯示攝影機預覽</span>
+          <button id="toggle-preview" class="toggled">顯示</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>追蹤靈敏度</h2>
+        <div class="toggle-row">
+          <span>頭部轉動幅度</span>
+          <input type="range" id="head-gain" min="0.3" max="2" step="0.1" value="1" />
+        </div>
+        <div class="toggle-row">
+          <span>表情強度</span>
+          <input type="range" id="expr-gain" min="0.3" max="2" step="0.1" value="1" />
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>說明</h2>
+        <p class="hint">
+          啟動攝影機後，程式會用 MediaPipe Face Landmarker 即時偵測臉部表情係數（張嘴、微笑、眨眼、眉毛等）與頭部朝向，
+          並映射到 VRM 角色的表情與頭頸骨骼上。可切換「透明背景」作為 OBS 瀏覽器來源疊加層使用。
+        </p>
+        <p class="hint">需要瀏覽器授權攝影機權限；所有運算都在本機瀏覽器內完成，不會上傳影像。</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/vtuber.js"></script>
+</body>
+</html>

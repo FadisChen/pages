@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VRM 角色預覽展示台</title>
+<link rel="stylesheet" href="css/style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+  }
+}
+</script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>VRM 角色預覽展示台</h1>
+    <select id="model-select">
+      <option value="su.vrm">Su</option>
+      <option value="mia.vrm">Mia</option>
+      <option value="sha.vrm">Sha</option>
+      <option value="SpringSnow.vrm">SpringSnow</option>
+    </select>
+    <nav>
+      <a href="index.html">首頁</a>
+      <a href="vtuber.html">VTuber 疊加層</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <div class="viewport">
+      <canvas id="canvas"></canvas>
+      <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">模型載入中…</div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h2>表情</h2>
+        <div class="btn-grid" id="expression-grid"></div>
+      </div>
+
+      <div class="panel">
+        <h2>嘴型 (Viseme)</h2>
+        <div class="row-flow" id="viseme-row"></div>
+        <div class="toggle-row" style="margin-top:8px;">
+          <span>自動說話 Demo</span>
+          <button id="toggle-lipsync">開始</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>動作 Demo</h2>
+        <div class="btn-grid">
+          <button id="motion-wave">揮手</button>
+          <button id="motion-nod">點頭</button>
+          <button id="motion-shake">搖頭</button>
+          <button id="motion-look">看左右</button>
+          <button id="motion-reset" style="grid-column: span 2;">重置姿勢</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>其他</h2>
+        <div class="toggle-row">
+          <span>待機呼吸</span>
+          <button id="toggle-breathing" class="toggled">開啟</button>
+        </div>
+        <div class="toggle-row">
+          <span>自動眨眼</span>
+          <button id="toggle-blink" class="toggled">開啟</button>
+        </div>
+        <p class="hint">滑鼠拖曳可旋轉視角、滾輪縮放。此模型未內建動畫，「動作 Demo」為程式即時驅動骨架的示範效果。</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/configurator.js"></script>
+</body>
+</html>
