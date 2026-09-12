@@ -1,6 +1,6 @@
 # Orbit Friend — Gemini Live Avatar
 
-這個資料夾是一個可獨立啟動的純前端頁面，沒有引用 `web/` 其他目錄的程式、圖片或套件。Three.js 與 `@pixiv/three-vrm` 由 HTML import map 從 CDN 載入，VRM 模型使用本資料夾內的 `SpringSnow無料版.vrm`。它使用瀏覽器原生 WebSocket 連接 Gemini Live API，使用 Web Audio API 完成麥克風 PCM 取樣、回覆音訊排程與 client-side lip sync。
+這個資料夾是一個可獨立啟動的純前端頁面，沒有引用 `web/` 其他目錄的程式、圖片或套件。Three.js 與 `@pixiv/three-vrm` 由 HTML import map 從 CDN 載入，VRM 模型使用本資料夾內的 `SpringSnow.vrm`。它使用瀏覽器原生 WebSocket 連接 Gemini Live API，使用 Web Audio API 完成麥克風 PCM 取樣、回覆音訊排程與 client-side lip sync。
 
 ## 啟動
 

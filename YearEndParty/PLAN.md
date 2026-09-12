@@ -4,12 +4,12 @@
 
 ## 0. 與既有專案的關係
 
-`Avatar/` 資料夾不只是一份 PRD，而是一個已經可以動的完整實作——`Avatar/index.html` + `Avatar/app.js`（three.js + `@pixiv/three-vrm` + Gemini Live WebSocket + client-side lip sync，全部串好了）、`Avatar/SpringSnow無料版.vrm`（實際的 VRM 模型檔）、以及一組共用小工具模組。**YearEndParty 不是從 PRD 重新做一個 Avatar 系統，而是直接 fork `Avatar/app.js` 這份已驗證可動的程式碼，在上面加尾牙主持人需要的行為。**
+`Avatar/` 資料夾不只是一份 PRD，而是一個已經可以動的完整實作——`Avatar/index.html` + `Avatar/app.js`（three.js + `@pixiv/three-vrm` + Gemini Live WebSocket + client-side lip sync，全部串好了）、`Avatar/SpringSnow.vrm`（實際的 VRM 模型檔）、以及一組共用小工具模組。**YearEndParty 不是從 PRD 重新做一個 Avatar 系統，而是直接 fork `Avatar/app.js` 這份已驗證可動的程式碼，在上面加尾牙主持人需要的行為。**
 
 | 來源 | 提供什麼 | 在本專案中的角色 |
 | --- | --- | --- |
 | `Avatar/app.js`（1049 行） | 完整、已可運作的 VRM 渲染、State Machine、Lip Sync、Gemini Live WebSocket client、情緒 tool call、逐字稿、設定面板 | **直接 fork 並修改**，是 `stage.js`／`app.js` 的基礎 |
-| `Avatar/SpringSnow無料版.vrm`（15.6 MB） | 實際的 VRM 角色模型 | 透過相對路徑 `../Avatar/...` 重用同一份檔案，**不複製** |
+| `Avatar/SpringSnow.vrm`（15.6 MB） | 實際的 VRM 角色模型 | 透過相對路徑 `../Avatar/...` 重用同一份檔案，**不複製** |
 | `Avatar/washi-enso.png`、`Avatar/favicon.svg` | 舞台背景圖、favicon | 同樣以相對路徑重用 |
 | `Avatar/avatar-emotions.js`、`live-audio-policy.js`、`session-context.js`、`transcript.js` | Emotion function-calling tool、音訊播放策略、session 環境上下文、逐字稿正規化等小工具模組 | 以 ES module 相對匯入重用，不重複貼一份程式碼 |
 
@@ -110,7 +110,7 @@ activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
 
 ## 4. Avatar / Lip Sync
 
-完全沿用 `Avatar/app.js` 已經做好的實作（VRM 載入、骨骼綁定、表情別名解析、呼吸/眨眼/頭部微動 idle 動畫、以頻段能量分類 viseme 的 lip sync、State Machine 動畫權重混合、情緒 crossfade）。`stage.js` 唯一改動是把 `AVATAR_MODEL_URL` 指到 `../Avatar/SpringSnow無料版.vrm`，其餘渲染／動畫程式碼沒有動。
+完全沿用 `Avatar/app.js` 已經做好的實作（VRM 載入、骨骼綁定、表情別名解析、呼吸/眨眼/頭部微動 idle 動畫、以頻段能量分類 viseme 的 lip sync、State Machine 動畫權重混合、情緒 crossfade）。`stage.js` 唯一改動是把 `AVATAR_MODEL_URL` 指到 `../Avatar/SpringSnow.vrm`，其餘渲染／動畫程式碼沒有動。
 
 ---
 

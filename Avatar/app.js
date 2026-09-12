@@ -22,10 +22,10 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
   const AVATAR_MODELS = Object.freeze([
-    { id: "springsnow", name: "SpringSnow", url: "./SpringSnow無料版.vrm", mouthIntensity: 1 },
-    { id: "mia", name: "Mia", url: "./mia.vrm", mouthIntensity: .6 },
-    { id: "sha", name: "Sha", url: "./sha.vrm", mouthIntensity: .45 },
-    { id: "su", name: "Su", url: "./su.vrm", mouthIntensity: .45 },
+    { id: "springsnow", name: "SpringSnow", url: "../vrm/SpringSnow.vrm", mouthIntensity: 1 },
+    { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
+    { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },
+    { id: "su", name: "Su", url: "../vrm/su.vrm", mouthIntensity: .45 },
   ]);
   const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";

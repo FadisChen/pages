@@ -5,7 +5,7 @@ import { GeminiAudioPlayer } from "./audio-player.js";
 import { DEFAULT_USER_SYSTEM_PROMPT } from "./host-config.js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { VRMLoaderPlugin } from "@pixiv/three-vrm";
+import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
 import {
   AVATAR_EMOTIONS,
 } from "../Avatar/avatar-emotions.js";
@@ -22,13 +22,19 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
   "use strict";
 
   const SETTINGS_KEY = "year-end-party.host.settings.v1";
-  const AVATAR_MODEL_URL = "../Avatar/SpringSnow無料版.vrm";
+  const AVATAR_MODELS = Object.freeze([
+    { id: "springsnow", name: "SpringSnow", url: "../vrm/SpringSnow.vrm", mouthIntensity: 1 },
+    { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
+    { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },
+    { id: "su", name: "Su", url: "../vrm/su.vrm", mouthIntensity: .45 },
+  ]);
+  const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "主持中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "按住「按住說話」就能對她下指令", listening: "正在聽工作人員說話", thinking: "讓我想一下", speaking: "主持詞正在變成表情", interrupted: "收到，請繼續說" });
-  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "" });
+  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "", avatarModel: DEFAULT_AVATAR_MODEL_ID });
 
   class EventBus {
     constructor() { this.listeners = new Map(); }
@@ -140,16 +146,18 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
   }
 
   class VRMAvatarController {
-    constructor(canvas, interactionSurface, bus) {
+    constructor(canvas, interactionSurface, bus, modelUrl) {
       this.canvas = canvas;
       this.interactionSurface = interactionSurface || canvas.parentElement || canvas;
       this.bus = bus;
+      this.modelUrl = modelUrl || AVATAR_MODELS[0].url;
       this.renderer = null;
       this.scene = null;
       this.camera = null;
       this.vrm = null;
       this.loaded = false;
       this.loadProgress = 0;
+      this.loadToken = 0;
       this.bones = {};
       this.restPose = new Map();
       this.expressionAliases = {};
@@ -170,6 +178,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.emotionMix = 1;
       this.viseme = "none";
       this.mouthWeight = 0;
+      this.mouthIntensity = 1;
       this.inputLevel = 0;
       this.outputLevel = 0;
       this.elapsed = 0;
@@ -277,20 +286,37 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
         queueMicrotask(() => this.bus.emit("avatar.error", error instanceof Error ? error : new Error(String(error))));
       }
     }
+    async switchModel(url) {
+      if (!url || url === this.modelUrl) return;
+      this.modelUrl = url;
+      await this.loadModel();
+    }
     async loadModel() {
       if (!this.renderer) return;
+      const requestToken = ++this.loadToken;
+      this.loaded = false;
+      this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
+      if (this.vrm?.scene) {
+        this.scene.remove(this.vrm.scene);
+        VRMUtils.deepDispose(this.vrm.scene);
+      }
+      this.vrm = null;
+      this.bones = {};
+      this.restPose.clear();
+      this.expressionAliases = {};
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
       this.bus.emit("avatar.loading", { progress: 0 });
       try {
-        const gltf = await loader.loadAsync(AVATAR_MODEL_URL, (progress) => {
+        const gltf = await loader.loadAsync(this.modelUrl, (progress) => {
           const total = Number(progress.total) || 0;
           const loaded = Number(progress.loaded) || 0;
           this.loadProgress = total ? clamp(loaded / total, 0, 1) : this.loadProgress;
           this.bus.emit("avatar.loading", { progress: this.loadProgress });
         });
+        if (requestToken !== this.loadToken) return;
         const vrm = gltf.userData.vrm;
-        if (!vrm?.scene) throw new Error("SpringSnow無料版.vrm 沒有可顯示的 VRM scene。");
+        if (!vrm?.scene) throw new Error(`${this.modelUrl} 沒有可顯示的 VRM scene。`);
         this.vrm = vrm;
         this.vrm.scene.rotation.y = Math.PI;
         this.scene.add(this.vrm.scene);
@@ -298,6 +324,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
         this.loaded = true;
         this.bus.emit("avatar.ready", { expressionNames: Object.keys(this.expressionAliases).filter((name) => this.expressionAliases[name]) });
       } catch (error) {
+        if (requestToken !== this.loadToken) return;
         this.loaded = false;
         this.bus.emit("avatar.error", error instanceof Error ? error : new Error(String(error)));
       }
@@ -373,9 +400,9 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       if (!this.vrm?.expressionManager) return;
       for (const name of ["neutral", "happy", "sad", "angry", "surprised"]) {
         const weight = name === this.emotion ? this.emotionMix : name === this.emotionFrom ? 1 - this.emotionMix : 0;
-        this.setExpression(name, weight);
+        this.setExpression(name, name === "happy" ? weight * this.mouthIntensity : weight);
       }
-      for (const name of ["aa", "ih", "ou", "ee", "oh"]) this.setExpression(name, name === this.viseme ? this.mouthWeight : 0);
+      for (const name of ["aa", "ih", "ou", "ee", "oh"]) this.setExpression(name, name === this.viseme ? this.mouthWeight * this.mouthIntensity : 0);
       this.applyBlink();
     }
     applyBoneOffset(name, x = 0, y = 0, z = 0) {
@@ -495,14 +522,16 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
     constructor() {
       this.bus = new EventBus();
       this.ui = collectUI();
+      populateAvatarModelSelect(this.ui.avatarModel);
+      this.settings = loadSettings();
       this.stateMachine = new AvatarStateMachine(this.bus);
       this.audioPlayer = new GeminiAudioPlayer(this.bus);
       this.mic = new MicrophoneInput(this.audioPlayer, this.bus);
       this.lipSync = new LipSyncEngine(this.audioPlayer, this.bus);
-      this.avatar = new VRMAvatarController(this.ui.avatarCanvas, this.ui.stageVisual, this.bus);
+      const initialModel = AVATAR_MODELS.find((model) => model.id === this.settings.avatarModel) || AVATAR_MODELS[0];
+      this.avatar = new VRMAvatarController(this.ui.avatarCanvas, this.ui.stageVisual, this.bus, initialModel.url);
       this.gemini = new GeminiLiveClient(this.bus);
       this.transcript = new TranscriptView(this.ui.transcript);
-      this.settings = loadSettings();
       this.callActive = false;
       this.callToken = 0;
       this.turnComplete = false;
@@ -543,6 +572,11 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.ui.settingsDialog.addEventListener("click", (event) => { if (event.target === this.ui.settingsDialog) this.closeSettings(); });
       this.ui.toggleKey.addEventListener("click", () => { const visible = this.ui.apiKey.type === "text"; this.ui.apiKey.type = visible ? "password" : "text"; this.ui.toggleKey.textContent = visible ? "show" : "hide"; });
       this.ui.settingsForm.addEventListener("input", () => this.saveSettings());
+      this.ui.avatarModel.addEventListener("change", () => {
+        this.saveSettings();
+        const model = AVATAR_MODELS.find((entry) => entry.id === this.settings.avatarModel);
+        if (model) this.avatar.switchModel(model.url);
+      });
       this.ui.textForm.addEventListener("submit", (event) => { event.preventDefault(); this.sendText(); });
       this.bindPtt();
       this.bus.on("avatar.loading", ({ progress }) => { this.ui.modelStatus.textContent = `VRM / ${progress > 0 ? `${Math.round(progress * 100)}%` : "LOADING"}`; });
@@ -621,13 +655,16 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.ui.thinking.value = this.settings.thinking;
       this.ui.userSystemPrompt.value = this.settings.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT;
       this.ui.apiKey.value = this.settings.apiKey || "";
+      this.ui.avatarModel.value = this.settings.avatarModel;
     }
     saveSettings() {
+      const avatarModel = AVATAR_MODELS.some((entry) => entry.id === this.ui.avatarModel.value) ? this.ui.avatarModel.value : DEFAULT_AVATAR_MODEL_ID;
       this.settings = {
         voice: this.ui.voice.value,
         thinking: this.ui.thinking.value,
         userSystemPrompt: this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT,
         apiKey: this.ui.apiKey.value.trim(),
+        avatarModel,
       };
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch (_) { /* storage may be blocked */ }
     }
@@ -756,9 +793,19 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
     const byId = (id) => document.getElementById(id);
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), waveform: byId("waveform"),
-      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
+      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
       pttButton: byId("pttButton"), pttLabel: byId("pttLabel"), rundownBar: byId("rundownBar"), currentSegmentLabel: byId("currentSegmentLabel"),
     };
+  }
+
+  function populateAvatarModelSelect(select) {
+    select.innerHTML = "";
+    for (const model of AVATAR_MODELS) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.name;
+      select.append(option);
+    }
   }
 
   function loadSettings() {
@@ -769,7 +816,8 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       const sessionKey = sessionStorage.getItem(`${SETTINGS_KEY}.apiKey`) || "";
       const saved = { ...DEFAULT_USER_SETTINGS, ...(sessionSaved && typeof sessionSaved === "object" ? sessionSaved : {}), ...(localSaved && typeof localSaved === "object" ? localSaved : {}) };
       if (!saved.apiKey) saved.apiKey = localKey || sessionKey;
-      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey };
+      const avatarModel = AVATAR_MODELS.some((model) => model.id === saved.avatarModel) ? saved.avatarModel : DEFAULT_AVATAR_MODEL_ID;
+      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey, avatarModel };
     } catch (_) {
       return { ...DEFAULT_USER_SETTINGS };
     }
