@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { FINGER_BONES } from './motion-retargeter.js';
 
 // Some VRoid exports have much more sensitive mouth-region morph targets than
 // others; without this a viseme or a mouth-heavy emotion (happy/sad/surprised)
@@ -15,18 +16,10 @@ export const MOUTH_INTENSITY = {
   'Purple.vrm': 1,
 };
 
-const FINGER_DIGITS = ['Thumb', 'Index', 'Middle', 'Ring', 'Little'];
-const FINGER_SEGMENTS = ['Proximal', 'Intermediate', 'Distal'];
-const FINGER_BONES = ['left', 'right'].flatMap((side) =>
-  FINGER_DIGITS.flatMap((digit) =>
-    FINGER_SEGMENTS.map((segment) => `${side}${digit}${segment}`)
-  )
-);
-
 const TRACKED_BONES = [
   'hips', 'spine', 'chest', 'neck', 'head',
-  'leftUpperArm', 'leftLowerArm', 'leftHand',
-  'rightUpperArm', 'rightLowerArm', 'rightHand',
+  'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand',
+  'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',
   ...FINGER_BONES,
 ];
 
