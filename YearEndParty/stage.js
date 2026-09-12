@@ -703,6 +703,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.gemini.disconnect();
       this.audioPlayer.stop();
       this.lipSync.reset();
+      this.resetEmotion();
       this.stateMachine.toIdle();
       this.updateCallButton(false);
       this.sessionStartedAt = 0;

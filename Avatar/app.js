@@ -987,6 +987,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       await this.mic.stop();
       this.audioPlayer.stop();
       this.lipSync.reset();
+      this.resetEmotion();
       this.stateMachine.toIdle();
       this.updateCallButton(false);
       this.sessionStartedAt = 0;
