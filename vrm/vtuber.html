@@ -11,7 +11,8 @@
     "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
     "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js",
-    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs"
+    "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs",
+    "kalidokit": "https://cdn.jsdelivr.net/npm/kalidokit@1.1/dist/kalidokit.es.js"
   }
 }
 </script>
@@ -61,6 +62,10 @@
           <span>顯示攝影機預覽</span>
           <button id="toggle-preview" class="toggled">顯示</button>
         </div>
+        <div class="toggle-row">
+          <span>上半身動作追蹤</span>
+          <button id="toggle-pose" class="toggled">開啟</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -79,9 +84,9 @@
         <h2>說明</h2>
         <p class="hint">
           啟動攝影機後，程式會用 MediaPipe Face Landmarker 即時偵測臉部表情係數（張嘴、微笑、眨眼、眉毛等）與頭部朝向，
-          並映射到 VRM 角色的表情與頭頸骨骼上。可切換「透明背景」作為 OBS 瀏覽器來源疊加層使用。
+          並用 Pose Landmarker 偵測肩膀、手肘、手腕，交給 Kalidokit 計算出手臂與手腕的骨骼旋轉角度，套用到 VRM 角色的表情、頭頸與雙臂（含手腕）骨骼上。可切換「透明背景」作為 OBS 瀏覽器來源疊加層使用。
         </p>
-        <p class="hint">需要瀏覽器授權攝影機權限；所有運算都在本機瀏覽器內完成，不會上傳影像。</p>
+        <p class="hint">需要瀏覽器授權攝影機權限；所有運算都在本機瀏覽器內完成，不會上傳影像。手臂追蹤需要肩膀到手腕都在畫面內才會生效。</p>
       </div>
     </div>
   </div>
