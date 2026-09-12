@@ -588,13 +588,13 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.bus.on("gemini.disconnected", () => this.setConnectionStatus("offline"));
       this.bus.on("gemini.error", (error) => this.showError(error.message));
       this.bus.on("gemini.input-start", () => { this.audioPlayer.stop(); this.lipSync.reset(); });
-      this.bus.on("gemini.connection-lost", () => { this.pttActive = false; this.audioPlayer.stop(); this.lipSync.reset(); });
+      this.bus.on("gemini.connection-lost", () => { this.pttActive = false; this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); });
       this.bus.on("gemini.avatar-emotion", ({ emotion }) => { this.bus.emit("avatar.emotion", { emotion }); });
       this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.turnComplete = false; this.peerLink.send({ type: "transcript", role: "user", text }); });
       this.bus.on("gemini.model-transcript", (text) => { this.peerLink.send({ type: "transcript", role: "model", text }); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
-      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); });
+      this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); });
       this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.peerLink.send({ type: "turn-complete" }); });
 
       this.bus.on("peerlink.ready", ({ roomCode }) => this.showRoomCode(roomCode));
@@ -775,8 +775,9 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.ui.outputLevelValue.textContent = `${Math.round(output * 100)}%`;
       this.ui.outputLevelBar.style.width = `${Math.round(output * 100)}%`;
       if (this.sessionStartedAt) { const seconds = Math.floor((now - this.sessionStartedAt) / 1000); this.ui.sessionClock.textContent = formatClock(seconds); } else this.ui.sessionClock.textContent = "00:00";
-      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) this.stateMachine.toListening();
+      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
   }
 
   function collectUI() {
