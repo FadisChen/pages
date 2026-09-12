@@ -568,7 +568,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       if (!this.vrm?.expressionManager) return;
       for (const name of ["neutral", "happy", "sad", "angry", "surprised"]) {
         const weight = name === this.emotion ? this.emotionMix : name === this.emotionFrom ? 1 - this.emotionMix : 0;
-        this.setExpression(name, weight);
+        this.setExpression(name, name === "happy" ? weight * this.mouthIntensity : weight);
       }
       for (const name of ["aa", "ih", "ou", "ee", "oh"]) this.setExpression(name, name === this.viseme ? this.mouthWeight * this.mouthIntensity : 0);
       this.applyBlink();
