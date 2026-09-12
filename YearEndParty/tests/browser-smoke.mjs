@@ -108,6 +108,14 @@ try {
   await evaluate("connection.emit('data', {type:'transcript', role:'user', text:'下一個環節是頒獎'}); connection.emit('data', {type:'connection', status:'reconnecting'})");
   assert.equal(await evaluate("document.getElementById('lastHeard').textContent"), "下一個環節是頒獎");
   assert.equal(await evaluate("document.getElementById('pttButton').disabled"), true);
+  await evaluate("connection.emit('data', {type:'connection', status:'connected'}); document.getElementById('pttButton').dispatchEvent(new PointerEvent('pointerdown', {pointerId:2, pointerType:'touch', bubbles:true}))");
+  await new Promise(resolve => setTimeout(resolve, 150));
+  await evaluate("connection.emit('data', {type:'connection', status:'failed'})");
+  await new Promise(resolve => setTimeout(resolve, 150));
+  assert.equal(await evaluate("document.getElementById('pttButton').disabled"), true);
+  assert.equal(await evaluate("document.getElementById('pttButton').getAttribute('aria-pressed')"), "false");
+  assert.equal(await evaluate("document.getElementById('controlPanel').hidden"), false);
+  assert.deepEqual(await evaluate("sent.at(-1)"), { type: "ptt", active: false });
   await evaluate("document.getElementById('disconnectButton').click()");
   assert.equal(await evaluate("document.getElementById('controlPanel').hidden"), true);
   assert.deepEqual(errors, []);

@@ -20,15 +20,17 @@ class MicrophoneInput {
     if (this.running) return;
     const generation = ++this.generation;
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("麥克風需要 HTTPS 或 localhost，以及支援收音的瀏覽器。");
-    if (this.audioPlayer) this.context = await this.audioPlayer.ensureContext();
-    else {
-      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-      this.context = new AudioContextClass({ latencyHint: "interactive" });
-      await this.context.resume();
-    }
-    if (generation !== this.generation) return;
-    const context = this.context;
     try {
+      let context;
+      if (this.audioPlayer) context = await this.audioPlayer.ensureContext();
+      else {
+        const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
+        context = new AudioContextClass({ latencyHint: "interactive" });
+        this.context = context;
+        await context.resume();
+      }
+      if (generation !== this.generation) return;
+      this.context = context;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: MICROPHONE_CONSTRAINTS, video: false });
       if (generation !== this.generation) { stream.getTracks().forEach(track => track.stop()); return; }
       this.stream = stream;

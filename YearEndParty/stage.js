@@ -294,6 +294,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       if (!this.renderer) return;
       const requestToken = ++this.loadToken;
       this.loaded = false;
+      this.loadProgress = 0;
       this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
       if (this.vrm?.scene) {
         this.scene.remove(this.vrm.scene);
@@ -308,12 +309,13 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.bus.emit("avatar.loading", { progress: 0 });
       try {
         const gltf = await loader.loadAsync(this.modelUrl, (progress) => {
+          if (requestToken !== this.loadToken) return;
           const total = Number(progress.total) || 0;
           const loaded = Number(progress.loaded) || 0;
           this.loadProgress = total ? clamp(loaded / total, 0, 1) : this.loadProgress;
           this.bus.emit("avatar.loading", { progress: this.loadProgress });
         });
-        if (requestToken !== this.loadToken) return;
+        if (requestToken !== this.loadToken) { VRMUtils.deepDispose(gltf.scene); return; }
         const vrm = gltf.userData.vrm;
         if (!vrm?.scene) throw new Error(`${this.modelUrl} 沒有可顯示的 VRM scene。`);
         this.vrm = vrm;
@@ -483,6 +485,8 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       else if (this.blinkDirection === -1) { this.blinkProgress = Math.max(0, this.blinkProgress - deltaTime / .075); if (this.blinkProgress <= 0) { this.blinkDirection = 0; this.blinkTimer = randomBetween(2, 6); } }
     }
     dispose() {
+      this.loadToken++;
+      this.loaded = false;
       const surface = this.interactionSurface;
       if (surface && this.viewHandlers) {
         surface.removeEventListener("pointerdown", this.viewHandlers.pointerDown);
@@ -493,7 +497,11 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       }
       this.dragPointerId = null;
       this.resizeObserver.disconnect();
+      if (this.scene) VRMUtils.deepDispose(this.scene);
+      this.scene = null;
+      this.vrm = null;
       this.renderer?.dispose();
+      this.renderer = null;
     }
   }
 
@@ -589,7 +597,10 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.bus.on("avatar.ready", () => { this.ui.modelStatus.textContent = "VRM / READY"; });
       this.bus.on("avatar.error", (error) => { this.ui.modelStatus.textContent = "VRM / ERROR"; this.showError(`VRM 載入失敗：${error.message || error}`, true); });
 
-      this.bus.on("gemini.status", ({ status }) => this.setConnectionStatus(status));
+      this.bus.on("gemini.status", ({ status }) => {
+        if (status === "failed" && this.callActive) this.abortCall();
+        this.setConnectionStatus(status);
+      });
       this.bus.on("gemini.connected", ({ model }) => { this.setConnectionStatus("connected"); this.stateMachine.toListening(); this.showToast(`已連上 ${model.replace("-preview", "")}。`); });
       this.bus.on("gemini.disconnected", () => this.setConnectionStatus("offline"));
       this.bus.on("gemini.error", (error) => this.showError(error.message));

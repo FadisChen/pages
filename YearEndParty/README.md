@@ -1,6 +1,6 @@
 # 尾牙主持人 Nami — Year End Party Host
 
-用 [`Avatar/`](../Avatar/) 資料夾裡同一個 VRM 角色（Nami）與 Gemini Live API，做成一個給尾牙現場用的虛擬主持人。目前的問題診斷、修復內容與後續規劃見 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md)；第一版設計紀錄保留於 [`PLAN.md`](./PLAN.md)。
+與 [`Avatar/`](../Avatar/) 共用 `vrm/` 的角色模型，搭配 Gemini Live API，做成一個給尾牙現場用的虛擬主持人。本輪穩定性修正見下方「穩定性與驗證」；先前的問題診斷及規劃見 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md)，第一版設計紀錄保留於 [`PLAN.md`](./PLAN.md)。
 
 ## 三個入口
 
@@ -14,7 +14,7 @@
 
 ## 啟動方式
 
-這個資料夾**不是獨立可攜的**——`stage.js`／`app.js` 透過相對路徑重用 `../Avatar/` 底下的 VRM 模型、背景圖、favicon 與幾個共用小工具模組，所以一定要從 **repo 根目錄**（`pages/`，`Avatar/` 與 `YearEndParty/` 的共同上層）起靜態伺服器：
+這個資料夾**不是獨立可攜的**——`stage.js`／`app.js` 從 `../vrm/` 載入模型，並重用 `../Avatar/` 的背景圖、favicon 與共用小工具模組，所以一定要從 **repo 根目錄**（`pages/`，`Avatar/`、`vrm/` 與 `YearEndParty/` 的共同上層）起靜態伺服器：
 
 ```bash
 cd pages
@@ -74,5 +74,17 @@ YearEndParty/
 - 情緒表情（`set_avatar_emotion`）已接上；抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
 - API Key 是開發測試模式（存在瀏覽器 localStorage），沒有做 ephemeral token，正式對外使用前需要處理。
 - 沒有在真實的兩台裝置／真實會場網路下測試過 WebRTC 配對，上場前務必實測。
+
+## 穩定性與驗證
+
+已將 Avatar 的模型生命週期及通話清理修正套用到單機與投影端，保留手動 PTT、句尾音訊順序與既有浮動視窗流程：
+
+- 快速切換模型時，忽略舊載入的進度並釋放晚到的模型；銷毀場景時也會使待處理載入失效。
+- Gemini 最終連線失敗時結束通話、停止播放並重設按鈕；單機同時釋放麥克風。重連期間保留通話，PTT 暫時停用。
+- 投影端將失敗狀態傳給手機，手機停止目前 PTT 並停用控制，保留配對與麥克風待命；可在投影端重新開始通話，或在手機按「離線」釋放麥克風。
+- 單機在等待麥克風停止完成前，先清理通話狀態，避免舊通話覆蓋新通話。
+- 共用麥克風模組會核對啟動代次，取消後較晚完成的 AudioContext 不會覆蓋新啟動。
+
+回歸測試包含上述模型競態、最終失敗、狀態通知、通話重啟，以及退出浮動視窗時保留場景與音訊的邏輯。Edge 測試使用真實 AudioWorklet 與虛擬麥克風，並驗證 Gemini 失敗通知會結束按住中的 PTT、保留配對。Gemini 與配對傳輸為模擬，浮動視窗及模型的實際視覺效果仍需人工驗收。
 
 在 repo 根目錄執行 `node --test YearEndParty/tests/host-regressions.test.mjs` 驗證音訊時序；`node YearEndParty/tests/browser-smoke.mjs` 使用已安裝的 Edge 與虛擬麥克風檢查收音流程（可用 `YEP_BROWSER` 環境變數指定 Chromium 路徑）。測試不呼叫 Gemini，真實辨識與聲線品質仍需按 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md) 實機驗收。
