@@ -59,6 +59,15 @@ h1, h2, h3, p { margin-top: 0; }
 .stage-settings-button { position: absolute; z-index: 6; top: 16px; right: 16px; opacity: .45; }
 .stage-settings-button:hover, .stage-settings-button:focus-visible { opacity: 1; }
 
+.stage-pip-button { position: absolute; z-index: 6; top: 16px; right: 58px; opacity: .45; }
+.stage-pip-button:hover, .stage-pip-button:focus-visible { opacity: 1; }
+.stage-pip-button.is-active { border-color: var(--matcha); color: var(--matcha-dark); opacity: 1; }
+
+/* 浮動視窗（Document Picture-in-Picture）：#stageVisual 整塊被搬進獨立小視窗時套用，
+   讓角色畫面填滿這個小視窗，不受原本 .stage-card 的絕對定位版面影響。 */
+body.stage-pip-body { margin: 0; overflow: hidden; background: #0c0f0c; }
+body.stage-pip-body .stage-visual { position: fixed; inset: 0; }
+
 .stage-stage { width: 100%; height: 100%; }
 .stage-card { position: relative; width: 100%; height: 100%; overflow: hidden; background: #e9eee9 url("../Avatar/washi-enso.png") center / cover no-repeat; isolation: isolate; }
 .stage-card::before { position: absolute; inset: 0; z-index: -3; background: radial-gradient(circle at 50% 43%, rgba(255, 253, 248, .52) 0 18%, rgba(255, 253, 248, .12) 42%, transparent 70%), linear-gradient(145deg, rgba(255,255,255,.2), transparent 42%); content: ""; }
