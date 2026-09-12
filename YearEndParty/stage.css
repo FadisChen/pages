@@ -59,6 +59,10 @@ h1, h2, h3, p { margin-top: 0; }
 .stage-settings-button { position: absolute; z-index: 6; top: 16px; right: 16px; opacity: .45; }
 .stage-settings-button:hover, .stage-settings-button:focus-visible { opacity: 1; }
 
+.stage-pip-button { position: absolute; z-index: 6; top: 16px; right: 58px; opacity: .45; }
+.stage-pip-button:hover, .stage-pip-button:focus-visible { opacity: 1; }
+.stage-pip-button.is-active { border-color: var(--matcha); color: var(--matcha-dark); opacity: 1; }
+
 /* 浮動視窗（Document Picture-in-Picture）：#stageVisual 整塊被搬進獨立小視窗時套用，
    讓角色畫面填滿這個小視窗，不受原本 .stage-card 的絕對定位版面影響。 */
 body.stage-pip-body { margin: 0; overflow: hidden; background: #0c0f0c; }
@@ -124,10 +128,6 @@ body.stage-pip-body .stage-visual { position: fixed; inset: 0; }
 .primary-button.is-active:hover { background: #9f515a; }
 .button-icon { font-size: 14px; line-height: 1; }
 
-.secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 40px; margin-top: 10px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--muted); background: rgba(255, 253, 248, .72); font-size: 11px; font-weight: 650; transition: transform .2s ease, border-color .2s ease, color .2s ease, background .2s ease; }
-.secondary-button:hover { border-color: var(--matcha); color: var(--matcha-dark); background: var(--paper-pure); transform: translateY(-1px); }
-.secondary-button.is-active { border-color: var(--matcha); color: var(--matcha-dark); background: rgba(113, 139, 121, .1); }
-
 .panel-hint, .field-hint { margin: 10px 0 0; color: var(--faint); font-size: 8px; line-height: 1.65; }
 .session-clock { display: inline-block; margin-top: 8px; color: var(--faint); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 9px; font-variant-numeric: tabular-nums; letter-spacing: .13em; }
 
@@ -161,6 +161,7 @@ body.stage-pip-body .stage-visual { position: fixed; inset: 0; }
 
 @media (max-width: 780px) {
   .stage-settings-button { top: 12px; right: 12px; }
+  .stage-pip-button { top: 12px; right: 50px; }
   .visual-state-pill { left: 17px; top: 18px; }
   .visual-metric { right: 17px; top: 18px; }
   .stage-signal { width: 88vw; height: 88vw; max-width: 390px; max-height: 390px; }
