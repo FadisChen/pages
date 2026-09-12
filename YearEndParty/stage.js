@@ -723,6 +723,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     setupPip() {
       if (!this.ui.pipButton || !("documentPictureInPicture" in window)) return;
       this.ui.pipButton.hidden = false;
+      if (this.ui.pipHint) this.ui.pipHint.hidden = false;
     }
     async togglePip() {
       if (this.pipWindow) { this.pipWindow.close(); return; }
@@ -758,6 +759,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       pipWindow.addEventListener("resize", () => this.avatar.resize());
       pipWindow.addEventListener("pagehide", () => this.exitPip(), { once: true });
       this.updatePipButton(true);
+      this.closeSettings();
     }
     exitPip() {
       const stageVisual = this.ui.stageVisual;
@@ -774,6 +776,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.ui.pipButton.classList.toggle("is-active", active);
       this.ui.pipButton.setAttribute("aria-pressed", String(active));
       this.ui.pipButton.title = active ? "取消浮動視窗" : "浮動視窗（切換分頁時仍會顯示在最上層）";
+      if (this.ui.pipButtonLabel) this.ui.pipButtonLabel.textContent = active ? "取消浮動視窗" : "浮動視窗";
     }
     setEmotion(emotion) {
       if (!EMOTIONS.includes(emotion)) return;
@@ -852,7 +855,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), currentSegmentLabel: byId("currentSegmentLabel"),
       startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
       pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), peerBadge: byId("peerBadge"),
-      pipButton: byId("pipButton"),
+      pipButton: byId("pipButton"), pipButtonLabel: byId("pipButtonLabel"), pipHint: byId("pipHint"),
     };
   }
 
