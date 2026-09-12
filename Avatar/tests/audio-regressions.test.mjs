@@ -10,7 +10,7 @@ const root = new URL("../", import.meta.url);
 function loadPage(extra = {}) {
   let source = readFileSync(new URL("app.js", root), "utf8").replace(/^import[\s\S]*?;\r?\n/gm, "");
   source = source.replaceAll("import.meta.url", JSON.stringify(new URL("app.js", root).href));
-  source = source.replace(/  if \(document.readyState[\s\S]*$/, "globalThis.page = { App, EventBus, GeminiLiveClient, GeminiAudioPlayer, MicrophoneInput };\n})();");
+  source = source.replace(/  if \(document.readyState[\s\S]*$/, "globalThis.page = { App, EventBus, GeminiLiveClient, GeminiAudioPlayer, MicrophoneInput, VRMAvatarController };\n})();");
   const context = vm.createContext({ ...emotions, ...transcript, shouldPlayLiveAudio,
     document: { addEventListener() {} }, window: { addEventListener() {} }, WebSocket: { OPEN: 1 },
     isSecureContext: true, setTimeout, clearTimeout, performance, Uint8Array, Float32Array,
@@ -30,6 +30,7 @@ function fixture() {
     stateMachine: { toThinking() {}, toListening() {}, toSpeaking() {}, transition() {}, toIdle() {} },
     audioPlayer: { enqueue: (bytes, rate) => played.push({ bytes: [...bytes], rate }), stop: () => stops++ },
     lipSync: { reset() {} }, transcript: { add() {}, clearPartial() {} },
+    mic: { stop: async () => {} }, updateCallButton() {},
     showError() {}, setConnectionStatus() {},
   });
   const client = new GeminiLiveClient(bus);
@@ -191,4 +192,105 @@ test("stopping before AudioContext is ready never opens a microphone", async () 
   await pending;
   assert.equal(requests, 0);
   assert.equal(mic.context, null);
+});
+
+function modelFixture() {
+  const requests = [], disposed = [], attached = [], events = [];
+  const { VRMAvatarController, EventBus } = loadPage({
+    GLTFLoader: class {
+      register() {}
+      loadAsync(url, progress) { return new Promise(resolve => requests.push({ url, progress, resolve })); }
+    },
+    VRMUtils: { deepDispose: scene => disposed.push(scene) },
+  });
+  const bus = new EventBus();
+  bus.on("avatar.loading", data => events.push(data.progress));
+  const controller = Object.assign(Object.create(VRMAvatarController.prototype), {
+    bus, renderer: { dispose() {} }, scene: { add: scene => attached.push(scene), remove() {} },
+    modelUrl: "first.vrm", loadToken: 0, loadProgress: 0, restPose: new Map(),
+    resizeObserver: { disconnect() {} }, prepareModel() {},
+  });
+  const model = () => { const scene = { rotation: {} }; return { scene, userData: { vrm: { scene } } }; };
+  return { controller, requests, disposed, attached, events, model };
+}
+
+test("rapid model switching disposes stale results and ignores their progress", async () => {
+  const f = modelFixture();
+  const first = f.controller.loadModel();
+  const second = f.controller.switchModel("second.vrm");
+  f.requests[0].progress({ loaded: 90, total: 100 });
+  assert.deepEqual(f.events, [0, 0]);
+  const old = f.model(), current = f.model();
+  f.requests[1].resolve(current);
+  await second;
+  f.requests[0].resolve(old);
+  await first;
+  assert.deepEqual(f.attached, [current.scene]);
+  assert.deepEqual(f.disposed, [old.scene]);
+});
+
+test("disposing during model loading releases both the scene and late result", async () => {
+  const f = modelFixture();
+  const pending = f.controller.loadModel();
+  const scene = f.controller.scene;
+  f.controller.dispose();
+  const late = f.model();
+  f.requests[0].resolve(late);
+  await pending;
+  assert.deepEqual(f.attached, []);
+  assert.deepEqual(f.disposed, [scene, late.scene]);
+  assert.equal(f.controller.loaded, false);
+});
+
+test("terminal connection failure stops capture and resets the call button", async () => {
+  const f = fixture();
+  let micStops = 0, active;
+  f.app.mic = { stop: async () => micStops++ };
+  f.app.updateCallButton = value => { active = value; };
+  f.client.fail(new Error("connection failed"));
+  await Promise.resolve();
+  assert.equal(micStops, 1);
+  assert.equal(f.app.callActive, false);
+  assert.equal(active, false);
+});
+
+test("a reconnect attempt keeps the active call and microphone alive", () => {
+  const f = fixture();
+  let micStops = 0;
+  f.app.mic = { stop: async () => micStops++ };
+  f.app.bus.emit("gemini.status", { status: "reconnecting" });
+  assert.equal(f.app.callActive, true);
+  assert.equal(micStops, 0);
+});
+
+test("ending the previous call cannot reset a newly started call after microphone shutdown", async () => {
+  const f = fixture();
+  let finishStop, buttonActive;
+  f.app.mic = { stop: () => new Promise(resolve => { finishStop = resolve; }) };
+  f.app.updateCallButton = value => { buttonActive = value; };
+  const pending = f.app.abortCall();
+  assert.equal(buttonActive, false);
+  // A new call begins while the prior microphone shutdown is settling.
+  f.app.callActive = true;
+  f.app.sessionStartedAt = 123;
+  buttonActive = true;
+  const stopsBefore = f.stops();
+  finishStop();
+  await pending;
+  assert.equal(f.app.callActive, true);
+  assert.equal(f.app.sessionStartedAt, 123);
+  assert.equal(buttonActive, true);
+  assert.equal(f.stops(), stopsBefore);
+});
+
+test("exhausting reconnect attempts ends capture without scheduling another retry", () => {
+  const f = fixture();
+  let micStops = 0;
+  f.app.mic = { stop: async () => micStops++ };
+  f.client.failures = 2;
+  f.client.handleClose(f.socket, { code: 1006 });
+  assert.equal(micStops, 1);
+  assert.equal(f.app.callActive, false);
+  assert.equal(f.client.reconnectTimer, null);
+  assert.equal(f.client.stopped, true);
 });
