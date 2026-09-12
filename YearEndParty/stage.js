@@ -28,6 +28,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
     { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },
     { id: "su", name: "Su", url: "../vrm/su.vrm", mouthIntensity: .45 },
+    { id: "purple", name: "Purple", url: "../vrm/Purple.vrm", mouthIntensity: 1 },
   ]);
   const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const NATURAL_ARM_DROP = 1.25;

@@ -17,7 +17,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
   const SETTINGS_KEY = "orbit-friend.avatar.settings.v1";
   const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，";
-  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion，每次語音回覆最多一次；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
+  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
   const DEFAULT_USER_SYSTEM_PROMPT = "一位溫柔、敏銳、簡潔的臺灣 AI 朋友";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
@@ -26,6 +26,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
     { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },
     { id: "su", name: "Su", url: "../vrm/su.vrm", mouthIntensity: .45 },
+    { id: "purple", name: "Purple", url: "../vrm/Purple.vrm", mouthIntensity: 1 },
   ]);
   const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
   const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";

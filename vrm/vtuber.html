@@ -25,6 +25,7 @@
       <option value="mia.vrm">Mia</option>
       <option value="sha.vrm">Sha</option>
       <option value="SpringSnow.vrm">SpringSnow</option>
+      <option value="Purple.vrm">Purple</option>
     </select>
     <select id="bg-select">
       <option value="transparent">透明背景 (OBS 用)</option>
@@ -66,6 +67,10 @@
           <span>上半身動作追蹤</span>
           <button id="toggle-pose" class="toggled">開啟</button>
         </div>
+        <div class="toggle-row">
+          <span>手腕/握拳偵測</span>
+          <button id="toggle-hands" class="toggled">開啟</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -81,12 +86,17 @@
       </div>
 
       <div class="panel">
+        <h2>手部偵錯資訊</h2>
+        <pre id="hand-debug" class="hint" style="white-space:pre-wrap;font-family:monospace;font-size:11px;">尚無資料</pre>
+      </div>
+
+      <div class="panel">
         <h2>說明</h2>
         <p class="hint">
           啟動攝影機後，程式會用 MediaPipe Face Landmarker 即時偵測臉部表情係數（張嘴、微笑、眨眼、眉毛等）與頭部朝向，
-          並用 Pose Landmarker 偵測肩膀、手肘、手腕，交給 Kalidokit 計算出手臂與手腕的骨骼旋轉角度，套用到 VRM 角色的表情、頭頸與雙臂（含手腕）骨骼上。可切換「透明背景」作為 OBS 瀏覽器來源疊加層使用。
+          並用 Pose Landmarker 偵測肩膀、手肘、手腕，交給 Kalidokit 計算出手臂與手腕的骨骼旋轉角度，套用到 VRM 角色的表情、頭頸與雙臂（含手腕）骨骼上。另外用 Hand Landmarker 偵測手掌與手指關節，可做出握拳、張開等手勢。可切換「透明背景」作為 OBS 瀏覽器來源疊加層使用。
         </p>
-        <p class="hint">需要瀏覽器授權攝影機權限；所有運算都在本機瀏覽器內完成，不會上傳影像。手臂追蹤需要肩膀到手腕都在畫面內才會生效。</p>
+        <p class="hint">需要瀏覽器授權攝影機權限；所有運算都在本機瀏覽器內完成，不會上傳影像。手臂追蹤需要肩膀到手腕都在畫面內才會生效；手掌追蹤需要手掌清楚入鏡。</p>
       </div>
     </div>
   </div>

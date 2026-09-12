@@ -12,12 +12,22 @@ export const MOUTH_INTENSITY = {
   'mia.vrm': 0.6,
   'sha.vrm': 0.45,
   'su.vrm': 0.45,
+  'Purple.vrm': 1,
 };
+
+const FINGER_DIGITS = ['Thumb', 'Index', 'Middle', 'Ring', 'Little'];
+const FINGER_SEGMENTS = ['Proximal', 'Intermediate', 'Distal'];
+const FINGER_BONES = ['left', 'right'].flatMap((side) =>
+  FINGER_DIGITS.flatMap((digit) =>
+    FINGER_SEGMENTS.map((segment) => `${side}${digit}${segment}`)
+  )
+);
 
 const TRACKED_BONES = [
   'hips', 'spine', 'chest', 'neck', 'head',
   'leftUpperArm', 'leftLowerArm', 'leftHand',
   'rightUpperArm', 'rightLowerArm', 'rightHand',
+  ...FINGER_BONES,
 ];
 
 function randomBlinkDelay() {
