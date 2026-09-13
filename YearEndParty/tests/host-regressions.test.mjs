@@ -50,6 +50,13 @@ const audio = { modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=2
 const toolCall = { functionCalls: [{ id: "emotion-1", name: "set_avatar_emotion", args: { emotion: "happy" } }] };
 const gestureCall = gesture => ({ functionCalls: [{ id: `gesture-${gesture}`, name: "play_avatar_gesture", args: { gesture } }] });
 
+test("host instructions describe every supported gesture", () => {
+  const instruction = shared.buildSystemInstruction();
+  for (const gesture of ["bow", "shrug", "hand_on_chest", "beckon", "salute"]) {
+    assert.ok(instruction.includes(gesture), `${gesture} should be available to the host`);
+  }
+});
+
 for (const page of ["app.js", "stage.js"]) {
   test(`${page}: gesture tool is registered, emitted once, and does not stop speech`, () => {
     const f = fixture(page);

@@ -75,7 +75,7 @@ YearEndParty/
 
 ## 目前的限制
 
-- 情緒表情（`set_avatar_emotion`）與人物動作（`play_avatar_gesture`）已接上；抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
+- 情緒表情（`set_avatar_emotion`）與人物動作（`play_avatar_gesture`）已接上；動作包含 `nod`、`shake_head`、`wave`、`present`、`tilt_head`、`bow`、`shrug`、`hand_on_chest`、`beckon`、`salute`。抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
 - API Key 是開發測試模式（存在瀏覽器 localStorage），沒有做 ephemeral token，正式對外使用前需要處理。
 - 沒有在真實的兩台裝置／真實會場網路下測試過 WebRTC 配對，上場前務必實測。
 
@@ -91,4 +91,4 @@ YearEndParty/
 
 回歸測試包含上述模型競態、最終失敗、狀態通知、通話重啟，以及退出浮動視窗時保留場景與音訊的邏輯。Edge 測試使用真實 AudioWorklet 與虛擬麥克風，並驗證 Gemini 失敗通知會結束按住中的 PTT、保留配對。Gemini 與配對傳輸為模擬，浮動視窗及模型的實際視覺效果仍需人工驗收。
 
-在 repo 根目錄執行 `node --test YearEndParty/tests/host-regressions.test.mjs YearEndParty/tests/gestures.test.mjs` 驗證音訊與動作時序；`node YearEndParty/tests/browser-smoke.mjs` 使用已安裝的 Edge 與虛擬麥克風檢查收音流程（可用 `YEP_BROWSER` 環境變數指定 Chromium 路徑）。測試不呼叫 Gemini，真實辨識、聲線品質與 VRM 動作畫面仍需按 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md) 實機驗收。
+在 repo 根目錄執行 `node --test YearEndParty/tests/host-regressions.test.mjs YearEndParty/tests/gestures.test.mjs` 驗證音訊與動作時序；`node YearEndParty/tests/browser-smoke.mjs` 使用已安裝的 Edge 與虛擬麥克風檢查收音流程（可用 `YEP_BROWSER` 環境變數指定 Chromium 路徑）。啟動本地 HTTP server 後，也可用 `YearEndParty/tests/browser-gesture-semantics.js` 的 Playwright callback 檢查五個 VRM 模型在單機頁與投影舞台頁的動作位置、掌心方向及逐幀出框。測試不呼叫 Gemini，真實辨識、聲線品質與 VRM 動作畫面仍需按 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md) 實機驗收。

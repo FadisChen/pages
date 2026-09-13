@@ -46,6 +46,22 @@ test("all gestures remain bounded and return to the base pose", () => {
   }
 });
 
+test("new gestures use the intended bone groups", () => {
+  const expectedBones = {
+    bow: ["spine", "chest", "neck", "head"],
+    shrug: ["leftShoulder", "rightShoulder", "leftUpperArm", "rightUpperArm", "head"],
+    hand_on_chest: ["rightUpperArm", "rightLowerArm", "rightHand"],
+    beckon: ["rightUpperArm", "rightLowerArm", "rightHand"],
+    salute: ["rightUpperArm", "rightLowerArm", "rightHand"],
+  };
+  for (const [gesture, bones] of Object.entries(expectedBones)) {
+    const player = new AvatarGesturePlayer();
+    player.queue(gesture, gesture);
+    const pose = player.update(.7, true);
+    for (const bone of bones) assert.ok(pose[bone], `${gesture} should animate ${bone}`);
+  }
+});
+
 test("interruption fades the current pose without advancing the gesture", () => {
   const player = new AvatarGesturePlayer();
   player.queue("wave", "one");
@@ -55,6 +71,44 @@ test("interruption fades the current pose without advancing the gesture", () => 
   assert.ok(after > 0 && after < before);
   assert.deepEqual(player.update(.2, true), {});
   assert.equal(player.active, null);
+});
+
+test("shrug mirrors the arms without reversing the palm roll", () => {
+  const player = new AvatarGesturePlayer();
+  player.queue("shrug", "shrug");
+  const pose = player.update(.7, true);
+  for (const segment of ["UpperArm", "LowerArm", "Hand"]) {
+    const [x, y, z] = pose[`right${segment}`];
+    const left = pose[`left${segment}`];
+    assert.ok(Math.abs(left[0] - x) < 1e-9);
+    assert.ok(Math.abs(left[1] + y) < 1e-9);
+    assert.ok(Math.abs(left[2] + z) < 1e-9);
+  }
+});
+
+test("beckon curls all four fingers and releases them on interruption", () => {
+  const player = new AvatarGesturePlayer();
+  player.queue("beckon", "beckon");
+  const open = player.update(.4, true);
+  const closed = player.update(1 / 3, true);
+  for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+    for (const segment of ["Proximal", "Intermediate", "Distal"]) {
+      const bone = `right${finger}${segment}`;
+      assert.ok(open[bone] && closed[bone], `${bone} must animate`);
+      assert.ok(closed[bone][2] < open[bone][2] - .3, `${bone} must curl`);
+    }
+  }
+  player.reset();
+  const release = player.update(.1, true);
+  assert.ok(Math.abs(release.rightMiddleProximal[2]) < Math.abs(closed.rightMiddleProximal[2]));
+  assert.deepEqual(player.update(.2, true), {});
+});
+
+test("salute holds still after reaching the forehead", () => {
+  const player = new AvatarGesturePlayer();
+  player.queue("salute", "salute");
+  const first = player.update(.7, true);
+  assert.deepEqual(player.update(.3, true), first);
 });
 
 test("waving moves the forearm about the elbow while keeping the wrist steady", () => {

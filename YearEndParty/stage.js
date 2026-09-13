@@ -369,10 +369,17 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.bones = {
         hips: getBone("hips"), spine: getBone("spine"), chest: getBone("chest"), neck: getBone("neck"), head: getBone("head"),
         leftShoulder: getBone("leftShoulder"), rightShoulder: getBone("rightShoulder"),
-        leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"),
+        leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"), leftHand: getBone("leftHand"),
         rightUpperArm: getBone("rightUpperArm"), rightLowerArm: getBone("rightLowerArm"),
         rightHand: getBone("rightHand"),
       };
+      for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+        for (const segment of ["Proximal", "Intermediate", "Distal"]) {
+          const name = `right${finger}${segment}`;
+          this.bones[name] = getBone(name);
+        }
+      }
+      this.bones.rightThumbMetacarpal = getBone("rightThumbMetacarpal");
       this.restPose.clear();
       for (const bone of new Set(Object.values(this.bones).filter(Boolean))) this.restPose.set(bone, bone.quaternion.clone());
     }

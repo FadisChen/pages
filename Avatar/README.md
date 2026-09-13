@@ -25,7 +25,7 @@ python -m http.server 4174
 - 設定中可切換 SpringSnow、Mia、Sha、Su、Purple；切換時釋放舊模型，過期的載入結果不會覆蓋目前角色或進度。
 - 舞台固定以電視主播式構圖聚焦角色上半身，下緣約在胸部以下、腰部以上。
 - Gemini 只在需要明顯表情或情緒轉折時最多呼叫一次 `set_avatar_emotion({ emotion })`；呼吸、眨眼、說話微動與嘴型仍由本地動畫處理。
-- Gemini 可依回覆語意呼叫 `play_avatar_gesture({ gesture })`：`nod` 點頭、`shake_head` 搖頭、`wave` 手心朝前、以手肘為支點小幅揮動前臂、`present` 手心向上且前臂向外展示、`tilt_head` 歪頭。每個回覆最多一個動作，可與表情同時使用，沒有合適情境時不觸發。
+- Gemini 可依回覆語意呼叫 `play_avatar_gesture({ gesture })`：`nod` 點頭、`shake_head` 搖頭、`wave` 招呼或道別、`present` 手心向上展示、`tilt_head` 歪頭、`bow` 鞠躬、`shrug` 聳肩、`hand_on_chest` 手放胸前、`beckon` 招手示意繼續或靠近、`salute` 敬禮。每個回覆最多一個動作，可與表情同時使用，沒有合適情境時不觸發。
 - 動作由 `avatar-gestures.js` 在本地播放，疊加在待機姿勢之後；等語音播放才開始，插話、斷線、結束通話時淡出，切換模型時清除。沒有語音的待播動作會在回覆結束或等待逾時後清除。這是回覆層級的搭配，沒有逐字音訊對齊。
 - 除了 `../vrm/*.vrm` 模型，Avatar 不引用專案其他目錄的 script、動作檔或素材；沿用既有 CDN Three.js／three-vrm，無需 MediaPipe。
 
@@ -59,11 +59,14 @@ node Avatar/tests/browser-smoke.mjs
 ```powershell
 New-Item -ItemType Directory -Force output/playwright | Out-Null
 playwright-cli -s=avatar-gestures open http://127.0.0.1:4174/Avatar/
+playwright-cli -s=avatar-gestures run-code (Get-Content -Raw Avatar/tests/browser-gesture-semantics.js)
 playwright-cli -s=avatar-gestures run-code (Get-Content -Raw Avatar/tests/browser-gestures.js)
 playwright-cli -s=avatar-gestures close
 ```
 
-此測試在測試分頁中注入控制入口，載入五個真實模型、輸出五種動作對照圖至 `output/playwright/avatar-gestures.png`，並在 1280 × 800 視窗逐幀檢查可見中指末節骨骼的側邊／上緣邊界；不修改正式頁面、不連接 Gemini。它不取代不同視窗尺寸、旋轉角度或服裝穿模的人工檢查。
+此測試在測試分頁中注入控制入口，載入五個真實模型、輸出十種動作對照圖至 `output/playwright/avatar-gestures.png`，並在 1280 × 800 視窗逐幀檢查可見中指末節骨骼的側邊／上緣邊界；不修改正式頁面、不連接 Gemini。它不取代不同視窗尺寸、旋轉角度或服裝穿模的人工檢查。
+
+`browser-gesture-semantics.js` 另驗證新增動作的實際骨骼位置：聳肩雙掌朝上且左右對稱、手放胸前時掌心朝內、招手在胸側反覆收指、敬禮手指朝向額側且掌心向下。它逐幀檢查這五個動作的手肘、手腕與指尖邊界及手指復位，並輸出 `output/playwright/avatar-refined-front.png` 與 `avatar-refined-side.png` 正面／側面對照圖。
 
 ## 作為 YearEndParty 的優化參考
 

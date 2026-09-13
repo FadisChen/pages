@@ -18,7 +18,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
   const SETTINGS_KEY = "orbit-friend.avatar.settings.v1";
   const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，";
-  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion；不需要時不要呼叫。只傳入工具列出的 emotion enum；你可以在回覆開始前依自己即將說出的內容呼叫一次 play_avatar_gesture：肯定用 nod、否定用 shake_head、招呼道別用 wave、解釋介紹用 present、疑問思考用 tilt_head。沒有適合情境就不呼叫，不要每句都動。表情和動作可以一起使用。不要描述工具或動作，不要用工具控制骨骼角度、嘴型、呼吸或連續動畫。";
+  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion；不需要時不要呼叫。只傳入工具列出的 emotion enum；你可以在回覆開始前依自己即將說出的內容呼叫一次 play_avatar_gesture：肯定用 nod、否定用 shake_head、招呼道別用 wave、解釋介紹用 present、疑問思考用 tilt_head、道謝道歉用 bow、不確定用 shrug、感謝關心用 hand_on_chest、請對方靠近或繼續用 beckon、收到指示或正式確認用 salute。沒有適合情境就不呼叫，不要每句都動。表情和動作可以一起使用。不要描述工具或動作，不要用工具控制骨骼角度、嘴型、呼吸或連續動畫。";
   const DEFAULT_USER_SYSTEM_PROMPT = "一位溫柔、敏銳、簡潔的臺灣 AI 朋友";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
@@ -539,10 +539,17 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.bones = {
         hips: getBone("hips"), spine: getBone("spine"), chest: getBone("chest"), neck: getBone("neck"), head: getBone("head"),
         leftShoulder: getBone("leftShoulder"), rightShoulder: getBone("rightShoulder"),
-        leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"),
+        leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"), leftHand: getBone("leftHand"),
         rightUpperArm: getBone("rightUpperArm"), rightLowerArm: getBone("rightLowerArm"),
         rightHand: getBone("rightHand"),
       };
+      for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+        for (const segment of ["Proximal", "Intermediate", "Distal"]) {
+          const name = `right${finger}${segment}`;
+          this.bones[name] = getBone(name);
+        }
+      }
+      this.bones.rightThumbMetacarpal = getBone("rightThumbMetacarpal");
       this.restPose.clear();
       for (const bone of new Set(Object.values(this.bones).filter(Boolean))) this.restPose.set(bone, bone.quaternion.clone());
     }

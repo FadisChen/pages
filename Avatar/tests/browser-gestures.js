@@ -18,10 +18,11 @@ async (page) => {
     for (const model of ['SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
       await app.avatar.switchModel('../vrm/' + model + '.vrm');
       if (!app.avatar.loaded) throw new Error('Model failed: ' + model);
-      for (const gesture of ['idle', 'nod', 'shake_head', 'wave', 'present', 'tilt_head']) {
+      for (const gesture of ['idle', 'nod', 'shake_head', 'wave', 'present', 'tilt_head', 'bow', 'shrug', 'hand_on_chest', 'beckon', 'salute']) {
         app.avatar.gestures.reset(true);
         if (gesture !== 'idle') app.avatar.gestures.queue(gesture, gesture);
-        app.avatar.update(gesture === 'present' ? 1.1 : .6, true);
+        const sampleTimes = { present: 1.1, bow: .9, shrug: .7, hand_on_chest: 1, beckon: 1.2, salute: .7 };
+        app.avatar.update(sampleTimes[gesture] || .6, true);
         if (['wave', 'present'].includes(gesture)) {
           const pos = name => app.avatar.vrm.humanoid.getRawBoneNode(name).getWorldPosition(app.avatar.basePosition.clone());
           const wrist = pos('rightHand');
@@ -65,5 +66,5 @@ async (page) => {
   for (const result of await page.evaluate(() => gesturePalms)) {
     if (result.alignment < .7) throw new Error('Palm facing wrong direction: ' + JSON.stringify(result));
   }
-  console.log('PASS: 5 VRM models, 5 gestures, palm directions, animated hand bounds and pose contact sheet.');
+  console.log('PASS: 5 VRM models, 10 gestures, palm directions, animated hand bounds and pose contact sheet.');
 }
