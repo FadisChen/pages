@@ -1,5 +1,6 @@
-import { AVATAR_EMOTION_TOOL, createAvatarToolResponse, normalizeAvatarEmotion } from "../Avatar/avatar-emotions.js";
-import { normalizeTranscript } from "../Avatar/transcript.js";
+import { AVATAR_EMOTION_TOOL, createAvatarToolResponse, normalizeAvatarEmotion } from "./avatar-emotions.js";
+import { AVATAR_GESTURE_TOOL, normalizeAvatarGesture } from "./avatar-gestures.js";
+import { normalizeTranscript } from "./transcript.js";
 import { GEMINI_LIVE_MODEL, buildSystemInstruction } from "./host-config.js";
 
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
@@ -20,6 +21,7 @@ class GeminiLiveClient {
     this.goAway = false;
     this.suppressAudio = false;
     this.initialContextSent = false;
+    this.gestureUsed = false;
     bus.on("audio.drained", () => { this.playbackPending = false; this.reconnectWhenIdle(); });
   }
   start(config) {
@@ -30,6 +32,7 @@ class GeminiLiveClient {
     this.suppressAudio = false;
     this.resumptionHandle = "";
     this.initialContextSent = false;
+    this.gestureUsed = false;
     this.connect(false);
   }
   disconnect(notify = true) {
@@ -44,6 +47,7 @@ class GeminiLiveClient {
     this.responsePending = false;
     this.playbackPending = false;
     this.goAway = false;
+    this.gestureUsed = false;
     if (notify) this.bus.emit("gemini.disconnected", { status: "offline" });
   }
   isConnected() { return this.ready && this.socket?.readyState === WebSocket.OPEN; }
@@ -79,7 +83,7 @@ class GeminiLiveClient {
       contextWindowCompression: { triggerTokens: 8000, slidingWindow: {} },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL] }],
+      tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL, AVATAR_GESTURE_TOOL] }],
     };
     if (!this.initialContextSent && !this.resumptionHandle) setup.historyConfig = { initialHistoryInClientContent: true };
     return { setup };
@@ -143,6 +147,7 @@ class GeminiLiveClient {
       if (content.interrupted) {
         this.suppressAudio = false;
         this.playbackPending = false;
+        this.gestureUsed = false;
         this.bus.emit("gemini.interrupted", {});
       }
       const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
@@ -160,7 +165,9 @@ class GeminiLiveClient {
       if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
       if (content.turnComplete) { this.suppressAudio = false; this.responsePending = false; this.bus.emit("gemini.turn-complete", {}); }
     }
-    if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
+    if (message.toolCallCancellation?.ids) this.bus.emit("avatar.gesture-cancel", { ids: message.toolCallCancellation.ids });
+    if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls, Boolean(content?.interrupted));
+    if (content?.turnComplete) { this.gestureUsed = false; this.bus.emit("avatar.gesture-turn-complete", {}); }
     if (message.goAway) this.goAway = true;
     this.reconnectWhenIdle();
   }
@@ -185,10 +192,24 @@ class GeminiLiveClient {
       return false;
     }
   }
-  handleToolCalls(socket, calls) {
+  handleToolCalls(socket, calls, interrupted = false) {
     let applied = false;
     for (const call of calls) {
       let result;
+      if (call?.name === AVATAR_GESTURE_TOOL.name) {
+        let args = call.args;
+        if (typeof args === "string") { try { args = JSON.parse(args); } catch (_) { args = null; } }
+        result = normalizeAvatarGesture(args);
+        if (interrupted) result = { ok: false, error: "The response was interrupted; the gesture was cancelled." };
+        else if (result.ok && this.gestureUsed) result = { ok: false, error: "At most one Avatar gesture is allowed per response." };
+        if (result.ok) {
+          this.gestureUsed = true;
+          this.bus.emit("avatar.gesture", { gesture: result.gesture, id: call.id });
+          result.result = "queued";
+        }
+        this.sendToolResponse(socket, call, result);
+        continue;
+      }
       if (call?.name !== AVATAR_EMOTION_TOOL.name) {
         result = { ok: false, error: `不支援的 Avatar tool：${String(call?.name || "")}。` };
       } else {
@@ -219,6 +240,7 @@ class GeminiLiveClient {
     this.playbackPending = false;
     this.suppressAudio = false;
     this.goAway = false;
+    this.gestureUsed = false;
     if (!this.resumptionHandle) this.initialContextSent = false;
     this.bus.emit("gemini.connection-lost", {});
     this.failures += 1;

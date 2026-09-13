@@ -6,8 +6,9 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
 import {
   AVATAR_EMOTIONS,
-} from "../Avatar/avatar-emotions.js";
-import { collectSessionContext } from "../Avatar/session-context.js";
+} from "./avatar-emotions.js";
+import { AvatarGesturePlayer } from "./avatar-gestures.js";
+import { collectSessionContext } from "./session-context.js";
 import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
 
 // stage.js — 投影端筆電使用：只負責顯示 Avatar、連線 Gemini Live、播放語音（接會場音響）。
@@ -159,6 +160,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.loadToken = 0;
       this.bones = {};
       this.restPose = new Map();
+      this.gestures = new AvatarGesturePlayer();
       this.expressionAliases = {};
       this.tmpEuler = new THREE.Euler();
       this.tmpQuaternion = new THREE.Quaternion();
@@ -187,6 +189,10 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       bus.on("avatar.state", ({ state }) => { this.state = state; });
+      bus.on("avatar.gesture", ({ gesture, id }) => { if (this.loaded) this.gestures.queue(gesture, id); });
+      bus.on("avatar.gesture-reset", () => this.gestures.reset());
+      bus.on("avatar.gesture-cancel", ({ ids }) => this.gestures.cancel(ids));
+      bus.on("avatar.gesture-turn-complete", () => this.gestures.finishTurn());
       bus.on("avatar.emotion", ({ emotion }) => this.setEmotion(emotion));
       bus.on("avatar.viseme", ({ viseme, weight, rms }) => { this.viseme = viseme; this.mouthWeight = weight; this.outputLevel = clamp(rms * 3.5, 0, 1); });
       bus.on("audio.input-level", ({ level }) => { this.inputLevel += (level - this.inputLevel) * .22; });
@@ -293,6 +299,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     async loadModel() {
       if (!this.renderer) return;
       const requestToken = ++this.loadToken;
+      this.gestures?.reset(true);
       this.loaded = false;
       this.loadProgress = 0;
       this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
@@ -364,6 +371,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
         leftShoulder: getBone("leftShoulder"), rightShoulder: getBone("rightShoulder"),
         leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"),
         rightUpperArm: getBone("rightUpperArm"), rightLowerArm: getBone("rightLowerArm"),
+        rightHand: getBone("rightHand"),
       };
       this.restPose.clear();
       for (const bone of new Set(Object.values(this.bones).filter(Boolean))) this.restPose.set(bone, bone.quaternion.clone());
@@ -463,7 +471,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.emotion = emotion;
       this.emotionMix = 0;
     }
-    update(deltaTime) {
+    update(deltaTime, playing = false) {
       this.elapsed += deltaTime;
       this.updateView(deltaTime);
       const stateBlend = 1 - Math.exp(-deltaTime * 4.5);
@@ -473,6 +481,13 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       if (this.loaded) {
         this.resetPose();
         this.animatePose(deltaTime);
+        for (const [name, angles] of Object.entries(this.gestures?.update(deltaTime, playing) || {})) {
+          const bone = this.bones[name];
+          if (!bone) continue;
+          this.tmpEuler.set(...angles);
+          this.tmpQuaternion.setFromEuler(this.tmpEuler);
+          bone.quaternion.multiply(this.tmpQuaternion);
+        }
         this.applyExpressions();
         this.vrm.update?.(deltaTime);
       }
@@ -859,7 +874,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.lastFrame = now;
       this.fps += ((1 / delta) - this.fps) * .08;
       this.lipSync.update(delta);
-      this.avatar.update(delta);
+      this.avatar.update(delta, this.audioPlayer.isPlaying());
       this.updateUI(now);
     }
     updateUI(now) {
@@ -876,7 +891,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       if (this.sessionStartedAt) { const seconds = Math.floor((now - this.sessionStartedAt) / 1000); this.ui.sessionClock.textContent = formatClock(seconds); } else this.ui.sessionClock.textContent = "00:00";
       if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
-    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); this.bus.emit("avatar.gesture-reset", {}); }
   }
 
   function collectUI() {

@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import * as emotions from "../../Avatar/avatar-emotions.js";
-import * as transcript from "../../Avatar/transcript.js";
+import * as emotions from "../avatar-emotions.js";
+import * as gestures from "../avatar-gestures.js";
+import * as transcript from "../transcript.js";
 
 const root = new URL("../", import.meta.url);
 const shared = {};
@@ -15,7 +16,7 @@ for (const name of ["live-session.js", "audio-player.js", "microphone.js", "host
 function loadPage(name, extra = {}) {
   let source = readFileSync(new URL(name, root), "utf8").replace(/^import[\s\S]*?;\r?\n/gm, "");
   source = source.replace(/  if \(document.readyState[\s\S]*$/, "globalThis.page = { App, EventBus, GeminiLiveClient, GeminiAudioPlayer, VRMAvatarController };\n})();");
-  const context = vm.createContext({ ...emotions, ...transcript, ...shared,
+  const context = vm.createContext({ ...emotions, ...gestures, ...transcript, ...shared,
     document: { addEventListener() {} }, window: { addEventListener() {} }, WebSocket: { OPEN: 1 },
     setTimeout, clearTimeout, performance, Uint8Array, ArrayBuffer, DataView, atob, btoa, ...extra,
   });
@@ -47,6 +48,42 @@ function fixture(name) {
 
 const audio = { modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=24000", data: "AQA=" } }] } };
 const toolCall = { functionCalls: [{ id: "emotion-1", name: "set_avatar_emotion", args: { emotion: "happy" } }] };
+const gestureCall = gesture => ({ functionCalls: [{ id: `gesture-${gesture}`, name: "play_avatar_gesture", args: { gesture } }] });
+
+for (const page of ["app.js", "stage.js"]) {
+  test(`${page}: gesture tool is registered, emitted once, and does not stop speech`, () => {
+    const f = fixture(page);
+    const events = [];
+    f.app.bus.on("avatar.gesture", event => events.push(event));
+    const setupTools = f.client.setupMessage().setup.tools[0].functionDeclarations.map(tool => tool.name);
+    assert.deepEqual(setupTools, ["set_avatar_emotion", "play_avatar_gesture"]);
+    f.client.handleMessage(f.socket, { serverContent: audio, toolCall: gestureCall("wave") });
+    assert.deepEqual(events, [{ gesture: "wave", id: "gesture-wave" }]);
+    assert.equal(f.stops(), 0);
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.error, "At most one Avatar gesture is allowed per response.");
+    f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
+    assert.equal(events.at(-1).gesture, "nod");
+  });
+
+  test(`${page}: interrupted or cancelled gesture calls cannot survive the response`, () => {
+    const f = fixture(page);
+    const events = [];
+    const player = new gestures.AvatarGesturePlayer();
+    f.app.bus.on("avatar.gesture", event => events.push(event));
+    f.app.bus.on("avatar.gesture", event => player.queue(event.gesture, event.id));
+    f.app.bus.on("avatar.gesture-cancel", ({ ids }) => player.cancel(ids));
+    f.client.handleMessage(f.socket, { serverContent: { interrupted: true }, toolCall: gestureCall("wave") });
+    assert.deepEqual(events, []);
+    assert.match(f.sent.at(-1).toolResponse.functionResponses[0].response.error, /interrupted/i);
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
+    f.client.handleMessage(f.socket, { toolCallCancellation: { ids: ["gesture-nod"] } });
+    assert.deepEqual(events, [{ gesture: "nod", id: "gesture-nod" }]);
+    assert.equal(player.pending, null);
+  });
+}
 
 for (const page of ["app.js", "stage.js"]) {
   test(`${page}: an emotion tool must not cut off already queued speech`, () => {

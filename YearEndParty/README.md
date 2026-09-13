@@ -14,7 +14,7 @@
 
 ## 啟動方式
 
-這個資料夾**不是獨立可攜的**——`stage.js`／`app.js` 從 `../vrm/` 載入模型，並重用 `../Avatar/` 的背景圖、favicon 與共用小工具模組，所以一定要從 **repo 根目錄**（`pages/`，`Avatar/`、`vrm/` 與 `YearEndParty/` 的共同上層）起靜態伺服器：
+這個資料夾**不是獨立可攜的**——`stage.js`／`app.js` 從 `../vrm/` 載入模型。請從 **repo 根目錄**（`pages/`，`vrm/` 與 `YearEndParty/` 的共同上層）起靜態伺服器：
 
 ```bash
 cd pages
@@ -62,6 +62,10 @@ YearEndParty/
 ├── operator.html/operator.js/operator.css   手機遙控端
 ├── webrtc-link.js        配對設定、Rundown 環節清單與訊息契約
 ├── host-config.js        模型與系統提示詞
+├── avatar-emotions.js    本地表情 tool
+├── avatar-gestures.js    本地動作 tool 與 VRM 動作播放器
+├── session-context.js     本地 session 環境資訊
+├── transcript.js          本地逐字稿正規化
 ├── live-session.js       Gemini 回合、工具呼叫與重連
 ├── audio-player.js       PCM 播放排程與分析器
 ├── microphone.js         單機與手機共用的收音生命週期
@@ -71,7 +75,7 @@ YearEndParty/
 
 ## 目前的限制
 
-- 情緒表情（`set_avatar_emotion`）已接上；抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
+- 情緒表情（`set_avatar_emotion`）與人物動作（`play_avatar_gesture`）已接上；抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
 - API Key 是開發測試模式（存在瀏覽器 localStorage），沒有做 ephemeral token，正式對外使用前需要處理。
 - 沒有在真實的兩台裝置／真實會場網路下測試過 WebRTC 配對，上場前務必實測。
 
@@ -87,4 +91,4 @@ YearEndParty/
 
 回歸測試包含上述模型競態、最終失敗、狀態通知、通話重啟，以及退出浮動視窗時保留場景與音訊的邏輯。Edge 測試使用真實 AudioWorklet 與虛擬麥克風，並驗證 Gemini 失敗通知會結束按住中的 PTT、保留配對。Gemini 與配對傳輸為模擬，浮動視窗及模型的實際視覺效果仍需人工驗收。
 
-在 repo 根目錄執行 `node --test YearEndParty/tests/host-regressions.test.mjs` 驗證音訊時序；`node YearEndParty/tests/browser-smoke.mjs` 使用已安裝的 Edge 與虛擬麥克風檢查收音流程（可用 `YEP_BROWSER` 環境變數指定 Chromium 路徑）。測試不呼叫 Gemini，真實辨識與聲線品質仍需按 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md) 實機驗收。
+在 repo 根目錄執行 `node --test YearEndParty/tests/host-regressions.test.mjs YearEndParty/tests/gestures.test.mjs` 驗證音訊與動作時序；`node YearEndParty/tests/browser-smoke.mjs` 使用已安裝的 Edge 與虛擬麥克風檢查收音流程（可用 `YEP_BROWSER` 環境變數指定 Chromium 路徑）。測試不呼叫 Gemini，真實辨識、聲線品質與 VRM 動作畫面仍需按 [`ARCHITECTURE_PLAN.md`](./ARCHITECTURE_PLAN.md) 實機驗收。

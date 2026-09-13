@@ -8,15 +8,16 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
 import {
   AVATAR_EMOTIONS,
-} from "../Avatar/avatar-emotions.js";
-import { collectSessionContext } from "../Avatar/session-context.js";
-import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
+} from "./avatar-emotions.js";
+import { AvatarGesturePlayer } from "./avatar-gestures.js";
+import { collectSessionContext } from "./session-context.js";
+import { mergePartial, normalizeTranscript } from "./transcript.js";
 
 // 這個檔案是 web/Avatar/app.js 的分支版本：沿用同一套 VRM / Gemini Live / Lip Sync 架構，
 // 但把「使用者開麥克風、伺服器自動偵測講話起訖」改成「工作人員按住按鈕才送話（push-to-talk）」，
 // 並加入尾牙 Rundown 環節切換。Gemini、收音與播放使用 YearEndParty 共用模組；
-// emotion、session context、transcript 從 ../Avatar/ 匯入，VRM 模型與背景圖也重用其檔案，避免
-// 在 repo 裡重複存放同一份大型二進位資產。
+// emotion、session context、transcript 與 gesture 均由 YearEndParty 自己提供；VRM 模型與背景圖仍
+// 透過相對路徑共用既有二進位資產，避免在 repo 裡重複存放大型檔案。
 
 (function () {
   "use strict";
@@ -161,6 +162,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.loadToken = 0;
       this.bones = {};
       this.restPose = new Map();
+      this.gestures = new AvatarGesturePlayer();
       this.expressionAliases = {};
       this.tmpEuler = new THREE.Euler();
       this.tmpQuaternion = new THREE.Quaternion();
@@ -189,6 +191,10 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       bus.on("avatar.state", ({ state }) => { this.state = state; });
+      bus.on("avatar.gesture", ({ gesture, id }) => { if (this.loaded) this.gestures.queue(gesture, id); });
+      bus.on("avatar.gesture-reset", () => this.gestures.reset());
+      bus.on("avatar.gesture-cancel", ({ ids }) => this.gestures.cancel(ids));
+      bus.on("avatar.gesture-turn-complete", () => this.gestures.finishTurn());
       bus.on("avatar.emotion", ({ emotion }) => this.setEmotion(emotion));
       bus.on("avatar.viseme", ({ viseme, weight, rms }) => { this.viseme = viseme; this.mouthWeight = weight; this.outputLevel = clamp(rms * 3.5, 0, 1); });
       bus.on("audio.input-level", ({ level }) => { this.inputLevel += (level - this.inputLevel) * .22; });
@@ -295,6 +301,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
     async loadModel() {
       if (!this.renderer) return;
       const requestToken = ++this.loadToken;
+      this.gestures?.reset(true);
       this.loaded = false;
       this.loadProgress = 0;
       this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
@@ -366,6 +373,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
         leftShoulder: getBone("leftShoulder"), rightShoulder: getBone("rightShoulder"),
         leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"),
         rightUpperArm: getBone("rightUpperArm"), rightLowerArm: getBone("rightLowerArm"),
+        rightHand: getBone("rightHand"),
       };
       this.restPose.clear();
       for (const bone of new Set(Object.values(this.bones).filter(Boolean))) this.restPose.set(bone, bone.quaternion.clone());
@@ -465,7 +473,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.emotion = emotion;
       this.emotionMix = 0;
     }
-    update(deltaTime) {
+    update(deltaTime, playing = false) {
       this.elapsed += deltaTime;
       this.updateView(deltaTime);
       const stateBlend = 1 - Math.exp(-deltaTime * 4.5);
@@ -475,6 +483,13 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       if (this.loaded) {
         this.resetPose();
         this.animatePose(deltaTime);
+        for (const [name, angles] of Object.entries(this.gestures?.update(deltaTime, playing) || {})) {
+          const bone = this.bones[name];
+          if (!bone) continue;
+          this.tmpEuler.set(...angles);
+          this.tmpQuaternion.setFromEuler(this.tmpEuler);
+          bone.quaternion.multiply(this.tmpQuaternion);
+        }
         this.applyExpressions();
         this.vrm.update?.(deltaTime);
       }
@@ -786,7 +801,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.lastFrame = now;
       this.fps += ((1 / delta) - this.fps) * .08;
       this.lipSync.update(delta);
-      this.avatar.update(delta);
+      this.avatar.update(delta, this.audioPlayer.isPlaying());
       this.updateUI(now);
       requestAnimationFrame(() => this.renderLoop());
     }
@@ -802,7 +817,7 @@ import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
       this.ui.waveform.querySelectorAll("i").forEach((bar, index) => { const pulse = .4 + ((Math.sin(now / 170 + index * 1.4) + 1) / 2) * (state === STATES.SPEAKING ? .6 : .22); bar.style.setProperty("--wave", String(pulse)); });
       if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
-    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); this.bus.emit("avatar.gesture-reset", {}); }
   }
 
   function collectUI() {

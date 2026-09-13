@@ -1,6 +1,6 @@
 import { SEGMENTS, createPeer } from "./webrtc-link.js";
 import { MicrophoneInput } from "./microphone.js";
-import { mergePartial, normalizeTranscript } from "../Avatar/transcript.js";
+import { mergePartial, normalizeTranscript } from "./transcript.js";
 
 // operator.js — 手機遙控端：負責 push-to-talk 收音與 Rundown 控制。
 // 不渲染 VRM、不連 Gemini、不播放聲音——所有這些都在投影端（stage.html）處理。
