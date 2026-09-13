@@ -1,6 +1,13 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nami 尾牙主持人手冊</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
+  [hidden]{display:none !important;}
+  img{max-width:100%;}
   :root{
     --paper:#faf6ef;
     --surface:#fffcf7;
@@ -337,7 +344,70 @@
     color:var(--ink-faint);
     font-size:.82rem;
   }
+
+  /* ---------- Diagram zoom ---------- */
+  figure.diagram.is-zoomable{cursor:zoom-in;position:relative;transition:box-shadow .15s ease;}
+  figure.diagram.is-zoomable:hover,figure.diagram.is-zoomable:focus-visible{box-shadow:0 1px 2px rgba(36,31,46,.06),0 10px 28px -10px rgba(36,31,46,.28);}
+  figure.diagram.is-zoomable:focus-visible{outline:2px solid var(--coral);outline-offset:3px;}
+  figure.diagram.is-zoomable .zoom-hint{
+    position:absolute;top:10px;right:10px;
+    display:flex;align-items:center;gap:5px;
+    font-family:"JetBrains Mono",monospace;font-size:.72rem;
+    padding:4px 9px;border-radius:999px;
+    background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);
+    opacity:0;transform:translateY(-3px);
+    transition:opacity .15s ease,transform .15s ease;
+    pointer-events:none;
+  }
+  figure.diagram.is-zoomable:hover .zoom-hint,figure.diagram.is-zoomable:focus-visible .zoom-hint{opacity:1;transform:translateY(0);}
+
+  .zoom-overlay{
+    position:fixed;inset:0;z-index:100;
+    background:rgba(15,12,20,.72);
+    display:flex;align-items:center;justify-content:center;
+    padding:24px;
+    opacity:0;
+    transition:opacity .18s ease;
+  }
+  .zoom-overlay.is-open{opacity:1;}
+  @media (prefers-reduced-motion:reduce){.zoom-overlay{transition:none;}}
+  .zoom-stage{
+    position:relative;
+    width:100%;height:100%;
+    max-width:1400px;
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 24px 64px -16px rgba(0,0,0,.5);
+    touch-action:none;
+  }
+  .zoom-stage.is-dragging{cursor:grabbing;}
+  .zoom-stage:not(.is-dragging){cursor:grab;}
+  .zoom-stage svg{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
+  .zoom-toolbar{
+    position:absolute;top:12px;right:12px;z-index:2;
+    display:flex;gap:8px;
+  }
+  .zoom-btn{
+    font-family:"JetBrains Mono",monospace;font-size:.78rem;font-weight:600;
+    background:var(--surface);color:var(--ink);
+    border:1px solid var(--line-strong);border-radius:8px;
+    padding:7px 12px;cursor:pointer;line-height:1;
+    box-shadow:var(--shadow);
+  }
+  .zoom-btn:hover{background:var(--paper);}
+  .zoom-btn:focus-visible{outline:2px solid var(--coral);outline-offset:2px;}
+  .zoom-caption{
+    position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:2;
+    font-family:"JetBrains Mono",monospace;font-size:.72rem;
+    color:var(--ink-soft);background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px 14px;white-space:nowrap;
+  }
 </style>
+</head>
+<body>
 
 <div class="shell">
   <div class="masthead">
@@ -746,6 +816,16 @@ stateDiagram-v2
   <footer>Nami 尾牙主持人手冊 · 對照原始碼：<code class="inline">YearEndParty/</code>（stage.js · live-session.js · avatar-emotions.js · avatar-gestures.js · webrtc-link.js）</footer>
 </div>
 
+<div class="zoom-overlay" id="zoomOverlay" hidden role="dialog" aria-modal="true" aria-label="圖表放大檢視">
+  <div class="zoom-stage" id="zoomStage">
+    <div class="zoom-toolbar">
+      <button type="button" class="zoom-btn" id="zoomResetBtn">重置</button>
+      <button type="button" class="zoom-btn" id="zoomCloseBtn">✕ 關閉</button>
+    </div>
+    <span class="zoom-caption">滾輪縮放・拖曳移動・Esc 關閉</span>
+  </div>
+</div>
+
 <script>
   (function () {
     var sections = [
@@ -768,3 +848,209 @@ stateDiagram-v2
     buildList("toc-list-mobile");
   })();
 </script>
+
+<script>
+  (function () {
+    "use strict";
+
+    function allMermaidRendered() {
+      var pres = document.querySelectorAll("pre.mermaid");
+      if (!pres.length) return true;
+      for (var i = 0; i < pres.length; i++) if (!pres[i].querySelector("svg")) return false;
+      return true;
+    }
+
+    function loadMermaidScript() {
+      return new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    function renderWithMermaid() {
+      if (!window.mermaid) return Promise.resolve();
+      var isDark = matchMedia("(prefers-color-scheme: dark)").matches
+        ? document.documentElement.getAttribute("data-theme") !== "light"
+        : document.documentElement.getAttribute("data-theme") === "dark";
+      var css = getComputedStyle(document.documentElement);
+      var v = function (name) { return css.getPropertyValue(name).trim(); };
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: "base",
+        themeVariables: {
+          background: v("--surface"),
+          primaryColor: isDark ? v("--peri-soft") : v("--peri-soft"),
+          primaryTextColor: v("--ink"),
+          primaryBorderColor: v("--peri"),
+          lineColor: v("--ink-soft"),
+          secondaryColor: v("--coral-soft"),
+          tertiaryColor: v("--teal-soft"),
+          noteBkgColor: v("--peri-soft"),
+          noteTextColor: v("--ink"),
+          noteBorderColor: v("--peri"),
+          actorBkg: v("--surface"),
+          actorBorder: v("--line-strong"),
+          actorTextColor: v("--ink"),
+          signalColor: v("--ink-soft"),
+          signalTextColor: v("--ink"),
+          labelBoxBkgColor: v("--coral-soft"),
+          labelBoxBorderColor: v("--coral"),
+          labelTextColor: v("--ink"),
+          loopTextColor: v("--ink"),
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: "13px"
+        }
+      });
+      var nodes = Array.prototype.filter.call(
+        document.querySelectorAll("pre.mermaid"),
+        function (el) { return !el.querySelector("svg"); }
+      );
+      if (!nodes.length) return Promise.resolve();
+      return window.mermaid.run({ nodes: nodes }).catch(function (error) {
+        console.error("mermaid render failed", error);
+      });
+    }
+
+    function ensureDiagramsRendered() {
+      return new Promise(function (resolve) {
+        var tries = 0;
+        (function poll() {
+          if (allMermaidRendered()) { resolve(); return; }
+          tries += 1;
+          if (tries > 15) {
+            loadMermaidScript().then(renderWithMermaid).then(resolve).catch(function (error) {
+              console.error("mermaid load failed", error);
+              resolve();
+            });
+            return;
+          }
+          setTimeout(poll, 100);
+        })();
+      });
+    }
+
+    /* ---------- click-to-zoom modal (wheel zoom + drag pan) ---------- */
+    function initZoom() {
+      var overlay = document.getElementById("zoomOverlay");
+      var stage = document.getElementById("zoomStage");
+      var resetBtn = document.getElementById("zoomResetBtn");
+      var closeBtn = document.getElementById("zoomCloseBtn");
+      if (!overlay || !stage) return;
+
+      var current = null; // { svg, homeParent, homeNext }
+      var scale = 1, tx = 0, ty = 0, fitScale = 1;
+      var dragging = false, dragStartX = 0, dragStartY = 0, dragTx = 0, dragTy = 0;
+      var MIN_SCALE_FACTOR = .4, MAX_SCALE = 8;
+
+      function applyTransform() {
+        if (current) current.svg.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
+      }
+
+      function fitToStage(svg) {
+        var vb = (svg.getAttribute("viewBox") || "").split(/\s+/).map(Number);
+        var w = vb.length === 4 && vb[2] ? vb[2] : svg.getBBox().width;
+        var h = vb.length === 4 && vb[3] ? vb[3] : svg.getBBox().height;
+        svg.style.width = w + "px";
+        svg.style.height = h + "px";
+        var rect = stage.getBoundingClientRect();
+        fitScale = Math.min((rect.width - 48) / w, (rect.height - 64) / h, 2.5);
+        if (!isFinite(fitScale) || fitScale <= 0) fitScale = 1;
+        scale = fitScale;
+        tx = (rect.width - w * scale) / 2;
+        ty = (rect.height - h * scale) / 2;
+        applyTransform();
+      }
+
+      function openZoom(figure) {
+        var svg = figure.querySelector("svg");
+        if (!svg) return;
+        current = { svg: svg, homeParent: svg.parentNode, homeNext: svg.nextSibling };
+        stage.appendChild(svg);
+        overlay.hidden = false;
+        requestAnimationFrame(function () {
+          overlay.classList.add("is-open");
+          fitToStage(svg);
+        });
+        document.addEventListener("keydown", onKeydown);
+        closeBtn.focus();
+      }
+
+      function closeZoom() {
+        if (!current) { overlay.hidden = true; overlay.classList.remove("is-open"); return; }
+        current.svg.style.transform = "";
+        current.svg.style.width = "";
+        current.svg.style.height = "";
+        current.homeParent.insertBefore(current.svg, current.homeNext);
+        current = null;
+        overlay.classList.remove("is-open");
+        overlay.hidden = true;
+        document.removeEventListener("keydown", onKeydown);
+      }
+
+      function onKeydown(event) { if (event.key === "Escape") closeZoom(); }
+
+      overlay.addEventListener("click", function (event) { if (event.target === overlay) closeZoom(); });
+      closeBtn.addEventListener("click", closeZoom);
+      resetBtn.addEventListener("click", function () { if (current) fitToStage(current.svg); });
+
+      stage.addEventListener("wheel", function (event) {
+        if (!current) return;
+        event.preventDefault();
+        var rect = stage.getBoundingClientRect();
+        var cx = event.clientX - rect.left;
+        var cy = event.clientY - rect.top;
+        var factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+        var next = Math.min(MAX_SCALE, Math.max(fitScale * MIN_SCALE_FACTOR, scale * factor));
+        tx = cx - (cx - tx) * (next / scale);
+        ty = cy - (cy - ty) * (next / scale);
+        scale = next;
+        applyTransform();
+      }, { passive: false });
+
+      stage.addEventListener("pointerdown", function (event) {
+        if (!current || event.target.closest(".zoom-btn")) return;
+        dragging = true;
+        dragStartX = event.clientX; dragStartY = event.clientY;
+        dragTx = tx; dragTy = ty;
+        stage.classList.add("is-dragging");
+        stage.setPointerCapture(event.pointerId);
+      });
+      stage.addEventListener("pointermove", function (event) {
+        if (!dragging) return;
+        tx = dragTx + (event.clientX - dragStartX);
+        ty = dragTy + (event.clientY - dragStartY);
+        applyTransform();
+      });
+      function endDrag(event) {
+        dragging = false;
+        stage.classList.remove("is-dragging");
+        try { stage.releasePointerCapture(event.pointerId); } catch (_) {}
+      }
+      stage.addEventListener("pointerup", endDrag);
+      stage.addEventListener("pointercancel", endDrag);
+
+      document.querySelectorAll("main figure.diagram").forEach(function (figure) {
+        if (!figure.querySelector("svg")) return;
+        figure.classList.add("is-zoomable");
+        figure.setAttribute("tabindex", "0");
+        figure.setAttribute("role", "button");
+        figure.setAttribute("aria-label", "點擊放大檢視圖表");
+        var hint = document.createElement("span");
+        hint.className = "zoom-hint";
+        hint.textContent = "🔍 點擊放大";
+        figure.appendChild(hint);
+        figure.addEventListener("click", function () { openZoom(figure); });
+        figure.addEventListener("keydown", function (event) {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openZoom(figure); }
+        });
+      });
+    }
+
+    ensureDiagramsRendered().then(initZoom);
+  })();
+</script>
+</body>
+</html>
