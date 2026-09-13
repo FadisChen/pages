@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本機 P2P 檔案快傳</title>
     <!-- 引入 PeerJS (信令牽線) -->
-    <script src="https://unpkg.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <!-- 引入 QRCode 生成庫 (讓手機掃描) -->
-    <script src="https://cloudflare.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- 引入 html5-qrcode (讓手機可以開鏡頭掃描，本地測試 localhost 或 file:// 在部分瀏覽器需授權) -->
-    <script src="https://unpkg.com"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #f5f5f7; color: #333; max-width: 600px; margin: 0 auto; }
@@ -99,6 +99,12 @@
             });
         });
 
+        // 連線層級發生錯誤（如伺服器連不上、對方 ID 不存在等）
+        peer.on('error', (err) => {
+            statusEl.innerText = `⚠️ 發生錯誤：${err.type}`;
+            statusEl.style.color = '#ff3b30';
+        });
+
         // 【主動方】點擊連線
         connectBtn.addEventListener('click', () => {
             const targetId = remoteIdIn.value.trim();
@@ -152,7 +158,12 @@
                     if (receivedChunks.length === fileMeta.totalChunks) {
                         const blob = new Blob(receivedChunks);
                         const url = URL.createObjectURL(blob);
-                        downloadArea.innerHTML = `<a href="${url}" download="${fileMeta.name}">💾 點此儲存檔案 (${fileMeta.name})</a>`;
+                        downloadArea.innerHTML = '';
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = fileMeta.name;
+                        link.textContent = `💾 點此儲存檔案 (${fileMeta.name})`;
+                        downloadArea.appendChild(link);
                         progressText.innerText = '✨ 檔案接收成功！已產生下載連結。';
                         progressBar.style.display = 'none';
                     }
@@ -164,6 +175,11 @@
                 statusEl.style.color = '#ff3b30';
                 fileInput.disabled = true;
                 sendBtn.disabled = true;
+            });
+
+            conn.on('error', (err) => {
+                statusEl.innerText = `⚠️ 傳輸連線發生錯誤：${err}`;
+                statusEl.style.color = '#ff3b30';
             });
         }
 
@@ -181,10 +197,24 @@
             let offset = 0;
             let chunkIndex = 0;
 
-            function readAndSend() {
+            const BUFFER_LIMIT = 8 * 1024 * 1024; // 緩衝區超過此值就暫停送出，避免灌爆 DataChannel
+
+            function sendNextChunk() {
+                if (offset >= file.size) {
+                    progressText.innerText = '🚀 檔案已全數送出！';
+                    progressBar.style.display = 'none';
+                    return;
+                }
+
+                // 對方接收速度跟不上時，等緩衝區清空一些再繼續，避免記憶體暴增或連線中斷
+                if (conn.dataChannel && conn.dataChannel.bufferedAmount > BUFFER_LIMIT) {
+                    setTimeout(sendNextChunk, 50);
+                    return;
+                }
+
                 const reader = new FileReader();
                 const slice = file.slice(offset, offset + CHUNK_SIZE);
-                
+
                 reader.onload = function(e) {
                     conn.send({ type: 'chunk', bits: e.target.result, index: chunkIndex });
                     chunkIndex++;
@@ -194,28 +224,26 @@
                     progressFill.style.width = currentProgress + '%';
                     progressText.innerText = `發送中... ${Math.round(currentProgress)}%`;
 
-                    if (offset < file.size) {
-                        setTimeout(readAndSend, 1); // 輕微延遲防止瀏覽器卡死
-                    } else {
-                        progressText.innerText = '🚀 檔案已全數送出！';
-                        progressBar.style.display = 'none';
-                    }
+                    sendNextChunk();
                 };
                 reader.readAsArrayBuffer(slice);
             }
-            readAndSend();
+            sendNextChunk();
         });
 
         // QR Code 鏡頭掃描功能 (部分手機瀏覽器在 file:// 協定下可能因安全限制無法開啟鏡頭)
         let html5QrcodeScanner = null;
         scanBtn.addEventListener('click', () => {
+            if (html5QrcodeScanner) return; // 避免重複點擊產生多個掃描器實例
+
             const readerEl = document.getElementById('reader');
             readerEl.style.display = 'block';
-            
+
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
             html5QrcodeScanner.render((decodedText) => {
                 remoteIdIn.value = decodedText;
                 html5QrcodeScanner.clear();
+                html5QrcodeScanner = null;
                 readerEl.style.display = 'none';
                 connectToPeer(decodedText); // 掃描到自動連線
             }, (error) => {
