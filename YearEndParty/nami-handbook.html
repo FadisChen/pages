@@ -1,0 +1,770 @@
+<title>Nami 尾牙主持人手冊</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#faf6ef;
+    --surface:#fffcf7;
+    --ink:#241f2e;
+    --ink-soft:#6b6478;
+    --ink-faint:#9b93a8;
+    --coral:#e05a3d;
+    --coral-soft:#fbe4dc;
+    --teal:#1f8f78;
+    --teal-soft:#dff3ee;
+    --peri:#5b67c4;
+    --peri-soft:#e8e9fb;
+    --line:rgba(36,31,46,.12);
+    --line-strong:rgba(36,31,46,.22);
+    --code-bg:#221d2c;
+    --code-ink:#f1ebe0;
+    --shadow:0 1px 2px rgba(36,31,46,.06),0 8px 24px -12px rgba(36,31,46,.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#19151f;
+      --surface:#221d2c;
+      --ink:#f3ece2;
+      --ink-soft:#bfb6cf;
+      --ink-faint:#847c96;
+      --coral:#ff8163;
+      --coral-soft:#3a2620;
+      --teal:#4fcdaf;
+      --teal-soft:#1c332e;
+      --peri:#9aa3f0;
+      --peri-soft:#26254a;
+      --line:rgba(243,236,226,.14);
+      --line-strong:rgba(243,236,226,.26);
+      --code-bg:#100d16;
+      --code-ink:#efe8db;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#19151f;
+    --surface:#221d2c;
+    --ink:#f3ece2;
+    --ink-soft:#bfb6cf;
+    --ink-faint:#847c96;
+    --coral:#ff8163;
+    --coral-soft:#3a2620;
+    --teal:#4fcdaf;
+    --teal-soft:#1c332e;
+    --peri:#9aa3f0;
+    --peri-soft:#26254a;
+    --line:rgba(243,236,226,.14);
+    --line-strong:rgba(243,236,226,.26);
+    --code-bg:#100d16;
+    --code-ink:#efe8db;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 28px -12px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Noto Sans TC","Noto Sans",-apple-system,sans-serif;
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{
+    font-family:"Noto Serif TC","Noto Sans TC",serif;
+    font-weight:900;
+    line-height:1.3;
+    text-wrap:balance;
+    margin:0;
+    color:var(--ink);
+  }
+  a{color:var(--teal);text-decoration-thickness:1px;}
+  code,pre,.mono{font-family:"JetBrains Mono","IBM Plex Mono",monospace;}
+  p{margin:0 0 1em;}
+  p:last-child{margin-bottom:0;}
+
+  .shell{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 20px;
+    display:grid;
+    grid-template-columns:220px minmax(0,1fr);
+    gap:48px;
+    align-items:start;
+  }
+  @media (max-width:900px){
+    .shell{grid-template-columns:1fr;gap:0;}
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead{
+    grid-column:1/-1;
+    padding:56px 0 40px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--coral);
+    font-weight:600;
+  }
+  .masthead h1{font-size:clamp(2rem,5vw,3rem);}
+  .masthead .sub{
+    max-width:640px;
+    color:var(--ink-soft);
+    font-size:1.05rem;
+  }
+  .stack-chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.75rem;
+    padding:5px 11px;
+    border-radius:999px;
+    border:1px solid var(--line-strong);
+    color:var(--ink-soft);
+    background:var(--surface);
+  }
+  .entry-table{
+    margin-top:8px;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+  }
+  @media (max-width:720px){.entry-table{grid-template-columns:1fr;}}
+  .entry-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 16px;
+    box-shadow:var(--shadow);
+  }
+  .entry-card .file{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.82rem;
+    color:var(--coral);
+    font-weight:600;
+    display:block;
+    margin-bottom:4px;
+  }
+  .entry-card .who{font-size:.82rem;color:var(--ink-faint);display:block;margin-bottom:6px;}
+  .entry-card .what{font-size:.86rem;color:var(--ink-soft);margin:0;}
+
+  /* ---------- TOC ---------- */
+  nav.toc{
+    position:sticky;
+    top:32px;
+    padding-top:40px;
+    font-size:.86rem;
+  }
+  nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+  nav.toc a{
+    display:block;
+    padding:7px 10px;
+    border-radius:7px;
+    color:var(--ink-soft);
+    text-decoration:none;
+  }
+  nav.toc a:hover{background:var(--surface);color:var(--ink);}
+  nav.toc .n{
+    font-family:"JetBrains Mono",monospace;
+    color:var(--coral);
+    margin-right:8px;
+    font-size:.78rem;
+  }
+  details.toc-mobile{display:none;}
+  @media (max-width:900px){
+    nav.toc.desktop{display:none;}
+    details.toc-mobile{
+      display:block;
+      grid-column:1/-1;
+      margin:20px 0 0;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--surface);
+    }
+    details.toc-mobile summary{
+      cursor:pointer;
+      padding:12px 16px;
+      font-weight:600;
+      font-family:"JetBrains Mono",monospace;
+      font-size:.8rem;
+      letter-spacing:.04em;
+    }
+    details.toc-mobile nav.toc{position:static;padding:0 12px 12px;}
+  }
+
+  /* ---------- Article ---------- */
+  main{padding:40px 0 100px;min-width:0;}
+  section{
+    padding-top:52px;
+    border-top:1px solid var(--line);
+    scroll-margin-top:24px;
+  }
+  section:first-of-type{border-top:none;}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px;}
+  .sec-num{
+    font-family:"JetBrains Mono",monospace;
+    font-size:1rem;
+    color:var(--coral);
+    font-weight:600;
+    flex:none;
+  }
+  h2{font-size:clamp(1.4rem,3vw,1.8rem);}
+  h3{font-size:1.15rem;margin-top:32px;margin-bottom:12px;color:var(--ink);}
+  h3 .n{color:var(--peri);font-family:"JetBrains Mono",monospace;font-size:.9rem;margin-right:8px;}
+  .lede{color:var(--ink-soft);font-size:1rem;max-width:64ch;margin-bottom:24px;}
+
+  main :is(p,li){max-width:70ch;}
+  ul,ol{padding-left:1.3em;margin:0 0 1em;}
+  li{margin-bottom:.4em;}
+  li:last-child{margin-bottom:0;}
+
+  .note{
+    border-left:3px solid var(--peri);
+    background:var(--peri-soft);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:.92rem;
+    color:var(--ink);
+    margin:18px 0;
+  }
+  .warn{
+    border-left:3px solid var(--coral);
+    background:var(--coral-soft);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:.92rem;
+    color:var(--ink);
+    margin:18px 0;
+  }
+  .note b,.warn b{font-weight:700;}
+
+  figure{margin:22px 0;}
+  figure.diagram{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px;
+    box-shadow:var(--shadow);
+    overflow-x:auto;
+  }
+  figcaption{
+    margin-top:10px;
+    font-size:.84rem;
+    color:var(--ink-faint);
+    text-align:center;
+  }
+  pre.mermaid{margin:0;display:flex;justify-content:center;}
+
+  pre.code-block{
+    background:var(--code-bg);
+    color:var(--code-ink);
+    border-radius:10px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:.82rem;
+    line-height:1.65;
+    box-shadow:var(--shadow);
+  }
+  pre.code-block code{white-space:pre;}
+  .code-cap{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.74rem;
+    color:var(--ink-faint);
+    margin-bottom:6px;
+    letter-spacing:.03em;
+  }
+  code.inline{
+    background:var(--surface);
+    border:1px solid var(--line);
+    padding:.1em .4em;
+    border-radius:5px;
+    font-size:.86em;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:.88rem;
+    margin:18px 0;
+  }
+  .table-wrap{overflow-x:auto;}
+  th,td{
+    text-align:left;
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  thead th{
+    font-family:"JetBrains Mono",monospace;
+    font-size:.72rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-weight:600;
+    border-bottom:1px solid var(--line-strong);
+  }
+  td code{font-size:.85em;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  .tag{
+    display:inline-block;
+    font-family:"JetBrains Mono",monospace;
+    font-size:.72rem;
+    padding:2px 8px;
+    border-radius:5px;
+    font-weight:600;
+  }
+  .tag.op{background:var(--peri-soft);color:var(--peri);}
+  .tag.stage{background:var(--coral-soft);color:var(--coral);}
+  .tag.teal{background:var(--teal-soft);color:var(--teal);}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+  .swatch-row{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;}
+  .swatch{
+    display:flex;align-items:center;gap:8px;
+    font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--ink-soft);
+  }
+  .swatch .dot{width:14px;height:14px;border-radius:50%;border:1px solid var(--line-strong);flex:none;}
+
+  footer{
+    grid-column:1/-1;
+    border-top:1px solid var(--line);
+    padding:28px 0 56px;
+    color:var(--ink-faint);
+    font-size:.82rem;
+  }
+</style>
+
+<div class="shell">
+  <div class="masthead">
+    <span class="eyebrow">技術手冊 · YearEndParty</span>
+    <h1>Nami 尾牙主持人手冊</h1>
+    <p class="sub">一支 VRM 虛擬主持人，怎麼靠兩台裝置的 WebRTC 配對收音、靠 Gemini Live API 即時聽說、再靠 function calling 把「說話」變成表情與動作。這份文件拆解三條主線的實際協定與程式邏輯，附上可對照原始碼的關鍵片段。</p>
+    <div class="stack-chips">
+      <span class="chip">PeerJS 1.5.4 · WebRTC DataChannel</span>
+      <span class="chip">Gemini 3.1 Flash Live · BidiGenerateContent</span>
+      <span class="chip">Three.js · @pixiv/three-vrm</span>
+      <span class="chip">Vanilla JS · EventBus</span>
+    </div>
+    <div class="entry-table">
+      <div class="entry-card">
+        <span class="file">stage.html</span>
+        <span class="who">投影端筆電</span>
+        <p class="what">顯示 VRM、連線 Gemini、播語音，畫面乾淨無控制項。</p>
+      </div>
+      <div class="entry-card">
+        <span class="file">operator.html</span>
+        <span class="who">工作人員手機</span>
+        <p class="what">push-to-talk 收音、Rundown 環節按鈕，不連 Gemini。</p>
+      </div>
+      <div class="entry-card">
+        <span class="file">index.html</span>
+        <span class="who">單機測試</span>
+        <p class="what">上面兩者合併在同一頁，方便一人快速驗證邏輯。</p>
+      </div>
+    </div>
+  </div>
+
+  <nav class="toc desktop">
+    <ol id="toc-list"></ol>
+  </nav>
+
+  <details class="toc-mobile">
+    <summary>本篇目錄</summary>
+    <nav class="toc"><ol id="toc-list-mobile"></ol></nav>
+  </details>
+
+  <main>
+
+    <section id="s1">
+      <div class="sec-head"><span class="sec-num">01</span><h2>整體架構：三個角色，兩條連線</h2></div>
+      <p class="lede">系統裡永遠只有三個會「說話」的角色：手機（收音／下指令）、投影端筆電（VRM + Gemini + 音響）、Gemini Live（大腦與聲音）。手機與筆電之間是 WebRTC 直連；筆電與 Gemini 之間是一條 WebSocket。PeerJS 的雲端伺服器只負責幫兩台裝置「牽線」，牽好之後就退場。</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+graph LR
+  subgraph PHONE["手機 · operator.js"]
+    MIC["AudioWorklet<br/>16kHz PCM16"] --> OPUI["push-to-talk / Rundown 按鈕"]
+  end
+  subgraph LAPTOP["投影端筆電 · stage.js"]
+    PL["PeerLink"] --> GLC["GeminiLiveClient"]
+    GLC --> VRM["VRMAvatarController"]
+    GLC --> AP["GeminiAudioPlayer<br/>接會場音響"]
+    GLC --> LS["LipSyncEngine"]
+  end
+  OPUI <-->|"單一 reliable/ordered DataChannel"| PL
+  OPUI -. 僅 signaling .-> BROKER[("PeerJS 雲端 Broker")]
+  PL -. 僅 signaling .-> BROKER
+  GLC <-->|"WebSocket · BidiGenerateContent"| GEMINI[("Gemini Live API")]
+        </pre>
+        <figcaption>唯一連 Gemini、唯一出聲的是投影端；手機只透過一條 DataChannel 送 PCM 與控制指令。</figcaption>
+      </figure>
+
+      <p>兩機模式下，音訊經過的路徑是「手機錄音 → WebRTC DataChannel → 筆電轉交 Gemini」，中間<b>沒有</b>經過 <code class="inline">getUserMedia</code> 的 MediaStream track、也沒有 Opus 編碼再解碼——因為 Gemini Live 吃的本來就是 16kHz PCM16 原始位元組，手機端直接切好封包送過去最省事也最不失真。單機模式（<code class="inline">index.html</code>）則直接跳過 WebRTC，同一支 <code class="inline">microphone.js</code> 把收到的 PCM 直接交給同頁面的 <code class="inline">GeminiLiveClient</code>。</p>
+
+      <h3><span class="n">1.1</span>檔案結構與職責</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>模組</th><th>職責</th></tr></thead>
+          <tbody>
+            <tr><td><code>webrtc-link.js</code></td><td>房號、ICE 設定、Rundown 環節清單、operator↔stage 訊息契約——雙邊都 import 同一份，避免格式漂移。</td></tr>
+            <tr><td><code>live-session.js</code></td><td><code>GeminiLiveClient</code>：Gemini WebSocket 連線、回合、tool call、重連、session resumption。</td></tr>
+            <tr><td><code>host-config.js</code></td><td>共用模型名稱與系統提示詞組裝，避免單機與投影端人設漂移。</td></tr>
+            <tr><td><code>avatar-emotions.js</code></td><td><code>set_avatar_emotion</code> 工具定義與參數驗證（5 種表情）。</td></tr>
+            <tr><td><code>avatar-gestures.js</code></td><td><code>play_avatar_gesture</code> 工具定義、程序化動作曲線、播放佇列 <code>AvatarGesturePlayer</code>（10 種動作）。</td></tr>
+            <tr><td><code>audio-player.js</code></td><td>PCM 播放排程、抖動緩衝、供 LipSync 用的 <code>AnalyserNode</code>。</td></tr>
+            <tr><td><code>microphone.js</code> / <code>pcm-capture.worklet.js</code></td><td>單機與手機共用的收音生命週期；音訊執行緒上切 20ms 封包、處理按住/放開起訖。</td></tr>
+            <tr><td><code>stage.js</code></td><td>VRM 渲染、表情/動作套用、LipSync、狀態機、浮動視窗，是最大的整合層。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s2">
+      <div class="sec-head"><span class="sec-num">02</span><h2>WebRTC：手機與投影端怎麼配對</h2></div>
+      <p class="lede">這裡的「WebRTC」指的窄一點：只用一條 <code class="inline">RTCDataChannel</code>，不建立語音用的 <code class="inline">MediaStream</code>／<code class="inline">RTCPeerConnection</code> track。PeerJS 把 SDP/ICE 交換包成 <code class="inline">Peer</code>／<code class="inline">DataConnection</code> 兩個物件，省掉手刻 signaling server 的麻煩。</p>
+
+      <h3><span class="n">2.1</span>被動端與主動端</h3>
+      <p><code class="inline">stage.js</code> 開一個<b>固定房號</b>的 <code class="inline">Peer</code> 等人連進來（被動端）；<code class="inline">operator.js</code> 掃 QR code 拿到房號後<b>主動撥號</b> <code class="inline">peer.connect(roomCode,&nbsp;{reliable:true})</code>。整個交握全部經過 PeerJS 的公用雲端 broker 轉發，一旦兩端的 <code class="inline">DataConnection</code> 進入 <code class="inline">open</code>，之後的資料就走 P2P，不再經過 broker。</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+    participant S as stage.js（投影端）
+    participant B as PeerJS 雲端 Broker
+    participant O as operator.js（手機端）
+    S->>B: new Peer(roomCode)
+    B-->>S: "open"（peerId = roomCode）
+    S->>S: 顯示房號 + QR Code
+    O->>B: new Peer(undefined)
+    B-->>O: "open"
+    O->>O: 掃 QR / 手動輸入房號
+    O->>B: peer.connect(roomCode, reliable:true)
+    B-->>S: 轉發 SDP Offer / ICE candidates
+    B-->>O: 轉發 SDP Answer / ICE candidates
+    Note over S,O: 透過 STUN 完成 NAT 穿透
+    S-->>O: 雙方 DataConnection "open"
+    Note over S,O: 之後全部走 P2P DataChannel，不再經過 Broker
+        </pre>
+        <figcaption>房號被占用時 stage.js 會自動換號重開；斷線後雙方各自呼叫 peer.reconnect() 自動重連。</figcaption>
+      </figure>
+
+      <h3><span class="n">2.2</span>為什麼音訊也走 DataChannel，不開 MediaStream</h3>
+      <p>一般語音通話會用 <code class="inline">getUserMedia()</code> 餵進 <code class="inline">RTCPeerConnection</code> 的 audio track，但那條路徑會把音訊丟進瀏覽器的 Opus 編碼器，抵達對端還要再解碼、還可能被瀏覽器悄悄套用它自己的 AEC/AGC。這裡反過來：手機把麥克風收到的音訊在 <code class="inline">AudioWorklet</code> 裡直接切成 <b>16kHz mono PCM16、每包 ≤640 bytes（20ms）</b>，和 PTT 起訖、環節切換這些控制指令<b>共用同一條 reliable/ordered DataChannel</b>送出。共用同一條有序通道是關鍵：它保證「最後一包 PCM」一定比「放開按鈕」的訊號早到，Gemini 不會誤判使用者提前講完。</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as 工作人員（手機）
+    participant O as operator.js
+    participant S as stage.js
+    participant G as Gemini Live
+    U->>O: 按住「按住說話」
+    O->>S: {type:"ptt", active:true}
+    S->>G: activityStart()
+    loop 每個 ≤640 bytes 的 PCM 封包
+        O->>S: {type:"audio", bytes}
+        S->>G: sendAudio(bytes)
+    end
+    U->>O: 放開按鈕
+    O->>S: {type:"ptt", active:false}
+    S->>G: activityEnd()
+    G-->>S: 逐字稿 + 語音（串流）
+    S->>O: {type:"transcript", role:"model", text}
+    S->>S: 播放語音 + LipSync
+    S->>O: {type:"status", state:"speaking"}
+    G-->>S: turnComplete
+    S->>O: {type:"turn-complete"}
+        </pre>
+        <figcaption>同一條有序通道保證「句尾 PCM」永遠先於「放開」訊號抵達，Gemini 才不會截斷最後一個字。</figcaption>
+      </figure>
+
+      <h3><span class="n">2.3</span>訊息契約（<code>webrtc-link.js</code>）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>方向</th><th>type</th><th>內容</th><th>說明</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag op">operator → stage</span></td><td><code>ptt</code></td><td><code>{active:true|false}</code></td><td>AudioWorklet 產生的發話起訖</td></tr>
+            <tr><td><span class="tag op">operator → stage</span></td><td><code>audio</code></td><td><code>{bytes:Uint8Array}</code></td><td>16kHz mono PCM16 LE，每包 ≤640 bytes</td></tr>
+            <tr><td><span class="tag op">operator → stage</span></td><td><code>segment</code></td><td><code>{id:"lucky_draw"}</code></td><td>切換 Rundown 環節</td></tr>
+            <tr><td><span class="tag op">operator → stage</span></td><td><code>note</code></td><td><code>{text:"..."}</code></td><td>現場備註／文字訊息，會轉成 <code>sendText</code></td></tr>
+            <tr><td><span class="tag stage">stage → operator</span></td><td><code>status</code></td><td><code>{state}</code></td><td>idle / listening / thinking / speaking / interrupted</td></tr>
+            <tr><td><span class="tag stage">stage → operator</span></td><td><code>connection</code></td><td><code>{status}</code></td><td>connected / connecting / reconnecting / failed / offline</td></tr>
+            <tr><td><span class="tag stage">stage → operator</span></td><td><code>transcript</code></td><td><code>{role,text}</code></td><td>使用者／模型逐字稿（部分更新）</td></tr>
+            <tr><td><span class="tag stage">stage → operator</span></td><td><code>turn-complete</code></td><td>–</td><td>清除本輪逐字稿合併狀態</td></tr>
+            <tr><td><span class="tag stage">stage → operator</span></td><td><code>segment-ack</code></td><td><code>{id}</code></td><td>確認環節已套用</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3><span class="n">2.4</span>壅塞保護與已知風險</h3>
+      <p>手機端每送一個麥克風封包前會先檢查佇列是否已經塞車：</p>
+      <div class="code-cap">operator.js</div>
+      <pre class="code-block"><code>if (dataConn.bufferSize > 50 || dataConn.dataChannel?.bufferedAmount > 64000) {
+  // 直接斷線重連，而不是繼續送過期的音訊/指令
+}</code></pre>
+      <p>一旦網路壅塞就主動斷線重配對，避免 Gemini 根據「過期的」PTT 片段做出反應，比繼續硬塞更安全。</p>
+      <div class="warn"><b>已知風險：</b><code class="inline">ICE_SERVERS</code> 目前只設定 Google 的公用 STUN，沒有 TURN。若會場 Wi-Fi 對同網段裝置做「用戶隔離」（許多飯店/場地預設如此），純 STUN 可能打不通，正式上場前務必在實際場地網路先測一次配對，並準備好 TURN 憑證（例如 Twilio NTS、metered.ca）填進 <code class="inline">ICE_SERVERS</code>。</div>
+    </section>
+
+    <section id="s3">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Gemini Live：一條 WebSocket，手動 VAD</h2></div>
+      <p class="lede"><code class="inline">GeminiLiveClient</code>（<code class="inline">live-session.js</code>）直接對 <code class="inline">wss://generativelanguage.googleapis.com/.../BidiGenerateContent</code> 開一條 WebSocket，用官方 <b>Bidi</b> 協定手刻，沒有透過任何 SDK。</p>
+
+      <h3><span class="n">3.1</span>setup 訊息：關掉自動語音偵測</h3>
+      <p>連上後第一件事是送 <code class="inline">setup</code>，裡面最關鍵的一行是把伺服器端的自動語音活動偵測（VAD）關掉：</p>
+      <div class="code-cap">live-session.js — setupMessage()</div>
+      <pre class="code-block"><code>realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
+sessionResumption: this.resumptionHandle ? { handle: this.resumptionHandle } : {},
+contextWindowCompression: { triggerTokens: 8000, slidingWindow: {} },
+inputAudioTranscription: {},
+outputAudioTranscription: {},
+tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL, AVATAR_GESTURE_TOOL] }],</code></pre>
+      <p>尾牙現場的背景音樂與人聲很容易讓伺服器自動 VAD 誤判講話起訖，所以改成<b>完全手動</b>：工作人員按住按鈕才送 <code class="inline">activityStart</code>，放開才送 <code class="inline">activityEnd</code>——按鈕本身就是「輪到 Gemini 說話」的觸發器。輸入／輸出逐字稿都開啟轉錄，逐字稿只是診斷用途，不代表模型內部真正理解的內容。</p>
+
+      <h3><span class="n">3.2</span>一次完整回合的訊息流</h3>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+    participant App as stage.js
+    participant WS as GeminiLiveClient
+    participant G as Gemini Live（WebSocket）
+    App->>WS: start(config)
+    WS->>G: {setup:{...}}
+    G-->>WS: setupComplete
+    WS->>G: clientContent（session context，僅一次）
+    App->>WS: activityStart()
+    WS->>G: realtimeInput.activityStart
+    loop PCM 封包
+        App->>WS: sendAudio(bytes)
+        WS->>G: realtimeInput.audio (base64 PCM16)
+    end
+    App->>WS: activityEnd()
+    WS->>G: realtimeInput.activityEnd
+    G-->>WS: serverContent（audio parts + transcription，串流）
+    WS-->>App: gemini.audio / gemini.model-transcript
+    G-->>WS: toolCall（functionCalls）
+    WS-->>App: avatar.gesture / gemini.avatar-emotion
+    WS->>G: toolResponse（每個 call 各回一個結果）
+    G-->>WS: turnComplete
+    WS-->>App: gemini.turn-complete
+        </pre>
+        <figcaption>音訊、逐字稿與工具呼叫在同一個 serverContent 串流裡交錯抵達，client 端依訊息內容各自分流。</figcaption>
+      </figure>
+
+      <h3><span class="n">3.3</span>斷線、重連與 GoAway</h3>
+      <p>三個機制一起處理「連線不會永遠活著」這件事：</p>
+      <ul>
+        <li><b>Session resumption</b>——伺服器每次回 <code class="inline">sessionResumptionUpdate</code> 就記住新的 <code class="inline">resumptionHandle</code>，下次連線帶著它重建 context，不用重講一次系統提示詞與歷史。</li>
+        <li><b>GoAway</b>——伺服器要求換線時只設一個旗標，<b>不會立刻斷線</b>；<code class="inline">reconnectWhenIdle()</code> 會等目前輸入、回覆、播放都結束才真正關閉 WebSocket，避免把正在說一半的句子腰斬。</li>
+        <li><b>失敗重試</b>——連線失敗時以 1s / 2.5s / 5s 遞增重試，第 3 次仍失敗才回報 <code class="inline">failed</code>，讓 UI 顯示錯誤並釋放麥克風。</li>
+      </ul>
+      <div class="note"><b>Context window compression</b> 設定 <code class="inline">triggerTokens: 8000</code>，讓伺服器在對話累積到一定長度時自動壓縮上下文——這不等於連線不會斷，長時間跑尾牙全場的可靠度仍需要實機測試（見第 07 節）。</div>
+    </section>
+
+    <section id="s4">
+      <div class="sec-head"><span class="sec-num">04</span><h2>Function Calling：把說話變成表情與動作</h2></div>
+      <p class="lede">Gemini 3.1 Flash Live 目前只支援<b>同步（blocking）</b> function calling，沒有 <code class="inline">NON_BLOCKING</code> 模式。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作——工具呼叫本身完全不影響語音有沒有播出來。</p>
+
+      <h3><span class="n">4.1</span>兩個工具的定義</h3>
+      <div class="grid-2">
+        <div>
+          <div class="code-cap">avatar-emotions.js — set_avatar_emotion</div>
+          <pre class="code-block"><code>{
+  name: "set_avatar_emotion",
+  parameters: {
+    type: "OBJECT",
+    properties: {
+      emotion: {
+        type: "STRING",
+        enum: ["neutral","happy","sad",
+               "angry","surprised"]
+      }
+    },
+    required: ["emotion"]
+  }
+}</code></pre>
+        </div>
+        <div>
+          <div class="code-cap">avatar-gestures.js — play_avatar_gesture</div>
+          <pre class="code-block"><code>{
+  name: "play_avatar_gesture",
+  parameters: {
+    type: "OBJECT",
+    properties: {
+      gesture: {
+        type: "STRING",
+        enum: ["nod","shake_head","wave",
+          "present","tilt_head","bow",
+          "shrug","hand_on_chest",
+          "beckon","salute"]
+      }
+    },
+    required: ["gesture"]
+  }
+}</code></pre>
+        </div>
+      </div>
+      <p>兩個工具的 <code class="inline">description</code> 直接把「什麼情境用什麼值」寫進 schema 裡（例如：肯定用 <code class="inline">nod</code>、否定用 <code class="inline">shake_head</code>、道謝或道歉用 <code class="inline">bow</code>），這樣模型不需要額外的 few-shot 範例就能選對值；系統提示詞（<code class="inline">host-config.js</code>）再加一句限制：<b>每個回覆最多各呼叫一次</b>，不需要時不要呼叫，也不要拿工具控制嘴型或連續動畫——嘴型是 LipSync 引擎依音量分析算出來的（第 05 節），跟工具無關。</p>
+
+      <h3><span class="n">4.2</span>呼叫回合：驗證、套用、回應</h3>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+    participant G as Gemini Live
+    participant WS as GeminiLiveClient
+    participant Bus as EventBus
+    participant VRM as VRMAvatarController
+    G->>WS: toolCall.functionCalls[]
+    loop 每個 call
+        WS->>WS: normalizeAvatarEmotion / normalizeAvatarGesture
+        alt 參數合法 且 本回合尚未用過
+            WS->>Bus: avatar.emotion 或 avatar.gesture
+            Bus->>VRM: 套用表情 / 排入動作佇列
+            WS->>G: toolResponse {result:"applied"|"queued"}
+        else 參數不合法 或 本回合已用過一次
+            WS->>G: toolResponse {error:"..."}
+        end
+    end
+    G-->>WS: serverContent.turnComplete
+    WS->>Bus: avatar.gesture-turn-complete
+        </pre>
+        <figcaption>每種工具每回合最多套用一次；第二次呼叫會收到明確的 error，而不是被靜默忽略。</figcaption>
+      </figure>
+
+      <h3><span class="n">4.3</span>被打斷時，動作要跟著取消</h3>
+      <p>使用者在 Gemini 說話中途按下 PTT 打斷時，伺服器會送 <code class="inline">content.interrupted</code>，同時可能送 <code class="inline">toolCallCancellation</code>。<code class="inline">live-session.js</code> 對這兩種訊號各自處理：</p>
+      <ul>
+        <li><code class="inline">interrupted</code> → 清空 <code class="inline">suppressAudio</code>／<code class="inline">playbackPending</code>，並把「本回合已用過一個動作」的旗標 <code class="inline">gestureUsed</code> 重置，同時發出 <code class="inline">gemini.interrupted</code> 讓 stage.js 停止播放、重置表情。</li>
+        <li><code class="inline">toolCallCancellation.ids</code> → 轉發成 <code class="inline">avatar.gesture-cancel</code>，讓 <code class="inline">AvatarGesturePlayer</code> 依 id 把還沒播出來的排隊動作／正在播的動作直接取消，不會讓一個已經被打斷的回覆還在比手勢。</li>
+      </ul>
+    </section>
+
+    <section id="s5">
+      <div class="sec-head"><span class="sec-num">05</span><h2>Avatar：VRM 怎麼「做出」表情與動作</h2></div>
+      <p class="lede">工具呼叫只丟出一個字串（<code class="inline">"happy"</code>、<code class="inline">"wave"</code>）；真正把它變成臉部與肢體動畫的，是 <code class="inline">stage.js</code> 裡的 <code class="inline">VRMAvatarController</code>，疊了四層動畫：呼吸/待機的程序化擺動、狀態機驅動的姿態、表情 blend shape 交叉淡化、以及一次性的動作曲線。</p>
+
+      <h3><span class="n">5.1</span>表情：blend shape 別名解析 + 交叉淡化</h3>
+      <p>不同 VRM 模型的表情 blend shape 命名不保證一致（<code class="inline">happy</code> 可能叫 <code class="inline">Happy</code>、<code class="inline">joy</code>…），載入模型後 <code class="inline">resolveExpressions()</code> 會用一張別名表把 5 種情緒與 5 個嘴型母音都解析成「這個模型實際的表情名稱」：</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>邏輯名稱</th><th>用途</th><th>常見別名</th></tr></thead>
+          <tbody>
+            <tr><td><code>neutral / happy / sad / angry / surprised</code></td><td>五種情緒（<code>set_avatar_emotion</code>）</td><td>模型原生 VRM 表情名，或首字大寫變體</td></tr>
+            <tr><td><code>aa / ih / ou / ee / oh</code></td><td>五個嘴型母音（LipSync）</td><td><code>mouthA</code>、<code>vowelA</code> 等</td></tr>
+            <tr><td><code>blink</code> / <code>blinkLeft</code> / <code>blinkRight</code></td><td>眨眼</td><td><code>eyeBlinkLeft</code> 等</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>套用表情時不是直接切換，而是每次 <code class="inline">setEmotion()</code> 記住「從哪個情緒來」，用 <code class="inline">emotionMix</code>（0→1，約 0.3 秒）在新舊兩個表情之間線性交叉淡化，臉不會在一個 frame 內突然切換。<code class="inline">happy</code> 額外乘上 <code class="inline">mouthIntensity</code>，跟嘴型共用同一組控制點，避免笑意和說話張嘴互相打架。</p>
+
+      <h3><span class="n">5.2</span>動作：程序化曲線疊加在骨骼上，不是動畫檔</h3>
+      <p>10 種動作完全沒有用任何 <code class="inline">.vrma</code>／骨架動畫檔，而是每種動作各寫一段以時間 <code class="inline">t</code> 為輸入的<b>手刻曲線函式</b>，直接輸出人形骨骼（hips/spine/upperArm/hand…）該疊加的 Euler 角度。例如揮手：</p>
+      <div class="code-cap">avatar-gestures.js — sampleGesture("wave", t)</div>
+      <pre class="code-block"><code>const weight = smooth(t / .35) * smooth((duration - t) / .45); // 淡入淡出
+const beat = Math.sin(t * Math.PI * 3);                        // 手臂擺動節奏
+case "wave": return {
+  rightUpperArm: [0, 0, -.08 * weight],
+  rightLowerArm: [0, 2.7 * weight, (.2 + .1 * beat) * weight],
+  rightHand:     [-1.51 * weight, -.28 * weight, .36 * weight],
+};</code></pre>
+      <p><code class="inline">weight</code> 用 smoothstep 在動作開頭與結尾各做一段淡入淡出，<code class="inline">beat</code> 用 sin 波製造揮手的來回擺動——每個動作都是這種「淡入淡出 × 節奏波」的組合，沒有任何一張姿勢是手動關鍵幀擺出來的。<code class="inline">update()</code> 每個 frame 把這組角度轉成 quaternion，<b>乘（multiply）</b>在既有的待機姿勢骨骼旋轉上，而不是取代它——所以動作播放時，呼吸、視線飄移這些底層待機動畫仍然同時在跑。</p>
+
+      <div class="note"><b>播放時機由「正在出聲」決定，不是收到工具呼叫就立刻播</b>：<code class="inline">AvatarGesturePlayer.queue()</code> 先把動作放進 <code class="inline">pending</code>，<code class="inline">update(dt, playing)</code> 每個 frame 檢查 <code class="inline">playing</code>（音訊播放器是否正在出聲），只有真正開始播語音那一刻才把 <code class="inline">pending</code> 轉成 <code class="inline">active</code> 開始計時——避免文字還沒轉成語音、動作卻先做完的錯位。等待超過 8 秒或本回合結束仍未播放，動作會直接被丟棄。</div>
+
+      <h3><span class="n">5.3</span>LipSync：即時音量頻譜 → 五個嘴型母音</h3>
+      <p>嘴型完全不靠 Gemini 傳的任何 viseme 資料，是<b>純前端音訊分析</b>：<code class="inline">LipSyncEngine</code> 掛在播放器的 <code class="inline">AnalyserNode</code> 上，每個 frame 讀時域與頻域資料，算出低/中/高三個頻段的能量平均，用一組簡單規則分類母音：</p>
+      <div class="code-cap">stage.js — classifyViseme(low, mid, high)</div>
+      <pre class="code-block"><code>if (low  > mid * 1.2  && low  > high * 1.15) return "ou";
+if (high > mid * 1.1) return high > low * 1.3 ? "ee" : "ih";
+if (mid  > low  * 1.16) return "aa";
+return "oh";</code></pre>
+      <p>整體音量（RMS）低於 <code class="inline">.018</code> 視為沒在說話、嘴型歸零；權重上升用 <code class="inline">.38</code>、下降用 <code class="inline">.18</code> 的不同插值係數，張嘴比閉嘴更快，聽起來才不會拖泥帶水。這個分類是頻譜能量的粗略近似，不是語音辨識，圖求的是「像在說話」而不是精準對嘴型。</p>
+
+      <h3><span class="n">5.4</span>五態狀態機：idle / listening / thinking / speaking / interrupted</h3>
+      <p>待機呼吸的幅度、頭部視線飄移的節奏，都會依目前狀態的權重（<code class="inline">stateWeights</code>，每態各自用指數平滑趨近 0 或 1）微調——例如 <code class="inline">listening</code> 時多一點點頭節奏，<code class="inline">thinking</code> 時頭略微側傾，<code class="inline">speaking</code> 時頭部隨音量做說話節拍。狀態轉換本身是一張顯式的合法轉移表，不是任意跳轉：</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> idle
+    idle --> listening
+    listening --> thinking
+    listening --> speaking
+    listening --> interrupted
+    listening --> idle
+    thinking --> speaking
+    thinking --> listening
+    thinking --> interrupted
+    thinking --> idle
+    speaking --> interrupted
+    speaking --> idle
+    interrupted --> listening
+    interrupted --> idle
+        </pre>
+        <figcaption>speaking／thinking 中途被打斷一律先落到 interrupted，再由呼叫端接著轉到 listening——不存在「speaking 直接跳 thinking」這種轉移。</figcaption>
+      </figure>
+    </section>
+
+    <section id="s6">
+      <div class="sec-head"><span class="sec-num">06</span><h2>事件總覽：EventBus 是唯一的接線方式</h2></div>
+      <p class="lede">三個入口頁面內部都用一個最小的 <code class="inline">EventBus</code>（<code class="inline">on</code>/<code class="inline">emit</code>）串接模組，<code class="inline">GeminiLiveClient</code>、<code class="inline">VRMAvatarController</code>、<code class="inline">PeerLink</code> 互相不直接持有對方的參照，只透過事件名稱溝通，方便個別替換或寫測試。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>事件</th><th>發送方</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>gemini.connected</code> / <code>gemini.disconnected</code> / <code>gemini.connection-lost</code></td><td>GeminiLiveClient</td><td>連線生命週期</td></tr>
+            <tr><td><code>gemini.audio</code></td><td>GeminiLiveClient</td><td>模型回覆的 PCM 音訊片段</td></tr>
+            <tr><td><code>gemini.user-transcript</code> / <code>gemini.model-transcript</code></td><td>GeminiLiveClient</td><td>雙向逐字稿（診斷／轉發給手機）</td></tr>
+            <tr><td><code>gemini.turn-complete</code> / <code>gemini.interrupted</code></td><td>GeminiLiveClient</td><td>回合結束／被打斷</td></tr>
+            <tr><td><code>gemini.avatar-emotion</code></td><td>GeminiLiveClient</td><td>工具呼叫解析後的表情結果</td></tr>
+            <tr><td><code>avatar.emotion</code> / <code>avatar.gesture</code></td><td>stage.js 轉發 / GeminiLiveClient</td><td>VRMAvatarController 實際套用的入口</td></tr>
+            <tr><td><code>avatar.gesture-cancel</code> / <code>avatar.gesture-turn-complete</code></td><td>GeminiLiveClient</td><td>取消排隊動作／清 gestureUsed 旗標</td></tr>
+            <tr><td><code>avatar.viseme</code></td><td>LipSyncEngine</td><td>即時嘴型母音與權重</td></tr>
+            <tr><td><code>peerlink.connected</code> / <code>peerlink.data</code> / <code>peerlink.disconnected</code></td><td>PeerLink</td><td>WebRTC 配對狀態與收到的訊息</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s7">
+      <div class="sec-head"><span class="sec-num">07</span><h2>目前的限制</h2></div>
+      <ul>
+        <li>抽獎、音效、AI 自動建議換環節等擴充工具還沒做；環節切換一律由工作人員手動觸發，Nami 不會自己宣布進入下一環節。</li>
+        <li>API Key 目前是開發測試模式，存在瀏覽器 <code class="inline">localStorage</code>，沒有做 ephemeral token；正式對外使用前需要處理金鑰保護。</li>
+        <li><code class="inline">ICE_SERVERS</code> 只有 STUN 沒有 TURN，尚未在真實兩台裝置＋真實會場網路下測試過配對，上場前務必實測（見第 02.4 節）。</li>
+        <li>Context window compression 與 session resumption 能延長單條連線的壽命，但不保證整場活動不斷線；長時間運行的韌性仍待實機驗證。</li>
+        <li>LipSync 與情緒交叉淡化都是前端啟發式規則，不是模型直接輸出的表情/口型資料，效果與模型生成語音的節奏相關，非公式可完全保證。</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <footer>Nami 尾牙主持人手冊 · 對照原始碼：<code class="inline">YearEndParty/</code>（stage.js · live-session.js · avatar-emotions.js · avatar-gestures.js · webrtc-link.js）</footer>
+</div>
+
+<script>
+  (function () {
+    var sections = [
+      ["s1", "01", "整體架構"],
+      ["s2", "02", "WebRTC 配對"],
+      ["s3", "03", "Gemini Live 協定"],
+      ["s4", "04", "Function Calling"],
+      ["s5", "05", "Avatar 表情與動作"],
+      ["s6", "06", "事件總覽"],
+      ["s7", "07", "目前的限制"]
+    ];
+    function buildList(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = sections.map(function (s) {
+        return '<li><a href="#' + s[0] + '"><span class="n">' + s[1] + '</span>' + s[2] + '</a></li>';
+      }).join("");
+    }
+    buildList("toc-list");
+    buildList("toc-list-mobile");
+  })();
+</script>
