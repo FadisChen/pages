@@ -14,6 +14,18 @@ const VISEME_LABELS = { aa: 'A', ih: 'I', ou: 'U', ee: 'E', oh: 'O' };
 const VISEME_NAMES = Object.keys(VISEME_LABELS);
 const EMOTION_NAMES = Object.keys(EXPRESSION_LABELS);
 const MOUTH_HEAVY_EMOTIONS = new Set(['happy', 'sad', 'surprised']);
+const GESTURE_DURATIONS = Object.freeze({
+  nod: 1.5,
+  shake_head: 1.6,
+  wave: 2.4,
+  present: 2.6,
+  tilt_head: 1.8,
+  bow: 1.9,
+  shrug: 1.6,
+  hand_on_chest: 2.2,
+  beckon: 2.4,
+  salute: 1.9,
+});
 
 const canvas = document.getElementById('canvas');
 const viewer = new VRMViewer(canvas, { transparent: false });
@@ -122,47 +134,99 @@ function eulerQuat(x, y, z) {
   return new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z));
 }
 
+function smooth(value) {
+  const x = Math.max(0, Math.min(1, value));
+  return x * x * (3 - 2 * x);
+}
+
 function applyBoneOffset(boneName, x, y, z) {
   const bone = viewer.getBone(boneName);
   const bind = viewer.getBindQuaternion(boneName);
   if (bone && bind) bone.quaternion.copy(bind).multiply(eulerQuat(x, y, z));
 }
 
+// Keep these local offsets aligned with Avatar/avatar-gestures.js. They are
+// applied on top of the viewer's arms-down bind pose for the current VRM.
+function sampleGesture(name, time) {
+  const duration = GESTURE_DURATIONS[name];
+  const weight = smooth(time / .35) * smooth((duration - time) / .45);
+  const beat = Math.sin(time * Math.PI * 3);
+  const offer = smooth((time - .35) / .65) * (1 - smooth((time - 1.65) / .45));
+  switch (name) {
+    case 'nod': return { head: [.16 * beat * weight, 0, 0], neck: [.04 * beat * weight, 0, 0] };
+    case 'shake_head': return { head: [0, .21 * beat * weight, 0], neck: [0, .05 * beat * weight, 0] };
+    case 'tilt_head': return { head: [0, -.06 * weight, -.16 * weight], neck: [0, 0, -.04 * weight] };
+    case 'bow': return {
+      spine: [-.16 * weight, 0, 0],
+      chest: [-.22 * weight, 0, 0],
+      neck: [-.08 * weight, 0, 0],
+      head: [-.12 * weight, 0, 0],
+    };
+    case 'shrug': return {
+      leftShoulder: [0, 0, -.18 * weight],
+      rightShoulder: [0, 0, .18 * weight],
+      leftUpperArm: [.15 * weight, .21 * weight, .25 * weight],
+      rightUpperArm: [.15 * weight, -.21 * weight, -.25 * weight],
+      leftLowerArm: [0, -2.15 * weight, 0],
+      rightLowerArm: [0, 2.15 * weight, 0],
+      leftHand: [1.7 * weight, -.19 * weight, -.19 * weight],
+      rightHand: [1.7 * weight, .19 * weight, .19 * weight],
+      head: [-.03 * weight, 0, 0],
+    };
+    case 'hand_on_chest': return {
+      rightUpperArm: [-.38 * weight, .31 * weight, .13 * weight],
+      rightLowerArm: [0, 1.94 * weight, 0],
+      rightHand: [.83 * weight, -.11 * weight, -.88 * weight],
+    };
+    case 'beckon': {
+      const curl = .5 - .5 * Math.cos(Math.max(0, time - .4) * Math.PI * 3);
+      const pose = {
+        rightUpperArm: [.2 * weight, 0, -.09 * weight],
+        rightLowerArm: [0, (2.1 + .08 * curl) * weight, 0],
+        rightHand: [1.82 * weight, -.06 * weight, .19 * weight],
+      };
+      for (const finger of ['Index', 'Middle', 'Ring', 'Little']) {
+        pose[`right${finger}Proximal`] = [0, 0, -(.1 + .85 * curl) * weight];
+        pose[`right${finger}Intermediate`] = [0, 0, -(.1 + .95 * curl) * weight];
+        pose[`right${finger}Distal`] = [0, 0, -(.05 + .5 * curl) * weight];
+      }
+      return pose;
+    }
+    case 'salute': {
+      const lift = smooth((time - .1) / .4) * smooth((duration - time) / .45);
+      const bend = smooth(time / .24) * smooth((duration - time) / .24);
+      return {
+        rightUpperArm: [1.56 * lift, 1.13 * lift, -.89 * lift],
+        rightLowerArm: [0, 2.15 * bend, 0],
+        rightHand: [.56 * weight, -.32 * weight, -1.08 * weight],
+        rightIndexProximal: [0, -.12 * weight, 0],
+        rightRingProximal: [0, .1 * weight, 0],
+        rightLittleProximal: [0, .22 * weight, 0],
+        rightThumbMetacarpal: [0, -.45 * weight, -.15 * weight],
+      };
+    }
+    case 'wave': return {
+      rightUpperArm: [0, 0, -.08 * weight],
+      rightLowerArm: [0, 2.7 * weight, (.2 + .1 * beat) * weight],
+      rightHand: [-1.51 * weight, -.28 * weight, .36 * weight],
+    };
+    case 'present': return {
+      rightUpperArm: [.63 * weight, .25 * weight, -.28 * weight],
+      rightLowerArm: [0, 1.4 * weight, (-.55 + .3 * offer) * weight],
+      rightHand: [1.42 * weight, .86 * weight, .33 * weight],
+    };
+    default: return {};
+  }
+}
+
 function updateMotion(elapsed) {
   if (!activeMotion) return;
   const t = elapsed - activeMotion.start;
-
-  if (activeMotion.name === 'wave') {
-    const duration = 2.6;
-    if (t > duration) { viewer.resetPose(); activeMotion = null; return; }
-    const raiseIn = Math.min(t / 0.4, 1);
-    const raiseOut = t > duration - 0.4 ? Math.max((duration - t) / 0.4, 0) : 1;
-    const raise = Math.min(raiseIn, raiseOut);
-    // rightUpperArm's Z axis is the confirmed shoulder-abduction axis (used
-    // for the arms-down rest pose too); wiggle it gently on top of the raised
-    // pose instead of touching lower-arm axes we haven't verified.
-    const wiggle = Math.sin(t * 9) * 0.15;
-    applyBoneOffset('rightUpperArm', 0, 0, raise * (1.0 + wiggle));
-    applyBoneOffset('rightLowerArm', -1.3 * raise, 0, 0);
-  } else if (activeMotion.name === 'nod') {
-    const duration = 1.6;
-    if (t > duration) { viewer.resetPose(); activeMotion = null; return; }
-    const amt = Math.sin(t * Math.PI * 2.2) * 0.35;
-    applyBoneOffset('head', -Math.max(amt, 0) * 0.9, 0, 0);
-  } else if (activeMotion.name === 'shake') {
-    const duration = 1.8;
-    if (t > duration) { viewer.resetPose(); activeMotion = null; return; }
-    const amt = Math.sin(t * Math.PI * 2.4) * 0.45;
-    applyBoneOffset('head', 0, amt, 0);
-  } else if (activeMotion.name === 'look') {
-    const duration = 4.0;
-    if (t > duration) {
-      viewer.lookAtTarget.position.set(0, 1.4, 3);
-      activeMotion = null;
-      return;
-    }
-    const sweep = Math.sin((t / duration) * Math.PI * 2);
-    viewer.lookAtTarget.position.set(sweep * 1.2, 1.4, 2.4);
+  const duration = GESTURE_DURATIONS[activeMotion.name];
+  if (!duration) return;
+  if (t >= duration) { viewer.resetPose(); activeMotion = null; return; }
+  for (const [bone, angles] of Object.entries(sampleGesture(activeMotion.name, t))) {
+    applyBoneOffset(bone, ...angles);
   }
 }
 
@@ -192,8 +256,14 @@ modelSelect.addEventListener('change', () => loadModel(modelSelect.value));
 
 document.getElementById('motion-wave').addEventListener('click', () => startMotion('wave'));
 document.getElementById('motion-nod').addEventListener('click', () => startMotion('nod'));
-document.getElementById('motion-shake').addEventListener('click', () => startMotion('shake'));
-document.getElementById('motion-look').addEventListener('click', () => startMotion('look'));
+document.getElementById('motion-shake-head').addEventListener('click', () => startMotion('shake_head'));
+document.getElementById('motion-present').addEventListener('click', () => startMotion('present'));
+document.getElementById('motion-tilt-head').addEventListener('click', () => startMotion('tilt_head'));
+document.getElementById('motion-bow').addEventListener('click', () => startMotion('bow'));
+document.getElementById('motion-shrug').addEventListener('click', () => startMotion('shrug'));
+document.getElementById('motion-hand-on-chest').addEventListener('click', () => startMotion('hand_on_chest'));
+document.getElementById('motion-beckon').addEventListener('click', () => startMotion('beckon'));
+document.getElementById('motion-salute').addEventListener('click', () => startMotion('salute'));
 document.getElementById('motion-reset').addEventListener('click', () => {
   activeMotion = null;
   viewer.resetPose();
