@@ -37,7 +37,7 @@ function createAvatarToolResponse(call, result) {
     id: call?.id || "",
     name: call?.name || AVATAR_EMOTION_TOOL.name,
     response: result?.ok
-      ? { result: "applied" }
+      ? { result: result.result || "applied" }
       : { error: result?.error || "set_avatar_emotion 參數無效。" },
   };
   return { toolResponse: { functionResponses: [functionResponse] } };

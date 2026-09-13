@@ -7,6 +7,7 @@ import {
   createAvatarToolResponse,
   normalizeAvatarEmotion,
 } from "./avatar-emotions.js";
+import { AVATAR_GESTURE_TOOL, normalizeAvatarGesture, AvatarGesturePlayer } from "./avatar-gestures.js";
 import { shouldPlayLiveAudio } from "./live-audio-policy.js";
 import { collectSessionContext } from "./session-context.js";
 import { mergePartial, normalizeTranscript } from "./transcript.js";
@@ -17,7 +18,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
   const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
   const SETTINGS_KEY = "orbit-friend.avatar.settings.v1";
   const REQUIRED_SYSTEM_PROMPT_PREFIX = "你是 Nami，";
-  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion；不需要時不要呼叫。只傳入工具列出的 emotion enum；不要用工具控制身體動作、嘴型、呼吸或連續動畫。";
+  const REQUIRED_SYSTEM_PROMPT = "請使用臺灣繁體中文自然交談，不要描述你正在使用的系統。回應要像真實語音對話：先接住對方，再給一個清楚的回應；不確定時誠實說明。你可以表現出自然的開心、驚訝、關心或思考，但不要每句都過度熱情。只有在回覆開始或情緒轉折需要明顯表情時才使用 set_avatar_emotion；不需要時不要呼叫。只傳入工具列出的 emotion enum；你可以在回覆開始前依自己即將說出的內容呼叫一次 play_avatar_gesture：肯定用 nod、否定用 shake_head、招呼道別用 wave、解釋介紹用 present、疑問思考用 tilt_head。沒有適合情境就不呼叫，不要每句都動。表情和動作可以一起使用。不要描述工具或動作，不要用工具控制骨骼角度、嘴型、呼吸或連續動畫。";
   const DEFAULT_USER_SYSTEM_PROMPT = "一位溫柔、敏銳、簡潔的臺灣 AI 朋友";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
@@ -331,6 +332,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.loadToken = 0;
       this.bones = {};
       this.restPose = new Map();
+      this.gestures = new AvatarGesturePlayer();
       this.expressionAliases = {};
       this.tmpEuler = new THREE.Euler();
       this.tmpQuaternion = new THREE.Quaternion();
@@ -359,6 +361,10 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       bus.on("avatar.state", ({ state }) => { this.state = state; });
+      bus.on("avatar.gesture", ({ gesture, id }) => { if (this.loaded) this.gestures.queue(gesture, id); });
+      bus.on("avatar.gesture-reset", () => this.gestures.reset());
+      bus.on("avatar.gesture-cancel", ({ ids }) => this.gestures.cancel(ids));
+      bus.on("avatar.gesture-turn-complete", () => this.gestures.finishTurn());
       bus.on("avatar.emotion", ({ emotion }) => this.setEmotion(emotion));
       bus.on("avatar.viseme", ({ viseme, weight, rms }) => { this.viseme = viseme; this.mouthWeight = weight; this.outputLevel = clamp(rms * 3.5, 0, 1); });
       bus.on("audio.input-level", ({ level }) => { this.inputLevel += (level - this.inputLevel) * .22; });
@@ -465,6 +471,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     async loadModel() {
       if (!this.renderer) return;
       const requestToken = ++this.loadToken;
+      this.gestures?.reset(true);
       this.loaded = false;
       this.loadProgress = 0;
       this.mouthIntensity = AVATAR_MODELS.find((model) => model.url === this.modelUrl)?.mouthIntensity ?? 1;
@@ -534,6 +541,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         leftShoulder: getBone("leftShoulder"), rightShoulder: getBone("rightShoulder"),
         leftUpperArm: getBone("leftUpperArm"), leftLowerArm: getBone("leftLowerArm"),
         rightUpperArm: getBone("rightUpperArm"), rightLowerArm: getBone("rightLowerArm"),
+        rightHand: getBone("rightHand"),
       };
       this.restPose.clear();
       for (const bone of new Set(Object.values(this.bones).filter(Boolean))) this.restPose.set(bone, bone.quaternion.clone());
@@ -633,7 +641,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.emotion = emotion;
       this.emotionMix = 0;
     }
-    update(deltaTime) {
+    update(deltaTime, playing = false) {
       this.elapsed += deltaTime;
       this.updateView(deltaTime);
       const stateBlend = 1 - Math.exp(-deltaTime * 4.5);
@@ -643,6 +651,13 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       if (this.loaded) {
         this.resetPose();
         this.animatePose(deltaTime);
+        for (const [name, angles] of Object.entries(this.gestures.update(deltaTime, playing))) {
+          const bone = this.bones[name];
+          if (!bone) continue;
+          this.tmpEuler.set(...angles);
+          this.tmpQuaternion.setFromEuler(this.tmpEuler);
+          bone.quaternion.multiply(this.tmpQuaternion);
+        }
         this.applyExpressions();
         this.vrm.update?.(deltaTime);
       }
@@ -686,6 +701,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.reconnectTimer = null;
       this.resumptionHandle = "";
       this.initialContextSent = false;
+      this.gestureUsed = false;
     }
     start(config) {
       this.disconnect(false);
@@ -694,6 +710,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.failures = 0;
       this.resumptionHandle = "";
       this.initialContextSent = false;
+      this.gestureUsed = false;
       this.connect(false);
     }
     disconnect(notify = true) {
@@ -737,7 +754,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         contextWindowCompression: { triggerTokens: 8000, slidingWindow: {} },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
-        tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL] }],
+        tools: [{ functionDeclarations: [AVATAR_EMOTION_TOOL, AVATAR_GESTURE_TOOL] }],
       };
       if (!this.initialContextSent && !this.resumptionHandle) setup.historyConfig = { initialHistoryInClientContent: true };
       return { setup };
@@ -777,7 +794,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         return;
       }
       if (content) {
-        if (content.interrupted) this.bus.emit("gemini.interrupted", {});
+        if (content.interrupted) { this.gestureUsed = false; this.bus.emit("gemini.interrupted", {}); }
         const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
         const playAudio = shouldPlayLiveAudio({ interrupted: content.interrupted });
         if (audioParts.length && playAudio) for (const part of audioParts) {
@@ -791,7 +808,9 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
         if (content.turnComplete) this.bus.emit("gemini.turn-complete", {});
       }
-      if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
+      if (message.toolCallCancellation?.ids) this.bus.emit("avatar.gesture-cancel", { ids: message.toolCallCancellation.ids });
+      if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls, Boolean(content?.interrupted));
+      if (content?.turnComplete) { this.gestureUsed = false; this.bus.emit("avatar.gesture-turn-complete", {}); }
       // Automatic VAD cannot tell us locally whether the user has finished speaking.
       // Receive until the server closes, then resume; this notice must not cut off speech.
       if (message.goAway) this.bus.emit("gemini.go-away", { timeLeft: message.goAway.timeLeft });
@@ -810,10 +829,24 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         return false;
       }
     }
-    handleToolCalls(socket, calls) {
+    handleToolCalls(socket, calls, interrupted = false) {
       let applied = false;
       for (const call of calls) {
         let result;
+        if (call?.name === AVATAR_GESTURE_TOOL.name) {
+          let args = call.args;
+          if (typeof args === "string") { try { args = JSON.parse(args); } catch (_) { args = null; } }
+          result = normalizeAvatarGesture(args);
+          if (interrupted) result = { ok: false, error: "回覆已被打斷，動作已取消。" };
+          else if (result.ok && this.gestureUsed) result = { ok: false, error: "每個回覆最多一個 Avatar gesture。" };
+          if (result.ok) {
+            this.gestureUsed = true;
+            this.bus.emit("avatar.gesture", { gesture: result.gesture, id: call.id });
+            result.result = "queued";
+          }
+          this.sendToolResponse(socket, call, result);
+          continue;
+        }
         if (call?.name !== AVATAR_EMOTION_TOOL.name) {
           result = { ok: false, error: `不支援的 Avatar tool：${String(call?.name || "")}。` };
         } else {
@@ -840,6 +873,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ready = false;
       this.socket = null;
       if (!this.resumptionHandle) this.initialContextSent = false;
+      this.gestureUsed = false;
       this.bus.emit("gemini.connection-lost", {});
       this.failures += 1;
       if (this.failures >= 3) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", new Error(`Gemini 連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`)); return; }
@@ -1051,7 +1085,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.lastFrame = now;
       this.fps += ((1 / delta) - this.fps) * .08;
       this.lipSync.update(delta);
-      this.avatar.update(delta);
+      this.avatar.update(delta, this.audioPlayer.isPlaying());
       this.updateUI(now);
       requestAnimationFrame(() => this.renderLoop());
     }
@@ -1067,7 +1101,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ui.waveform.querySelectorAll("i").forEach((bar, index) => { const pulse = .4 + ((Math.sin(now / 170 + index * 1.4) + 1) / 2) * (state === STATES.SPEAKING ? .6 : .22); bar.style.setProperty("--wave", String(pulse)); });
       if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
-    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); }
+    resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); this.bus.emit("avatar.gesture-reset", {}); }
   }
 
   function collectUI() {

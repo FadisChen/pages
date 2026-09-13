@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import * as gestures from "../avatar-gestures.js";
 import * as emotions from "../avatar-emotions.js";
 import * as transcript from "../transcript.js";
 import { shouldPlayLiveAudio } from "../live-audio-policy.js";
@@ -11,7 +12,7 @@ function loadPage(extra = {}) {
   let source = readFileSync(new URL("app.js", root), "utf8").replace(/^import[\s\S]*?;\r?\n/gm, "");
   source = source.replaceAll("import.meta.url", JSON.stringify(new URL("app.js", root).href));
   source = source.replace(/  if \(document.readyState[\s\S]*$/, "globalThis.page = { App, EventBus, GeminiLiveClient, GeminiAudioPlayer, MicrophoneInput, VRMAvatarController };\n})();");
-  const context = vm.createContext({ ...emotions, ...transcript, shouldPlayLiveAudio,
+  const context = vm.createContext({ ...emotions, ...gestures, ...transcript, shouldPlayLiveAudio,
     document: { addEventListener() {} }, window: { addEventListener() {} }, WebSocket: { OPEN: 1 },
     isSecureContext: true, setTimeout, clearTimeout, performance, Uint8Array, Float32Array,
     ArrayBuffer, DataView, TextDecoder, URL, atob, btoa, ...extra,
@@ -43,6 +44,53 @@ function fixture() {
 
 const audio = (rate = 24000) => ({ modelTurn: { parts: [{ inlineData: { mimeType: `audio/pcm;rate=${rate}`, data: "AQA=" } }] } });
 const toolCall = { functionCalls: [{ id: "emotion-1", name: "set_avatar_emotion", args: { emotion: "happy" } }] };
+
+const gestureCall = { id: "gesture-1", name: "play_avatar_gesture", args: { gesture: "wave" } };
+function gestureFixture() {
+  const f = fixture(), player = new gestures.AvatarGesturePlayer();
+  f.app.bus.on("avatar.gesture", ({ gesture, id }) => player.queue(gesture, id));
+  f.app.bus.on("avatar.gesture-reset", () => player.reset());
+  f.app.bus.on("avatar.gesture-cancel", ({ ids }) => player.cancel(ids));
+  f.app.bus.on("avatar.gesture-turn-complete", () => player.finishTurn());
+  return { ...f, player };
+}
+
+test("gesture and emotion in the same audio packet preserve PCM and tool responses", () => {
+  const f = gestureFixture();
+  f.client.handleMessage(f.socket, { serverContent: audio(), toolCall: { functionCalls: [gestureCall, ...toolCall.functionCalls] } });
+  assert.equal(f.played.length, 1);
+  assert.equal(f.stops(), 0);
+  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.result, "queued");
+  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.result, "applied");
+  assert.equal(f.player.pending.gesture, "wave");
+});
+
+test("gesture limit spans packets and resets on the next turn", () => {
+  const f = gestureFixture();
+  const packet = { toolCall: { functionCalls: [gestureCall] } };
+  f.client.handleMessage(f.socket, packet);
+  f.client.handleMessage(f.socket, packet);
+  assert.ok(f.sent[1].toolResponse.functionResponses[0].response.error);
+  f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+  f.player.update(.1, false);
+  f.client.handleMessage(f.socket, packet);
+  assert.equal(f.sent[2].toolResponse.functionResponses[0].response.result, "queued");
+});
+
+test("interrupt cancels pending gestures and rejects co-delivered gestures", () => {
+  const f = gestureFixture();
+  f.client.handleMessage(f.socket, { toolCall: { functionCalls: [gestureCall] } });
+  f.client.handleMessage(f.socket, { serverContent: { interrupted: true }, toolCall: { functionCalls: [gestureCall] } });
+  assert.equal(f.player.pending, null);
+  assert.ok(f.sent[1].toolResponse.functionResponses[0].response.error);
+});
+
+test("server tool cancellation removes the matching pending gesture", () => {
+  const f = gestureFixture();
+  f.client.handleMessage(f.socket, { toolCall: { functionCalls: [gestureCall] } });
+  f.client.handleMessage(f.socket, { toolCallCancellation: { ids: [gestureCall.id] } });
+  assert.equal(f.player.pending, null);
+});
 
 test("emotion changes leave queued speech intact", () => {
   const f = fixture();
