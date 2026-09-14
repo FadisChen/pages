@@ -1,5 +1,7 @@
 # YearEndParty 編輯工具實作計畫
 
+> 實作狀態：已完成第一階段的 JSON 設定抽離。`config/show-config.json` 是活動內容來源，`stage.html` 與 `index.html` 會載入並驗證它，`operator.html` 只接受 stage 傳來的 `rundown-sync`。獨立 Editor、草稿儲存與匯入匯出仍是後續工作。
+
 ## 1. 需求結論
 
 技術上可行，且不需要在 `stage.html` 或 `operator.html` 放置編輯介面。
@@ -13,12 +15,12 @@
 
 ## 2. 目前程式的限制
 
-目前有兩類資料被寫死在程式內：
+固定主持規則仍保留在程式內，活動資料已移至 JSON：
 
 | 資料 | 目前位置 | 目前行為 | 問題 |
 | --- | --- | --- | --- |
 | 固定主持規則與預設人設 | `host-config.js` | 建立 Gemini system instruction；人設欄位可由 stage 設定，但下次連線才生效 | 活動前沒有獨立編輯及匯出流程 |
-| Rundown 環節 | `webrtc-link.js` 的 `SEGMENTS` | operator 依清單畫按鈕，stage 依 `id` 查找 `context` | 只能改原始碼，無法由工作人員管理 |
+| Rundown 環節 | `config/show-config.json` | stage 載入並驗證，operator 依 `rundown-sync` 畫按鈕，stage 依 `id` 查找 `context` | 目前仍需直接編輯 JSON，尚未提供活動前 Editor |
 
 目前 operator 送出的訊息只有環節 `id`：
 
@@ -44,15 +46,15 @@ YearEndParty/
 
 `show-config.js` 是新的設定 seam，提供小而穩定的 Interface，將編輯器、stage、單機測試模式與測試隔離開來。資料格式的變化集中在這個 Module，避免三個頁面各自處理 JSON。
 
-建議 Interface：
+目前已實作的 Interface：
 
 ```js
-loadShowConfig({ fetchImpl, storage, url })
-saveDraft(config, storage)
+loadShowConfig({ fetchImpl, url, onError })
 normalizeShowConfig(raw)
-exportShowConfig(config)
 resolveSegment(config, id)
 ```
+
+`loadShowConfig()` 讀取同源 JSON；載入失敗或格式錯誤時使用內建預設並顯示警告。正式活動若要管理草稿、匯入或匯出，仍需補上 Editor 與明確的正式檔／草稿切換流程。
 
 ## 4. 活動設定格式
 
@@ -99,13 +101,12 @@ resolveSegment(config, id)
 
 ## 5. 設定檔載入策略
 
-建議使用以下優先順序：
+目前執行期的載入順序是：
 
 1. 載入部署後的 `config/show-config.json`。
-2. 若檔案不存在，讀取同源 `localStorage` 草稿，方便活動前在同一台筆電測試。
-3. 若兩者都不存在或格式錯誤，使用程式內建預設值。
+2. 若檔案不存在或格式錯誤，使用程式內建預設值並顯示警告。
 
-編輯器的「儲存」只保存草稿；「匯出」才產生正式 `show-config.json`。工作人員將該檔案放入 `YearEndParty/config/` 後再部署，活動設定即可固定且可追溯。
+目前不讀取 localStorage 草稿，避免正式舞台意外使用上一次彩排內容。若要讓非工程人員管理草稿，應在後續 Editor 中明確區分預覽草稿與正式匯出檔。
 
 ```mermaid
 flowchart LR
@@ -206,10 +207,10 @@ Rundown 則不同：stage 載入新設定後，下一次按下環節按鈕即可
 
 ## 9. 實作順序
 
-### P0：抽離設定資料
+### P0：抽離設定資料（已完成）
 
-- 將 `SEGMENTS` 的資料移至 `show-config.js` 的預設設定。
-- 建立 `normalizeShowConfig()`、`resolveSegment()`。
+- 將 `SEGMENTS` 的資料移至 `config/show-config.json`。
+- 建立 `show-config.js` 的 `normalizeShowConfig()`、`resolveSegment()` 與載入 fallback。
 - `host-config.js` 保留固定主持規則。
 - `webrtc-link.js` 僅保留連線設定與訊息契約。
 
@@ -246,6 +247,6 @@ Rundown 則不同：stage 載入新設定後，下一次按下環節按鈕即可
 
 ## 11. 最終建議
 
-採用「獨立 Editor + 靜態 JSON 設定檔 + stage 載入 + WebRTC 同步」的方案。這符合手機端只做現場遙控的需求，也讓活動設定可以在活動前被檢查、備份與固定版本。
+目前採用「靜態 JSON 設定檔 + stage 載入 + WebRTC 同步」的第一階段方案。這已符合手機端只做現場遙控的需求；若活動需要交給非工程人員反覆準備，再加入獨立 Editor 與正式檔／草稿切換。
 
 不要讓 editor 直接修改 `host-config.js` 或 `webrtc-link.js`；瀏覽器無法安全地直接改寫部署中的 JavaScript，且會使程式碼與活動資料互相耦合。將硬編碼內容降級為預設值，將實際活動資料移到可驗證的 `show-config.json`，可以得到較好的可維護性與操作安全性。

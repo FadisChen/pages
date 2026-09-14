@@ -29,7 +29,7 @@
 | `operator.html` + `operator.js` + `operator.css` | 工作人員手機 | push-to-talk 收音、Rundown 環節按鈕、現場備註文字、簡易狀態回饋。**不渲染 Avatar、不連 Gemini、不播放聲音**。 |
 | `index.html` + `app.js` + `styles.css` | 任何一台裝置（單機） | 保留作為「單機測試模式」：不用兩台裝置、不用配對，直接在同一頁測試 push-to-talk／Rundown 的邏輯是否符合預期，適合正式上場前先驗證行為，不用每次都拉兩台裝置對接。 |
 
-`webrtc-link.js` 是 `stage.js` 與 `operator.js` 共用的小模組，定義配對用的房號產生規則、ICE 伺服器設定、Rundown 環節清單，確保兩邊不會各自漂移。
+`webrtc-link.js` 是 `stage.js` 與 `operator.js` 共用的小模組，定義配對用的房號產生規則、ICE 伺服器設定與訊息契約；活動內容則由 `config/show-config.json` 載入，stage 透過 `rundown-sync` 傳給 operator，確保兩邊不會各自漂移。
 
 ### 兩台裝置怎麼「牽線」
 
@@ -92,7 +92,7 @@ activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
 
 ### 2.2 Rundown 環節與情境感知
 
-環節清單（id/label/context）定義在 `webrtc-link.js` 的 `SEGMENTS`，operator.js 只用 id/label 畫按鈕，stage.js 收到 `{type:'segment', id}` 後查出對應的 `context` 文字，透過既有的 `gemini.sendText()`（`realtimeInput.text`）送給 Gemini。環節切換由工作人員手動決定，系統提示詞（`REQUIRED_SYSTEM_PROMPT`）明確要求 Gemini 不要自己宣布換環節、不要自己編造得獎名單。
+環節清單（id/label/context）定義在 `config/show-config.json`，由 `show-config.js` 驗證。operator.js 只用同步後的 id/label 畫按鈕，stage.js 收到 `{type:'segment', id}` 後查出對應的 `context` 文字，透過既有的 `gemini.sendText()`（`realtimeInput.text`）送給 Gemini。環節切換由工作人員手動決定，系統提示詞（`REQUIRED_SYSTEM_PROMPT`）明確要求 Gemini 不要自己宣布換環節、不要自己編造得獎名單。
 
 ---
 
@@ -128,7 +128,7 @@ activityEnd() { this.send({ realtimeInput: { activityEnd: {} } }); }
 - 配對畫面：輸入/掃碼房號 → 連線（會跳出麥克風授權）。
 - Push-to-talk 大按鈕（按住＝送話，放開＝結束這輪換 Gemini 講）。
 - 麥克風音量小進度條（視覺回饋「你正在被收音」）。
-- Rundown 環節按鈕（跟 `SEGMENTS` 清單一致）。
+- Rundown 環節按鈕（跟 `config/show-config.json` 一致）。
 - 現場備註文字輸入（透過 data channel `note` 轉發成 `gemini.sendText`）。
 - 簡易狀態回饋：目前 Nami 狀態（聆聽中/思考中/主持中）、Gemini 連線狀態、最近幾句對話摘要。
 - 沒有 VRM、沒有 three.js、沒有 Gemini 連線——頁面很輕，適合手機瀏覽器。

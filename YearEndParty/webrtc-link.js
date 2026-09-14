@@ -13,6 +13,8 @@
 // TURN。若正式上場前測試發現連不上，需要自備 TURN 服務（例如 Twilio Network
 // Traversal Service、metered.ca 等），把憑證加進下面的 ICE_SERVERS 陣列。
 
+import { DEFAULT_SHOW_CONFIG } from "./show-config.js";
+
 const ROOM_PREFIX = "yep-";
 
 const ICE_SERVERS = [
@@ -22,19 +24,9 @@ const ICE_SERVERS = [
   // { urls: "turn:your-turn-host:3478", username: "...", credential: "..." },
 ];
 
-// 尾牙 Rundown：環節由工作人員手動切換，Nami 不會自己換環節。
-// operator.js 只需要 id/label 畫按鈕；context 是切換時要餵給 Gemini 的場控文字，
-// 只有 stage.js 會用到，但放在同一份共用清單裡，確保雙邊顯示的環節名稱不會兜不起來。
-const SEGMENTS = Object.freeze([
-  { id: "opening", label: "開場", context: "[環節切換] 現在進入「開場」。請歡迎大家、簡短介紹今天主持人與活動亮點，帶動期待感。" },
-  { id: "vp_speech", label: "副總致詞", context: "[環節切換] 現在進入「副總致詞」。請用熱情但得體的語氣，邀請 James 副總上台致詞，簡短歡迎即可，致詞內容交給他本人，不要代為發言。" },
-  { id: "manager_speech", label: "部門主管致詞", context: "[環節切換] 現在進入「部門主管致詞」。請邀請 Jerry 處長上台致詞，語氣保持熱情尊重，簡短歡迎即可，致詞內容交給他本人，不要代為發言。" },
-  { id: "meal", label: "用餐", context: "[環節切換] 現在進入「用餐」。請提醒大家開動享用美食，並提一下待會後段還有金色三麥最具特色的啤酒可以享用，帶動期待感。" },
-  { id: "game", label: "小遊戲", context: "[環節切換] 現在進入「小遊戲：123木頭人」。請邀請大家拿出手機掃描 QRCode 加入遊戲，並提醒大家仔細聆聽遊戲規則，說明前三名抵達終點的人會有獎賞。" },
-  { id: "outstanding_employee", label: "部門優良員工", context: "[環節切換] 現在進入「部門優良員工」表揚。請用真誠的語氣帶出這個環節的意義；得獎名單會由工作人員另外用文字告訴你，收到後再逐一唸名字恭喜對方。" },
-  { id: "lucky_draw", label: "抽獎", context: "[環節切換] 現在進入「抽獎」。請營造懸念、公布獎項亮點；得獎名單會由工作人員另外用文字告訴你，收到後再唸名字恭喜對方。" },
-  { id: "closing", label: "尾聲", context: "[環節切換] 現在進入「尾聲」。請感謝大家參與、溫馨收尾，預告活動即將結束。" },
-]);
+// Compatibility export for older consumers. Runtime pages use the loaded
+// config directly, so this is only the built-in fallback.
+const SEGMENTS = DEFAULT_SHOW_CONFIG.segments;
 
 // operator → stage 的訊息（走 PeerJS DataConnection）：
 //   { type: "ptt", active: true|false }        AudioWorklet 產生的發話起訖

@@ -8,7 +8,7 @@ import * as transcript from "../transcript.js";
 
 const root = new URL("../", import.meta.url);
 const shared = {};
-for (const name of ["live-session.js", "audio-player.js", "microphone.js", "host-config.js", "webrtc-link.js"]) {
+for (const name of ["live-session.js", "audio-player.js", "microphone.js", "host-config.js", "webrtc-link.js", "show-config.js"]) {
   Object.assign(shared, await import(new URL(name, root)));
 }
 
@@ -353,6 +353,26 @@ test("stage failure notifies the operator and keeps its pairing available", () =
   assert.equal(messages.at(-1).status, "failed");
   assert.equal(f.app.peerLink, peerLink);
   assert.equal(f.app.callActive, false);
+});
+
+test("stage uses the loaded JSON rundown and syncs it to the operator", () => {
+  const f = fixture("stage.js");
+  const messages = [];
+  f.app.showConfig = { schemaVersion: 1, segments: [{ id: "custom", label: "自訂環節", context: "請宣布自訂環節開始。" }] };
+  f.app.showConfigReady = true;
+  f.app.currentSegmentId = "";
+  f.app.peerLink = { send: message => messages.push(message) };
+  f.app.sendRundownSync();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].type, "rundown-sync");
+  assert.equal(messages[0].schemaVersion, 1);
+  assert.equal(messages[0].currentId, "");
+  assert.equal(messages[0].segments[0].id, "custom");
+  assert.equal(messages[0].segments[0].context, "請宣布自訂環節開始。");
+
+  f.app.callActive = true;
+  f.app.handlePeerData({ type: "segment", id: "custom" });
+  assert.equal(f.sent.at(-1).realtimeInput.text, "請宣布自訂環節開始。");
 });
 
 test("leaving picture-in-picture moves the existing scene without stopping speech", () => {

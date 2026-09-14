@@ -1,6 +1,7 @@
-import { SEGMENTS, createPeer } from "./webrtc-link.js";
+import { createPeer } from "./webrtc-link.js";
 import { MicrophoneInput } from "./microphone.js";
 import { mergePartial, normalizeTranscript } from "./transcript.js";
+import { normalizeShowConfig } from "./show-config.js";
 
 // operator.js — 手機遙控端：負責 push-to-talk 收音與 Rundown 控制。
 // 不渲染 VRM、不連 Gemini、不播放聲音——所有這些都在投影端（stage.html）處理。
@@ -17,6 +18,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ui = collectUI();
       this.peer = null;
       this.dataConn = null;
+      this.showConfig = null;
       this.geminiReady = false;
       this.connectToken = 0;
       this.mic = new MicrophoneInput(null, { emit: (type, data) => {
@@ -25,7 +27,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.pttActive = false;
       this.currentSegmentId = "";
       this.partial = { user: "", model: "" };
-      this.buildSegmentButtons();
+      this.buildSegmentButtons([]);
       this.bindEvents();
       this.prefillRoomCode();
       this.setConnected(false);
@@ -35,10 +37,10 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const room = params.get("room");
       if (room) this.ui.roomInput.value = room;
     }
-    buildSegmentButtons() {
+    buildSegmentButtons(segments) {
       const container = this.ui.segmentGrid;
       container.innerHTML = "";
-      for (const segment of SEGMENTS) {
+      for (const segment of segments) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "segment-button";
@@ -141,6 +143,21 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
         this.updateControls();
         return;
       }
+      if (message.type === "rundown-sync") {
+        try {
+          const config = normalizeShowConfig({ schemaVersion: message.schemaVersion, segments: message.segments });
+          this.showConfig = config;
+          this.buildSegmentButtons(config.segments);
+          this.markSegmentActive(message.currentId || "");
+          this.updateControls();
+        } catch (error) {
+          this.showConfig = null;
+          this.buildSegmentButtons([]);
+          this.updateControls();
+          this.showError(`投影端活動設定無效：${error.message}`);
+        }
+        return;
+      }
       if (message.type === "transcript" && ["user", "model"].includes(message.role)) {
         this.partial[message.role] = mergePartial(this.partial[message.role], normalizeTranscript(message.text));
         this.ui[message.role === "user" ? "lastHeard" : "lastReply"].textContent = this.partial[message.role];
@@ -167,7 +184,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.mic.end();
     }
     sendSegment(segment) {
-      if (!this.dataConn?.open || !this.geminiReady || this.pttActive) return;
+      if (!this.showConfig || !this.dataConn?.open || !this.geminiReady || this.pttActive) return;
       this.dataConn.send({ type: "segment", id: segment.id });
     }
     markSegmentActive(id) {
@@ -200,6 +217,8 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const peer = this.peer;
       this.dataConn = null;
       this.peer = null;
+      this.showConfig = null;
+      this.buildSegmentButtons([]);
       try { conn?.close(); } catch (_) {}
       try { peer?.destroy(); } catch (_) {}
       this.mic.stop().catch(() => {});

@@ -54,7 +54,8 @@ flowchart LR
 | `live-session.js` | `start`、`disconnect`、`activityStart/End`、`sendAudio`、`sendText`；封裝 Gemini 回合、工具與重連 |
 | `audio-player.js` | `enqueue`、`stop`、`ensureContext`、`getAnalyser`；封裝排程、清空與嘴型所需分析器 |
 | `host-config.js` | 共用模型與系統提示詞，避免單機、投影端人設定義漂移 |
-| `webrtc-link.js` | 共用房號、ICE 設定、Rundown 與訊息契約 |
+| `webrtc-link.js` | 共用房號、ICE 設定與訊息契約 |
+| `show-config.js` / `config/show-config.json` | 活動主持提示文字、Rundown 載入、驗證與環節查找 |
 | 三個頁面入口 | 按鈕、畫面與事件接線；VRM／LipSync 原有實作仍留在兩個主持頁面 |
 
 這些模組把原先分散在兩個頁面的複雜行為收進小型 Interface；本機與遠端輸入是兩個實際存在的 Adapter，測試也能從同一個 Seam 驗證資料是否完整送達。

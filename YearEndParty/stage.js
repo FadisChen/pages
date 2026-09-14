@@ -9,7 +9,8 @@ import {
 } from "./avatar-emotions.js";
 import { AvatarGesturePlayer } from "./avatar-gestures.js";
 import { collectSessionContext } from "./session-context.js";
-import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
+import { randomRoomCode, createPeer } from "./webrtc-link.js";
+import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-config.js";
 
 // stage.js — 投影端筆電使用：只負責顯示 Avatar、連線 Gemini Live、播放語音（接會場音響）。
 // 不做任何現場控制——push-to-talk 與 Rundown 環節切換的指令，全部來自手機（operator.html）
@@ -570,6 +571,8 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       this.ui = collectUI();
       populateAvatarModelSelect(this.ui.avatarModel);
       this.settings = loadSettings();
+      this.showConfig = DEFAULT_SHOW_CONFIG;
+      this.showConfigReady = false;
       this.stateMachine = new AvatarStateMachine(this.bus);
       this.audioPlayer = new GeminiAudioPlayer(this.bus);
       this.lipSync = new LipSyncEngine(this.audioPlayer, this.bus);
@@ -600,6 +603,15 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
       });
       window.addEventListener("pagehide", () => { this.pipWindow?.close(); this.gemini.disconnect(false); this.audioPlayer.close(); this.avatar.dispose(); });
       this.startRenderLoop();
+      this.showConfigPromise = this.loadActivityConfig();
+    }
+    async loadActivityConfig() {
+      const loaded = await loadShowConfig({ onError: (error) => this.showError(`活動設定檔無法載入，已使用內建預設：${error.message}`) });
+      this.showConfig = loaded;
+      this.showConfigReady = true;
+      this.settings.userSystemPrompt = loaded.host.userSystemPrompt;
+      this.applySettings();
+      this.sendRundownSync();
     }
     bindEvents() {
       this.ui.startCall.addEventListener("click", () => { if (this.callActive) this.endCall(); else this.startCall(); });
@@ -641,6 +653,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
         this.hasEverPaired = true; this.setPeerStatus(true); this.setPairPanelVisible(false);
         this.peerLink.send({ type: "connection", status: this.gemini.isConnected() ? "connected" : "offline" });
         this.peerLink.send({ type: "status", state: this.stateMachine.state });
+        this.sendRundownSync();
       });
       this.bus.on("peerlink.disconnected", () => { this.setPeerStatus(false); this.stopPtt(); if (!this.hasEverPaired) this.setPairPanelVisible(true); });
       this.bus.on("peerlink.error", (error) => this.showError(`遙控端連線發生問題：${error.message}`));
@@ -654,7 +667,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
         if (this.pttActive && bytes instanceof Uint8Array && bytes.byteLength <= 640 && bytes.byteLength % 2 === 0) this.gemini.sendAudio(bytes);
         return;
       }
-      if (message.type === "segment") { const segment = SEGMENTS.find((item) => item.id === message.id); if (segment) this.activateSegment(segment); return; }
+      if (message.type === "segment") { const segment = resolveSegment(this.showConfig, message.id); if (segment) this.activateSegment(segment); return; }
       if (message.type === "note") { const text = String(message.text || "").trim(); if (text && this.gemini.sendText(text)) this.stateMachine.toThinking(); }
     }
     startPtt() {
@@ -677,6 +690,10 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
         this.stateMachine.toThinking();
         this.peerLink.send({ type: "segment-ack", id: segment.id });
       }
+    }
+    sendRundownSync() {
+      if (!this.showConfigReady) return;
+      this.peerLink.send({ type: "rundown-sync", schemaVersion: this.showConfig.schemaVersion, segments: this.showConfig.segments, currentId: this.currentSegmentId });
     }
     applySettings() {
       this.ui.voice.value = this.settings.voice;
@@ -703,6 +720,7 @@ import { SEGMENTS, randomRoomCode, createPeer } from "./webrtc-link.js";
     }
     async startCall() {
       if (this.callActive) return;
+      await (this.showConfigPromise || Promise.resolve());
       const config = this.collectConfig();
       if (!config.apiKey) { this.showError("請先點擊右上角設定 icon 貼上 Gemini API key。", true); this.openSettings(); this.ui.apiKey.focus(); return; }
       this.saveSettings();

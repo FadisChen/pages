@@ -1,4 +1,3 @@
-import { SEGMENTS } from "./webrtc-link.js";
 import { MicrophoneInput } from "./microphone.js";
 import { GeminiLiveClient } from "./live-session.js";
 import { GeminiAudioPlayer } from "./audio-player.js";
@@ -12,6 +11,7 @@ import {
 import { AvatarGesturePlayer } from "./avatar-gestures.js";
 import { collectSessionContext } from "./session-context.js";
 import { mergePartial, normalizeTranscript } from "./transcript.js";
+import { DEFAULT_SHOW_CONFIG, loadShowConfig } from "./show-config.js";
 
 // 這個檔案是 web/Avatar/app.js 的分支版本：沿用同一套 VRM / Gemini Live / Lip Sync 架構，
 // 但把「使用者開麥克風、伺服器自動偵測講話起訖」改成「工作人員按住按鈕才送話（push-to-talk）」，
@@ -555,6 +555,8 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.ui = collectUI();
       populateAvatarModelSelect(this.ui.avatarModel);
       this.settings = loadSettings();
+      this.showConfig = DEFAULT_SHOW_CONFIG;
+      this.showConfigReady = false;
       this.stateMachine = new AvatarStateMachine(this.bus);
       this.audioPlayer = new GeminiAudioPlayer(this.bus);
       this.mic = new MicrophoneInput(this.audioPlayer, this.bus);
@@ -571,7 +573,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       this.currentSegmentId = "";
       this.lastFrame = performance.now();
       this.fps = 60;
-      this.buildRundownBar();
+      this.buildRundownBar([]);
       this.bindEvents();
       this.applySettings();
       this.updateCallButton(false);
@@ -581,12 +583,21 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       });
       window.addEventListener("pagehide", () => { this.gemini.disconnect(false); this.mic.stop(); this.audioPlayer.close(); this.avatar.dispose(); });
       this.renderLoop();
+      this.showConfigPromise = this.loadActivityConfig();
     }
-    buildRundownBar() {
+    async loadActivityConfig() {
+      const loaded = await loadShowConfig({ onError: (error) => this.showError(`活動設定檔無法載入，已使用內建預設：${error.message}`) });
+      this.showConfig = loaded;
+      this.showConfigReady = true;
+      this.settings.userSystemPrompt = loaded.host.userSystemPrompt;
+      this.applySettings();
+      this.buildRundownBar();
+    }
+    buildRundownBar(segments = this.showConfig.segments) {
       const container = this.ui.rundownBar;
       if (!container) return;
       container.innerHTML = "";
-      for (const segment of SEGMENTS) {
+      for (const segment of segments) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "segment-button";
@@ -710,6 +721,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     }
     async startCall() {
       if (this.callActive) return;
+      await (this.showConfigPromise || Promise.resolve());
       const config = this.collectConfig();
       if (!config.apiKey) { this.showError("請先點擊右上角設定 icon 貼上 Gemini API key。", true); this.openSettings(); this.ui.apiKey.focus(); return; }
       this.saveSettings();

@@ -29,6 +29,8 @@ python3 -m http.server 4173
 
 麥克風需要安全來源（`https://` 或 `localhost`），`file://` 直接開啟不會動。
 
+活動內容放在 [`config/show-config.json`](./config/show-config.json)。修改環節名稱、主持人提示文字或 `context` 後，重新整理 stage 與 operator；stage 載入並驗證設定，再把同一份 Rundown 同步給手機。設定檔只包含活動內容，不放 API key、Gemini 連線或 WebRTC 設定。
+
 ## 兩機模式（正式上場）
 
 1. **兩台裝置都要能連到同一個可公開存取的網址**——`localhost` 只有同一台機器能開，手機開不到筆電的 `localhost`。建議直接部署到 GitHub Pages（本身是 HTTPS）；本機測試可以用 ngrok 之類的內網穿透工具暫時給一個 HTTPS 網址。
@@ -60,7 +62,9 @@ YearEndParty/
 ├── index.html/app.js/styles.css      單機測試模式
 ├── stage.html/stage.js/stage.css     投影端
 ├── operator.html/operator.js/operator.css   手機遙控端
-├── webrtc-link.js        配對設定、Rundown 環節清單與訊息契約
+├── config/show-config.json 活動主持人設定與 Rundown
+├── show-config.js        設定檔驗證、載入與環節查找
+├── webrtc-link.js        配對設定與訊息契約
 ├── host-config.js        模型與系統提示詞
 ├── avatar-emotions.js    本地表情 tool
 ├── avatar-gestures.js    本地動作 tool 與 VRM 動作播放器
