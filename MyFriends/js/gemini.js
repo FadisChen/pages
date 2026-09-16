@@ -302,17 +302,19 @@ export class LiveSession {
     if (character.voiceName) {
       generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } } };
     }
-    const rawThinkingLevel = String(this.config.thinkingLevel || "").trim().toUpperCase();
-    const thinkingOption = getLiveThinkingOption(rawThinkingLevel);
-    if (rawThinkingLevel === "OFF") {
-      // 相容尚未經 storage migration 的舊角色。2.5 可使用 budget 0；3.1 只能送 level。
-      generationConfig.thinkingConfig = this.modelOption.asyncToolCalling
-        ? { thinkingBudget: 0 }
-        : { thinkingLevel: "MINIMAL" };
-    } else if (thinkingOption.id && this.modelOption.asyncToolCalling) {
-      generationConfig.thinkingConfig = { thinkingBudget: thinkingOption.thinkingBudget };
-    } else if (thinkingOption.id) {
-      generationConfig.thinkingConfig = { thinkingLevel: thinkingOption.id };
+    if (this.modelOption.supportsThinking !== false) {
+      const rawThinkingLevel = String(this.config.thinkingLevel || "").trim().toUpperCase();
+      const thinkingOption = getLiveThinkingOption(rawThinkingLevel);
+      if (rawThinkingLevel === "OFF") {
+        // 相容尚未經 storage migration 的舊角色。2.5 可使用 budget 0；舊版 Live 只能送 level。
+        generationConfig.thinkingConfig = this.modelOption.asyncToolCalling
+          ? { thinkingBudget: 0 }
+          : { thinkingLevel: "MINIMAL" };
+      } else if (thinkingOption.id && this.modelOption.asyncToolCalling) {
+        generationConfig.thinkingConfig = { thinkingBudget: thinkingOption.thinkingBudget };
+      } else if (thinkingOption.id) {
+        generationConfig.thinkingConfig = { thinkingLevel: thinkingOption.id };
+      }
     }
 
     const setup = {

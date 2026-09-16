@@ -13,6 +13,7 @@ const AVATAR_GESTURES = Object.freeze([
 
 const AVATAR_GESTURE_TOOL = Object.freeze({
   name: "play_avatar_gesture",
+  behavior: "NON_BLOCKING",
   description: "依照自己即將說出的內容選擇一個自然動作：肯定用 nod，否定用 shake_head，招呼或道別用 wave，解釋介紹用 present，疑問思考用 tilt_head，道謝或道歉用 bow，不確定用 shrug，感謝或關心用 hand_on_chest，請對方靠近或繼續用 beckon，收到指示或正式確認用 salute。每個回覆最多一次，沒有適合情境就不呼叫。",
   parameters: {
     type: "OBJECT",

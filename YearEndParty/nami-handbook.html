@@ -416,7 +416,7 @@
     <p class="sub">一支 VRM 虛擬主持人，怎麼靠兩台裝置的 WebRTC 配對收音、靠 Gemini Live API 即時聽說、再靠 function calling 把「說話」變成表情與動作。這份文件拆解三條主線的實際協定與程式邏輯，附上可對照原始碼的關鍵片段。</p>
     <div class="stack-chips">
       <span class="chip">PeerJS 1.5.4 · WebRTC DataChannel</span>
-      <span class="chip">Gemini 3.1 Flash Live · BidiGenerateContent</span>
+      <span class="chip">Gemini 3.8 Live · BidiGenerateContent</span>
       <span class="chip">Three.js · @pixiv/three-vrm</span>
       <span class="chip">Vanilla JS · EventBus</span>
     </div>
@@ -638,7 +638,7 @@ sequenceDiagram
 
     <section id="s4">
       <div class="sec-head"><span class="sec-num">04</span><h2>Function Calling：把說話變成表情與動作</h2></div>
-      <p class="lede">Gemini 3.1 Flash Live 目前只支援<b>同步（blocking）</b> function calling，沒有 <code class="inline">NON_BLOCKING</code> 模式。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作——工具呼叫本身完全不影響語音有沒有播出來。</p>
+      <p class="lede">Gemini 3.8 Live 支援<b>非同步（NON_BLOCKING）</b> function calling。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作；工具結果以 <code class="inline">WHEN_IDLE</code> 排程回報，避免阻塞目前的語音回合。</p>
 
       <h3><span class="n">4.1</span>兩個工具的定義</h3>
       <div class="grid-2">
@@ -646,6 +646,7 @@ sequenceDiagram
           <div class="code-cap">avatar-emotions.js — set_avatar_emotion</div>
           <pre class="code-block"><code>{
   name: "set_avatar_emotion",
+  behavior: "NON_BLOCKING",
   parameters: {
     type: "OBJECT",
     properties: {
@@ -663,6 +664,7 @@ sequenceDiagram
           <div class="code-cap">avatar-gestures.js — play_avatar_gesture</div>
           <pre class="code-block"><code>{
   name: "play_avatar_gesture",
+  behavior: "NON_BLOCKING",
   parameters: {
     type: "OBJECT",
     properties: {

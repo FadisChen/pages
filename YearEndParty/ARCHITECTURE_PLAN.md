@@ -9,7 +9,7 @@
 本次已實作下方 P0 的程式修復。P1–P3 是後續 plan，尚未實作。
 
 - 假設目前仍以靜態網站、單一操作端、同一個 VRM 角色為主。
-- 本次保留 `gemini-3.1-flash-live-preview`，不把更換模型當作修復。
+- 本次採用穩定版 `gemini-3.8-live`，並使用其預設思考與非同步工具呼叫。
 - 這次能確認的是程式層的截音、丟音與過期訊息問題。沒有使用現場錄音或真實 Gemini session 做辨識正確率與聲線聽測，因此不能宣稱所有語意誤判、重複說話或聲線漂移已解決。
 
 ## 1. 問題確認
@@ -25,7 +25,7 @@
 | 收到伺服器換線預告就斷句 | 舊版收到 `goAway` 立即關 WebSocket | 改為等待收音、模型回合、實際播放都結束再關線；伺服器期限先到時仍可能被動斷線 |
 | 人物聲音改變 | 程式未發現每句隨機更換 voice，但舊設定為空時會省略 voice；兩個頁面的設定各自保存 | 現在固定本次 session 的設定快照，空 voice 回退 Aoede。這不能保證生成模型的音色與韻律完全固定 |
 
-Gemini 3.1 Flash Live 目前只支援同步 function calling；不能直接把表情工具改成 `NON_BLOCKING` 當作修復。同步工具需回傳結果，但官方未要求因此丟棄已收到的有效音訊。[官方工具文件](https://ai.google.dev/gemini-api/docs/live-api/tools)
+Gemini 3.8 Live 支援 `NON_BLOCKING` 非同步 function calling；表情與動作工具會在不阻塞語音生成的情況下執行，回覆使用 `WHEN_IDLE` 排程。[官方工具文件](https://ai.google.dev/gemini-api/docs/live-api/tools)
 
 ## 2. 本次修復後的資料流
 

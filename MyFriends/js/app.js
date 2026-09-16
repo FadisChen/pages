@@ -16,6 +16,7 @@ import {
 } from "./store.js";
 import {
   describeLiveThinking,
+  getLiveModelOption,
   getLiveThinkingOption,
   LIVE_MODEL_OPTIONS,
   LIVE_THINKING_OPTIONS,
@@ -358,7 +359,9 @@ function openMemoryEditor(memory, characterId) {
 
 function renderSettings() {
   const settings = data.settings;
-  const thinking = getLiveThinkingOption(settings.liveThinkingLevel);
+  const liveModel = getLiveModelOption(settings.liveModel);
+  const supportsThinking = liveModel.supportsThinking !== false;
+  const thinking = supportsThinking ? getLiveThinkingOption(settings.liveThinkingLevel) : LIVE_THINKING_OPTIONS[0];
   const thinkingIndex = Math.max(0, LIVE_THINKING_OPTIONS.indexOf(thinking));
   appElement.innerHTML = `
     <div class="page">
@@ -369,10 +372,10 @@ function renderSettings() {
           <div class="form-field"><label for="apiKey">Gemini API key</label><div class="secret-wrap"><input class="input" id="apiKey" type="password" autocomplete="off" value="${attr(getApiKey())}" placeholder="AIza…"><button class="secret-toggle" type="button" data-action="toggle-secret" data-target="apiKey">顯示</button></div></div>
           <div class="switch-row"><div class="switch-copy"><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到此分頁／瀏覽器工作階段結束</small></div><label class="switch"><input id="rememberApiKey" type="checkbox" ${settings.rememberApiKey ? "checked" : ""}><span></span></label></div>
           <div class="setting-divider"></div>
-          <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.1 以低延遲同步工具呼叫為主；2.5 支援 NON_BLOCKING 非同步工具呼叫，工具結果會在模型空閒時回報。</p></div>
+          <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.8 支援預設的 NON_BLOCKING 非同步工具呼叫；2.5 仍保留為可選模型，工具結果會在模型空閒時回報。</p></div>
           <div class="form-field">
             <label class="thinking-label" for="settingsThinkingLevel"><span>思考強度 <small>套用到所有角色</small></span><output id="thinkingValue" for="settingsThinkingLevel">${html(thinking.label)}</output></label>
-            <input class="thinking-range" id="settingsThinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}">
+            <input class="thinking-range" id="settingsThinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}" ${supportsThinking ? "" : "disabled"}>
             <div class="thinking-scale" aria-hidden="true">${LIVE_THINKING_OPTIONS.map((option) => `<span>${html(option.label)}</span>`).join("")}</div>
             <p class="thinking-description" id="thinkingHint">${html(describeLiveThinking(settings.liveModel, thinking.id))}</p>
           </div>
@@ -421,7 +424,9 @@ function saveSettings(event) {
   data.settings = {
     ...data.settings,
     liveModel: document.getElementById("liveModel").value,
-    liveThinkingLevel: selectedSettingsThinkingOption().id,
+    liveThinkingLevel: getLiveModelOption(document.getElementById("liveModel").value).supportsThinking === false
+      ? ""
+      : selectedSettingsThinkingOption().id,
     flashModel: document.getElementById("flashModel").value.trim(),
     groundingModel: document.getElementById("groundingModel").value.trim(),
     memoryBudgetTokens: rangedNumber(document.getElementById("memoryBudget").value, 200, 100000, 3000),
@@ -441,10 +446,13 @@ function selectedSettingsThinkingOption() {
 }
 
 function renderSettingsThinking() {
-  const thinking = selectedSettingsThinkingOption();
-  const model = document.getElementById("liveModel").value;
+  const selectedThinking = selectedSettingsThinkingOption();
+  const model = getLiveModelOption(document.getElementById("liveModel").value);
+  const supportsThinking = model.supportsThinking !== false;
+  const thinking = supportsThinking ? selectedThinking : LIVE_THINKING_OPTIONS[0];
   document.getElementById("thinkingValue").value = thinking.label;
-  document.getElementById("thinkingHint").textContent = describeLiveThinking(model, thinking.id);
+  document.getElementById("thinkingHint").textContent = describeLiveThinking(model.id, thinking.id);
+  document.getElementById("settingsThinkingLevel").disabled = !supportsThinking;
   document.getElementById("settingsThinkingLevel").setAttribute("aria-valuetext", thinking.label);
 }
 

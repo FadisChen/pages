@@ -57,6 +57,18 @@ test("host instructions describe every supported gesture", () => {
   }
 });
 
+test("Gemini Live 3.8 setup omits thinking config and enables async tools", () => {
+  const client = new shared.GeminiLiveClient({ on() {} });
+  client.config = { voice: "Aoede", thinking: "HIGH" };
+  const setup = client.setupMessage().setup;
+  assert.equal(setup.model, "models/gemini-3.8-live");
+  assert.equal(setup.generationConfig.thinkingConfig, undefined);
+  assert.deepEqual(setup.tools[0].functionDeclarations.map(tool => ({ name: tool.name, behavior: tool.behavior })), [
+    { name: "set_avatar_emotion", behavior: "NON_BLOCKING" },
+    { name: "play_avatar_gesture", behavior: "NON_BLOCKING" },
+  ]);
+});
+
 for (const page of ["app.js", "stage.js"]) {
   test(`${page}: gesture tool is registered, emitted once, and does not stop speech`, () => {
     const f = fixture(page);
@@ -68,6 +80,7 @@ for (const page of ["app.js", "stage.js"]) {
     assert.deepEqual(events, [{ gesture: "wave", id: "gesture-wave" }]);
     assert.equal(f.stops(), 0);
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
     f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.error, "At most one Avatar gesture is allowed per response.");
     f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
@@ -372,7 +385,8 @@ test("stage uses the loaded JSON rundown and syncs it to the operator", () => {
 
   f.app.callActive = true;
   f.app.handlePeerData({ type: "segment", id: "custom" });
-  assert.equal(f.sent.at(-1).realtimeInput.text, "請宣布自訂環節開始。");
+  assert.equal(f.sent.at(-1).clientContent.turns[0].parts[0].text, "請宣布自訂環節開始。");
+  assert.equal(f.sent.at(-1).clientContent.turnComplete, true);
 });
 
 test("leaving picture-in-picture moves the existing scene without stopping speech", () => {

@@ -1,6 +1,6 @@
 # Orbit Friend — Gemini Live Avatar
 
-這是一個不需要建置的純前端頁面。Three.js 與 `@pixiv/three-vrm` 由 HTML import map 從 CDN 載入；五個可選的 VRM 模型位於同層的 `../vrm/`，因此部署時必須保留 `Avatar/` 與 `vrm/` 的相對位置。它使用瀏覽器原生 WebSocket 連接 Gemini Live API，使用 Web Audio API 完成麥克風 PCM 取樣、回覆音訊排程與 client-side lip sync。
+這是一個不需要建置的純前端頁面。Three.js 與 `@pixiv/three-vrm` 由 HTML import map 從 CDN 載入；五個可選的 VRM 模型位於同層的 `../vrm/`，字幕轉換使用 Avatar 內建的 `./traditional-chinese.js` 與 `./vendor/opencc-cn2t.js`。因此部署時必須保留 `Avatar/`、`vrm/` 的相對位置。它使用瀏覽器原生 WebSocket 連接 Gemini Live API，使用 Web Audio API 完成麥克風 PCM 取樣、回覆音訊排程與 client-side lip sync。
 
 ## 啟動
 
@@ -14,7 +14,7 @@ python -m http.server 4174
 
 ## 使用
 
-1. 點擊頁面右上角的設定 icon，在彈出視窗貼上 Gemini API key、選擇 voice／thinking level，並可調整 Nami 的人物設定。必要的對話與 Avatar 工具規則由 Avatar 內部固定，不會顯示在設定介面。可調整的設定會保存至目前瀏覽器的 `localStorage`；API key 請只用於開發測試。
+1. 點擊頁面右上角的設定 icon，在彈出視窗貼上 Gemini API key、選擇 voice，並可調整 Nami 的人物設定。必要的對話與 Avatar 工具規則由 Avatar 內部固定，不會顯示在設定介面。可調整的設定會保存至目前瀏覽器的 `localStorage`；API key 請只用於開發測試。
 2. 按「開始對話」，允許麥克風權限並等待 `CONNECTED`；通話中同一顆按鈕會變成紅色的「結束對話」。
 3. 若瀏覽器詢問定位權限，可允許 Avatar 取得本次 session 的約略座標；若拒絕，仍會使用時區與瀏覽器語系作為地點近似資訊。這些時間／地點資料只送出一次作為 Live session 初始上下文，不會保存或顯示在逐字稿。
 4. 使用耳機降低回音；Gemini 回傳的 24 kHz PCM 會直接送進 Web Audio 播放器與嘴型分析器。
@@ -27,13 +27,13 @@ python -m http.server 4174
 - Gemini 只在需要明顯表情或情緒轉折時最多呼叫一次 `set_avatar_emotion({ emotion })`；呼吸、眨眼、說話微動與嘴型仍由本地動畫處理。
 - Gemini 可依回覆語意呼叫 `play_avatar_gesture({ gesture })`：`nod` 點頭、`shake_head` 搖頭、`wave` 招呼或道別、`present` 手心向上展示、`tilt_head` 歪頭、`bow` 鞠躬、`shrug` 聳肩、`hand_on_chest` 手放胸前、`beckon` 招手示意繼續或靠近、`salute` 敬禮。每個回覆最多一個動作，可與表情同時使用，沒有合適情境時不觸發。
 - 動作由 `avatar-gestures.js` 在本地播放，疊加在待機姿勢之後；等語音播放才開始，插話、斷線、結束通話時淡出，切換模型時清除。沒有語音的待播動作會在回覆結束或等待逾時後清除。這是回覆層級的搭配，沒有逐字音訊對齊。
-- 除了 `../vrm/*.vrm` 模型，Avatar 不引用專案其他目錄的 script、動作檔或素材；沿用既有 CDN Three.js／three-vrm，無需 MediaPipe。
+- 除了 `../vrm/*.vrm` 模型，Avatar 不引用專案其他目錄的 script、動作檔或素材；字幕轉換模組與 OpenCC 授權檔放在 Avatar 內，沿用既有 CDN Three.js／three-vrm，無需 MediaPipe。
 
 ## Gemini Live model 與 voice
 
-Live model 固定使用 `gemini-3.1-flash-live-preview`，並共用 Avatar emotion tool：
+Live model 固定使用 `gemini-3.8-live`，並共用 Avatar emotion／gesture tools：
 
-- `gemini-3.1-flash-live-preview`：使用 `thinkingLevel`，function calling 採同步回應。
+- `gemini-3.8-live`：不設定 `thinkingLevel`／`thinkingConfig`；Avatar tools 宣告為 `NON_BLOCKING`，工具回應使用 `scheduling: "WHEN_IDLE"`，讓模型可在工具執行期間持續對話。
 
 Voice 下拉選單包含官方 30 組 prebuilt voice：
 

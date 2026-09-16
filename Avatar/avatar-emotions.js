@@ -8,6 +8,7 @@ const AVATAR_EMOTIONS = Object.freeze([
 
 const AVATAR_EMOTION_TOOL = Object.freeze({
   name: "set_avatar_emotion",
+  behavior: "NON_BLOCKING",
   description: "只有在回覆需要明顯表情或情緒轉折時，為 Nami 選擇一個表情。每個回覆最多呼叫一次；不需要時不要呼叫；不要用它控制身體動作、嘴型、呼吸或連續動畫。",
   parameters: Object.freeze({
     type: "OBJECT",
@@ -37,8 +38,8 @@ function createAvatarToolResponse(call, result) {
     id: call?.id || "",
     name: call?.name || AVATAR_EMOTION_TOOL.name,
     response: result?.ok
-      ? { result: result.result || "applied" }
-      : { error: result?.error || "set_avatar_emotion 參數無效。" },
+      ? { result: result.result || "applied", scheduling: "WHEN_IDLE" }
+      : { error: result?.error || "set_avatar_emotion 參數無效。", scheduling: "WHEN_IDLE" },
   };
   return { toolResponse: { functionResponses: [functionResponse] } };
 }

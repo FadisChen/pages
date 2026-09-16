@@ -1,2 +1,4 @@
 .playwright-mcp/
 YearEndParty/WEBRTC_COMMUNICATION.md
+.playwright-cli/
+output/

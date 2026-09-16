@@ -3,6 +3,7 @@ import { DEFAULT_LIVE_MODEL, DEFAULT_MEMORY_MODEL, normalizeModelName } from './
 import { normalizeStoryState } from './story.js';
 
 const LEGACY_DEFAULT_MEMORY_MODEL = 'gemini-3.5-flash-lite';
+const LEGACY_LIVE_MODEL = 'gemini-3.1-flash-live-preview';
 const SETTINGS_VERSION = 3;
 
 export const STORAGE_KEYS = Object.freeze({
@@ -64,7 +65,9 @@ export function saveApiKey(key, remember) {
 }
 
 function cleanSettings(value, migrateLegacyDefault = false) {
+  const liveModelName = normalizeModelName(value?.liveModelName, DEFAULT_SETTINGS.liveModelName);
   const memoryModelName = normalizeModelName(value?.memoryModelName, DEFAULT_SETTINGS.memoryModelName);
+  const shouldMigrateLiveModel = liveModelName === LEGACY_LIVE_MODEL;
   const shouldMigrateMemoryModel = migrateLegacyDefault
     && Number(value?.version || 1) < SETTINGS_VERSION
     && memoryModelName === LEGACY_DEFAULT_MEMORY_MODEL;
@@ -75,7 +78,7 @@ function cleanSettings(value, migrateLegacyDefault = false) {
     captionsVisible: value?.captionsVisible !== false,
     backgroundMusicAutoPlay: Boolean(value?.backgroundMusicAutoPlay),
     rememberApiKey: Boolean(value?.rememberApiKey),
-    liveModelName: normalizeModelName(value?.liveModelName, DEFAULT_SETTINGS.liveModelName),
+    liveModelName: shouldMigrateLiveModel ? DEFAULT_SETTINGS.liveModelName : liveModelName,
     memoryModelName: shouldMigrateMemoryModel ? DEFAULT_SETTINGS.memoryModelName : memoryModelName,
   };
 }

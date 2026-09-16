@@ -11,6 +11,7 @@ import { AVATAR_GESTURE_TOOL, normalizeAvatarGesture, AvatarGesturePlayer } from
 import { shouldPlayLiveAudio } from "./live-audio-policy.js";
 import { collectSessionContext } from "./session-context.js";
 import { mergePartial, normalizeTranscript } from "./transcript.js";
+import { toTraditionalChinese } from "./traditional-chinese.js";
 
 (function () {
   "use strict";
@@ -30,13 +31,13 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     { id: "purple", name: "Purple", url: "../vrm/Purple.vrm", mouthIntensity: 1 },
   ]);
   const DEFAULT_AVATAR_MODEL_ID = AVATAR_MODELS[0].id;
-  const GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
+  const GEMINI_LIVE_MODEL = "gemini-3.8-live";
   const NATURAL_ARM_DROP = 1.25;
   const STATES = Object.freeze({ IDLE: "idle", LISTENING: "listening", THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted" });
   const EMOTIONS = AVATAR_EMOTIONS;
   const STATE_LABELS = Object.freeze({ idle: "待機中", listening: "聆聽中", thinking: "思考中", speaking: "回應中", interrupted: "被打斷" });
   const STATE_COPY = Object.freeze({ idle: "準備好聽你說話", listening: "我正在聽", thinking: "讓我想一下", speaking: "聲音正在變成表情", interrupted: "收到，你可以繼續說" });
-  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", thinking: "", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "", avatarModel: DEFAULT_AVATAR_MODEL_ID });
+  const DEFAULT_USER_SETTINGS = Object.freeze({ voice: "Aoede", userSystemPrompt: DEFAULT_USER_SYSTEM_PROMPT, apiKey: "", avatarModel: DEFAULT_AVATAR_MODEL_ID });
 
   function buildSystemInstruction(userSystemPrompt) {
     const personality = String(userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT).trim();
@@ -747,11 +748,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     setupMessage() {
       const generationConfig = { responseModalities: ["AUDIO"] };
       generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice || "Aoede" } } };
-      const thinking = String(this.config.thinking || "").trim().toUpperCase();
-      if (thinking) {
-        const option = { thinkingLevel: thinking };
-        if (Object.values(option)[0] !== undefined) generationConfig.thinkingConfig = option;
-      }
       const setup = {
         model: `models/${GEMINI_LIVE_MODEL}`,
         generationConfig,
@@ -773,7 +769,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     }
     sendText(text) {
       if (!this.isConnected() || !String(text).trim()) return false;
-      this.send({ realtimeInput: { text: String(text).trim() } });
+      this.send({ clientContent: { turns: [{ role: "user", parts: [{ text: String(text).trim() }] }], turnComplete: true } });
       return true;
     }
     sendAudioNow(bytes) { this.send({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: bytesToBase64(bytes) } } }); }
@@ -808,8 +804,8 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
           const sampleRate = Number(/(?:^|;)rate=(\d+)/.exec(part.inlineData.mimeType)?.[1]) || AUDIO_OUTPUT_RATE;
           this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate });
         }
-        const inputText = normalizeTranscript(content.inputTranscription?.text);
-        const outputText = normalizeTranscript(content.outputTranscription?.text);
+        const inputText = normalizeTranscript(toTraditionalChinese(content.inputTranscription?.text));
+        const outputText = normalizeTranscript(toTraditionalChinese(content.outputTranscription?.text));
         if (inputText) this.bus.emit("gemini.user-transcript", inputText);
         if (outputText && playAudio) this.bus.emit("gemini.model-transcript", outputText);
         if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
@@ -979,7 +975,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     }
     applySettings() {
       this.ui.voice.value = this.settings.voice;
-      this.ui.thinking.value = this.settings.thinking;
       this.ui.userSystemPrompt.value = this.settings.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT;
       this.ui.apiKey.value = this.settings.apiKey || "";
       this.ui.avatarModel.value = this.settings.avatarModel;
@@ -988,7 +983,6 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const avatarModel = AVATAR_MODELS.some((entry) => entry.id === this.ui.avatarModel.value) ? this.ui.avatarModel.value : DEFAULT_AVATAR_MODEL_ID;
       this.settings = {
         voice: this.ui.voice.value,
-        thinking: this.ui.thinking.value,
         userSystemPrompt: this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT,
         apiKey: this.ui.apiKey.value.trim(),
         avatarModel,
@@ -998,7 +992,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     collectConfig() {
       const apiKey = this.ui.apiKey.value.trim();
       const userSystemPrompt = this.ui.userSystemPrompt.value.trim() || DEFAULT_USER_SYSTEM_PROMPT;
-      return { apiKey, voice: this.ui.voice.value, thinking: this.ui.thinking.value, userSystemPrompt };
+      return { apiKey, voice: this.ui.voice.value, userSystemPrompt };
     }
     async startCall() {
       if (this.callActive) return;
@@ -1058,7 +1052,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const text = this.ui.textInput.value.trim();
       if (!text) return;
       if (!this.callActive || !this.gemini.isConnected()) { this.showError("請先開始對話並等待 Gemini 連線完成。", true); return; }
-      if (this.gemini.sendText(text)) { this.transcript.add("user", text); this.ui.textInput.value = ""; this.stateMachine.toThinking(); }
+      if (this.gemini.sendText(text)) { this.transcript.add("user", toTraditionalChinese(text)); this.ui.textInput.value = ""; this.stateMachine.toThinking(); }
     }
     setEmotion(emotion) {
       if (!EMOTIONS.includes(emotion)) return;
@@ -1115,7 +1109,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
     const byId = (id) => document.getElementById(id);
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), waveform: byId("waveform"),
-      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
+      startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), transcript: byId("transcript"), textForm: byId("textForm"), textInput: byId("textInput"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion")
     };
   }
 
@@ -1138,7 +1132,7 @@ import { mergePartial, normalizeTranscript } from "./transcript.js";
       const saved = { ...DEFAULT_USER_SETTINGS, ...(sessionSaved && typeof sessionSaved === "object" ? sessionSaved : {}), ...(localSaved && typeof localSaved === "object" ? localSaved : {}) };
       if (!saved.apiKey) saved.apiKey = localKey || sessionKey;
       const avatarModel = AVATAR_MODELS.some((model) => model.id === saved.avatarModel) ? saved.avatarModel : DEFAULT_AVATAR_MODEL_ID;
-      return { voice: saved.voice, thinking: saved.thinking, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey, avatarModel };
+      return { voice: saved.voice, userSystemPrompt: saved.userSystemPrompt || DEFAULT_USER_SYSTEM_PROMPT, apiKey: saved.apiKey, avatarModel };
     } catch (_) {
       return { ...DEFAULT_USER_SETTINGS };
     }

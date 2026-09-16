@@ -67,11 +67,6 @@ class GeminiLiveClient {
   setupMessage() {
     const generationConfig = { responseModalities: ["AUDIO"] };
     generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice || "Aoede" } } };
-    const thinking = String(this.config.thinking || "").trim().toUpperCase();
-    if (thinking) {
-      const option = { thinkingLevel: thinking };
-      if (Object.values(option)[0] !== undefined) generationConfig.thinkingConfig = option;
-    }
     const setup = {
       model: `models/${GEMINI_LIVE_MODEL}`,
       generationConfig,
@@ -114,7 +109,7 @@ class GeminiLiveClient {
   }
   sendText(text) {
     if (!this.isConnected() || this.inputActive || !String(text).trim()) return false;
-    this.send({ realtimeInput: { text: String(text).trim() } });
+    this.send({ clientContent: { turns: [{ role: "user", parts: [{ text: String(text).trim() }] }], turnComplete: true } });
     this.suppressAudio = false;
     this.responsePending = true;
     return true;

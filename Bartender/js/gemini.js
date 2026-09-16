@@ -60,13 +60,13 @@ export class LiveSession {
   }
 
   setupMessage() {
-    const generationConfig = { responseModalities: ['AUDIO'], thinkingConfig: { thinkingLevel: 'minimal' } };
+    const generationConfig = { responseModalities: ['AUDIO'] };
     if (this.config.voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.config.voice } } };
     return { setup: {
       model: `models/${normalizeModelName(this.config.liveModelName, LIVE_MODEL)}`,
       generationConfig,
       systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
-      realtimeInputConfig: { automaticActivityDetection: { disabled: false }, turnCoverage: 'TURN_INCLUDES_ONLY_ACTIVITY' },
+      realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
       contextWindowCompression: { triggerTokens: 25000, slidingWindow: { targetTokens: 8000 } },
       sessionResumption: this.resumptionHandle ? { handle: this.resumptionHandle } : {},
       inputAudioTranscription: {},

@@ -6,13 +6,14 @@ import * as gestures from "../avatar-gestures.js";
 import * as emotions from "../avatar-emotions.js";
 import * as transcript from "../transcript.js";
 import { shouldPlayLiveAudio } from "../live-audio-policy.js";
+import { toTraditionalChinese } from "../traditional-chinese.js";
 
 const root = new URL("../", import.meta.url);
 function loadPage(extra = {}) {
   let source = readFileSync(new URL("app.js", root), "utf8").replace(/^import[\s\S]*?;\r?\n/gm, "");
   source = source.replaceAll("import.meta.url", JSON.stringify(new URL("app.js", root).href));
   source = source.replace(/  if \(document.readyState[\s\S]*$/, "globalThis.page = { App, EventBus, GeminiLiveClient, GeminiAudioPlayer, MicrophoneInput, VRMAvatarController };\n})();");
-  const context = vm.createContext({ ...emotions, ...gestures, ...transcript, shouldPlayLiveAudio,
+  const context = vm.createContext({ ...emotions, ...gestures, ...transcript, shouldPlayLiveAudio, toTraditionalChinese,
     document: { addEventListener() {} }, window: { addEventListener() {} }, WebSocket: { OPEN: 1 },
     isSecureContext: true, setTimeout, clearTimeout, performance, Uint8Array, Float32Array,
     ArrayBuffer, DataView, TextDecoder, URL, atob, btoa, ...extra,
@@ -62,6 +63,8 @@ test("gesture and emotion in the same audio packet preserve PCM and tool respons
   assert.equal(f.stops(), 0);
   assert.equal(f.sent[0].toolResponse.functionResponses[0].response.result, "queued");
   assert.equal(f.sent[1].toolResponse.functionResponses[0].response.result, "applied");
+  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
+  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
   assert.equal(f.player.pending.gesture, "wave");
 });
 
@@ -98,6 +101,41 @@ test("emotion changes leave queued speech intact", () => {
   f.client.handleMessage(f.socket, { toolCall });
   assert.equal(f.stops(), 0);
   assert.equal(f.sent.filter(message => message.toolResponse).length, 1);
+});
+
+test("Gemini 3.8 setup omits thinking config and enables asynchronous Avatar tools", () => {
+  const f = fixture();
+  f.client.config.thinking = "HIGH";
+  const setup = f.client.setupMessage().setup;
+  assert.equal(setup.model, "models/gemini-3.8-live");
+  assert.equal(setup.generationConfig.thinkingConfig, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(setup.tools[0].functionDeclarations.map(({ name, behavior }) => ({ name, behavior })))), [
+    { name: "set_avatar_emotion", behavior: "NON_BLOCKING" },
+    { name: "play_avatar_gesture", behavior: "NON_BLOCKING" },
+  ]);
+});
+
+test("typed text uses an explicit user client-content turn", () => {
+  const f = fixture();
+  assert.equal(f.client.sendText("hello"), true);
+  assert.deepEqual(f.sent.at(-1), {
+    clientContent: { turns: [{ role: "user", parts: [{ text: "hello" }] }], turnComplete: true },
+  });
+});
+
+test("user and model transcripts are converted to Traditional Chinese", () => {
+  const f = fixture();
+  const userTranscripts = [], modelTranscripts = [];
+  f.client.bus.on("gemini.user-transcript", text => userTranscripts.push(text));
+  f.client.bus.on("gemini.model-transcript", text => modelTranscripts.push(text));
+  f.client.handleMessage(f.socket, {
+    serverContent: {
+      inputTranscription: { text: "今天天气很好。" },
+      outputTranscription: { text: "这是一个视频。" },
+    },
+  });
+  assert.deepEqual(userTranscripts, [toTraditionalChinese("今天天气很好。")]);
+  assert.deepEqual(modelTranscripts, [toTraditionalChinese("这是一个视频。")]);
 });
 
 test("PCM in a tool-call packet is delivered exactly once", () => {
