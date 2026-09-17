@@ -9,6 +9,7 @@ import { FINGER_BONES } from './motion-retargeter.js';
 // blows past the face geometry. Values carried over from the sibling Avatar
 // project, which already validated them against these same model files.
 export const MOUTH_INTENSITY = {
+  'shamini.vrm': .45,
   'SpringSnow.vrm': 1,
   'mia.vrm': 0.6,
   'sha.vrm': 0.45,

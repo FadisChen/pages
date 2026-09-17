@@ -27,7 +27,7 @@ async (page) => {
       avatar.gestures.queue(gesture, gesture);
       avatar.update(time, true);
     };
-    for (const model of ['SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
+    for (const model of ['shamini', 'SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
       await avatar.switchModel('../vrm/' + model + '.vrm');
       if (!avatar.loaded) throw new Error('Model failed: ' + model);
       sample('idle', 0);

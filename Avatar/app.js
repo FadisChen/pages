@@ -24,6 +24,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
   const AUDIO_OUTPUT_RATE = 24000;
   const AUDIO_WORKLET_URL = new URL("./pcm-capture.worklet.js", import.meta.url);
   const AVATAR_MODELS = Object.freeze([
+    { id: "shamini", name: "Shamini", url: "../vrm/shamini.vrm", mouthIntensity: .45 },
     { id: "springsnow", name: "SpringSnow", url: "../vrm/SpringSnow.vrm", mouthIntensity: 1 },
     { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
     { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },

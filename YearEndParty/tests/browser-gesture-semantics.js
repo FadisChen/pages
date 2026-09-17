@@ -30,7 +30,7 @@ async (page) => {
     };
     const failures = [];
     const check = (condition, message) => { if (!condition) failures.push(message); };
-    for (const model of ['SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
+    for (const model of ['shamini', 'SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
       await avatar.switchModel('../vrm/' + model + '.vrm');
       sample('idle', 0);
       const chest = pos('chest');

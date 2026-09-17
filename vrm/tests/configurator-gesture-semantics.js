@@ -24,7 +24,7 @@ async (page) => {
       salute: ['rightUpperArm', 'rightHand', 'rightMiddleProximal'],
     };
     const buttonIds = Object.fromEntries(Object.keys(actions).map(name => [name, `#motion-${name.replaceAll('_', '-')}`]));
-    const modelFiles = ['su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm'];
+    const modelFiles = ['shamini.vrm', 'su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm'];
     const failures = [];
     for (const file of modelFiles) {
       const select = document.querySelector('#model-select');

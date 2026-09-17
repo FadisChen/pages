@@ -15,7 +15,7 @@ async (page) => {
     window.gestureShots = [];
     window.gestureBounds = [];
     window.gesturePalms = [];
-    for (const model of ['SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
+    for (const model of ['shamini', 'SpringSnow', 'mia', 'sha', 'su', 'Purple']) {
       await app.avatar.switchModel('../vrm/' + model + '.vrm');
       if (!app.avatar.loaded) throw new Error('Model failed: ' + model);
       for (const gesture of ['idle', 'nod', 'shake_head', 'wave', 'present', 'tilt_head', 'bow', 'shrug', 'hand_on_chest', 'beckon', 'salute']) {

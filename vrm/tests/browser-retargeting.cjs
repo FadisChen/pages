@@ -18,7 +18,7 @@ async (page) => {
     viewer.idleBreathing = false;
     viewer.autoBlink = false;
     const results = [];
-    for (const file of ['su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm']) {
+    for (const file of ['shamini.vrm', 'su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm']) {
       await loadModel(file);
       const solver = window.__vtuber.solver;
       if (!solver) throw Error('failed to load ' + file);

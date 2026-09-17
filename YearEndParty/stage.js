@@ -26,6 +26,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
 
   const SETTINGS_KEY = "year-end-party.stage.settings.v1";
   const AVATAR_MODELS = Object.freeze([
+    { id: "shamini", name: "Shamini", url: "../vrm/shamini.vrm", mouthIntensity: .45 },
     { id: "springsnow", name: "SpringSnow", url: "../vrm/SpringSnow.vrm", mouthIntensity: 1 },
     { id: "mia", name: "Mia", url: "../vrm/mia.vrm", mouthIntensity: .6 },
     { id: "sha", name: "Sha", url: "../vrm/sha.vrm", mouthIntensity: .45 },

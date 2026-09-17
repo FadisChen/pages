@@ -268,7 +268,9 @@ function applyHeadRotation(matrixData) {
   // Negated: this rig's head bone treats +X as tilting back/up, so a
   // physical nod-down (chin drops) needs a negative X rotation.
   const targetPitch = -THREE.MathUtils.clamp(_euler.x, -maxPitch, maxPitch) * headGain;
-  const targetRoll = THREE.MathUtils.clamp(_euler.z, -maxRoll, maxRoll) * headGain;
+  // Negated for the same reason as pitch: the avatar faces the camera, so the
+  // camera-space tilt (Z) is mirrored relative to the head bone.
+  const targetRoll = -THREE.MathUtils.clamp(_euler.z, -maxRoll, maxRoll) * headGain;
 
   curYaw += (targetYaw - curYaw) * 0.2;
   curPitch += (targetPitch - curPitch) * 0.2;

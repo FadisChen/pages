@@ -80,7 +80,7 @@ function fixture(file = 'su.vrm') {
 const nearDirection = (actual, expected, message) => assert.ok(actual.angleTo(expected) < 0.015,
   `${message}: direction error ${THREE.MathUtils.radToDeg(actual.angleTo(expected))} degrees`);
 
-for (const file of ['su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm']) {
+for (const file of ['shamini.vrm', 'su.vrm', 'mia.vrm', 'sha.vrm', 'SpringSnow.vrm', 'Purple.vrm']) {
   test(`${file}: 45/90/135 degree elbow bends preserve the measured angle on both arms`, () => {
     for (const side of ['left', 'right']) for (const degrees of [45, 90, 135]) {
       const f = fixture(file), elbow = side === 'left' ? 13 : 14, wrist = elbow + 2;
