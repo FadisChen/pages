@@ -80,7 +80,7 @@ for (const page of ["app.js", "stage.js"]) {
     assert.deepEqual(events, [{ gesture: "wave", id: "gesture-wave" }]);
     assert.equal(f.stops(), 0);
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
-    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "SILENT");
     f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.error, "At most one Avatar gesture is allowed per response.");
     f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });

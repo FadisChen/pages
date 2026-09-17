@@ -63,8 +63,8 @@ test("gesture and emotion in the same audio packet preserve PCM and tool respons
   assert.equal(f.stops(), 0);
   assert.equal(f.sent[0].toolResponse.functionResponses[0].response.result, "queued");
   assert.equal(f.sent[1].toolResponse.functionResponses[0].response.result, "applied");
-  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
-  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
+  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.scheduling, "SILENT");
+  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.scheduling, "SILENT");
   assert.equal(f.player.pending.gesture, "wave");
 });
 

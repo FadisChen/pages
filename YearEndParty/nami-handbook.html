@@ -638,7 +638,7 @@ sequenceDiagram
 
     <section id="s4">
       <div class="sec-head"><span class="sec-num">04</span><h2>Function Calling：把說話變成表情與動作</h2></div>
-      <p class="lede">Gemini 3.8 Live 支援<b>非同步（NON_BLOCKING）</b> function calling。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作；工具結果以 <code class="inline">WHEN_IDLE</code> 排程回報，避免阻塞目前的語音回合。</p>
+      <p class="lede">Gemini 3.8 Live 支援<b>非同步（NON_BLOCKING）</b> function calling。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作；工具結果以 <code class="inline">SILENT</code> 排程回報，不阻塞目前的語音回合，也不會讓模型在講完後針對工具結果再多說一段話。</p>
 
       <h3><span class="n">4.1</span>兩個工具的定義</h3>
       <div class="grid-2">
