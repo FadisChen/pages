@@ -61,11 +61,25 @@ test("gesture and emotion in the same audio packet preserve PCM and tool respons
   f.client.handleMessage(f.socket, { serverContent: audio(), toolCall: { functionCalls: [gestureCall, ...toolCall.functionCalls] } });
   assert.equal(f.played.length, 1);
   assert.equal(f.stops(), 0);
-  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.result, "queued");
-  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.result, "applied");
-  assert.equal(f.sent[0].toolResponse.functionResponses[0].response.scheduling, "SILENT");
-  assert.equal(f.sent[1].toolResponse.functionResponses[0].response.scheduling, "SILENT");
+  // One toolCall must produce one toolResponse; each WHEN_IDLE response makes Gemini speak again.
+  assert.equal(f.sent.length, 1);
+  const [gestureResponse, emotionResponse] = f.sent[0].toolResponse.functionResponses;
+  assert.equal(gestureResponse.response.result, "queued");
+  assert.equal(emotionResponse.response.result, "applied");
+  assert.equal(gestureResponse.response.scheduling, "WHEN_IDLE");
+  assert.equal(emotionResponse.response.scheduling, "WHEN_IDLE");
   assert.equal(f.player.pending.gesture, "wave");
+});
+
+test("a tool-only turn keeps the queued gesture for the speech that follows", () => {
+  const f = gestureFixture();
+  f.client.handleMessage(f.socket, { toolCall: { functionCalls: [gestureCall] } });
+  f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+  f.player.update(.1, false);
+  assert.equal(f.player.pending.gesture, "wave");
+  f.client.handleMessage(f.socket, { serverContent: audio() });
+  f.player.update(.1, true);
+  assert.equal(f.player.active.gesture, "wave");
 });
 
 test("gesture limit spans packets and resets on the next turn", () => {

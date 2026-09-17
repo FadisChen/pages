@@ -80,12 +80,32 @@ for (const page of ["app.js", "stage.js"]) {
     assert.deepEqual(events, [{ gesture: "wave", id: "gesture-wave" }]);
     assert.equal(f.stops(), 0);
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
-    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "SILENT");
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
     f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.error, "At most one Avatar gesture is allowed per response.");
     f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
     f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
     assert.equal(events.at(-1).gesture, "nod");
+  });
+
+  test(`${page}: calls in one toolCall are answered in a single toolResponse`, () => {
+    const f = fixture(page);
+    f.client.handleMessage(f.socket, { toolCall: { functionCalls: [...gestureCall("bow").functionCalls, ...toolCall.functionCalls] } });
+    const responses = f.sent.filter(x => x.toolResponse);
+    assert.equal(responses.length, 1);
+    assert.deepEqual(responses[0].toolResponse.functionResponses.map(r => r.name), ["play_avatar_gesture", "set_avatar_emotion"]);
+  });
+
+  test(`${page}: a tool-only turn keeps the queued gesture for the speech that follows`, () => {
+    const f = fixture(page);
+    let finished = 0;
+    f.app.bus.on("avatar.gesture-turn-complete", () => finished++);
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("bow") });
+    f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+    assert.equal(finished, 0);
+    f.client.handleMessage(f.socket, { serverContent: audio });
+    f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+    assert.equal(finished, 1);
   });
 
   test(`${page}: interrupted or cancelled gesture calls cannot survive the response`, () => {

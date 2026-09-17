@@ -117,6 +117,8 @@ body.stage-pip-body .stage-visual { position: fixed; inset: 0; }
 
 .pair-body { display: flex; gap: 18px; align-items: center; margin-top: 13px; flex-wrap: wrap; }
 .pair-body canvas { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 8px; }
+.qr-link { flex: 0 0 auto; display: block; line-height: 0; border-radius: 10px; }
+.qr-link canvas { display: block; }
 .pair-info { min-width: 0; display: grid; gap: 10px; }
 .pair-room strong { display: block; margin-top: 2px; color: var(--ink); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 22px; letter-spacing: .04em; }
 .pair-url { min-width: 0; }

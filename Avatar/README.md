@@ -33,7 +33,7 @@ python -m http.server 4174
 
 Live model 固定使用 `gemini-3.8-live`，並共用 Avatar emotion／gesture tools：
 
-- `gemini-3.8-live`：不設定 `thinkingLevel`／`thinkingConfig`；Avatar tools 宣告為 `NON_BLOCKING`，工具回應使用 `scheduling: "SILENT"`，讓模型可在工具執行期間持續對話，且不會在講完後針對工具結果再產生一段回覆。
+- `gemini-3.8-live`：不設定 `thinkingLevel`／`thinkingConfig`；Avatar tools 宣告為 `NON_BLOCKING`，工具回應使用 `scheduling: "WHEN_IDLE"`，讓模型可在工具執行期間持續對話。
 
 Voice 下拉選單包含官方 30 組 prebuilt voice：
 

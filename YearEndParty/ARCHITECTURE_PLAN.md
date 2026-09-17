@@ -25,7 +25,7 @@
 | 收到伺服器換線預告就斷句 | 舊版收到 `goAway` 立即關 WebSocket | 改為等待收音、模型回合、實際播放都結束再關線；伺服器期限先到時仍可能被動斷線 |
 | 人物聲音改變 | 程式未發現每句隨機更換 voice，但舊設定為空時會省略 voice；兩個頁面的設定各自保存 | 現在固定本次 session 的設定快照，空 voice 回退 Aoede。這不能保證生成模型的音色與韻律完全固定 |
 
-Gemini 3.8 Live 支援 `NON_BLOCKING` 非同步 function calling；表情與動作工具會在不阻塞語音生成的情況下執行，回覆使用 `SILENT` 排程（`WHEN_IDLE` 會讓模型講完後針對工具結果再產生一段回覆，造成重複發言）。[官方工具文件](https://ai.google.dev/gemini-api/docs/live-api/tools)
+Gemini 3.8 Live 支援 `NON_BLOCKING` 非同步 function calling；表情與動作工具會在不阻塞語音生成的情況下執行，回覆使用 `WHEN_IDLE` 排程。[官方工具文件](https://ai.google.dev/gemini-api/docs/live-api/tools)
 
 ## 2. 本次修復後的資料流
 

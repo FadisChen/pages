@@ -866,6 +866,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
       const operatorUrl = new URL("./operator.html", location.href);
       operatorUrl.searchParams.set("room", roomCode);
       this.ui.roomUrl.textContent = operatorUrl.toString();
+      this.ui.qrLink.href = operatorUrl.toString();
       if (globalThis.QRCode?.toCanvas) {
         globalThis.QRCode.toCanvas(this.ui.qrCanvas, operatorUrl.toString(), { width: 176, margin: 1 }, (error) => { if (error) this.showError("QR code 產生失敗，請直接用房號配對。"); });
       }
@@ -925,7 +926,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
     return {
       avatarCanvas: byId("avatarCanvas"), stageVisual: byId("stageVisual"), modelStatus: byId("modelStatus"), stageCard: byId("stageCard"), avatarStateLabel: byId("avatarStateLabel"), stageStateCopy: byId("stageStateCopy"), outputLevelValue: byId("outputLevelValue"), outputLevelBar: byId("outputLevelBar"), currentSegmentLabel: byId("currentSegmentLabel"),
       startCall: byId("startCall"), callButtonIcon: byId("callButtonIcon"), callButtonLabel: byId("callButtonLabel"), settingsButton: byId("settingsButton"), settingsDialog: byId("settingsDialog"), closeSettings: byId("closeSettings"), connectionBadge: byId("connectionBadge"), settingsForm: byId("settingsForm"), apiKey: byId("apiKey"), toggleKey: byId("toggleKey"), voice: byId("voice"), thinking: byId("thinking"), avatarModel: byId("avatarModel"), userSystemPrompt: byId("userSystemPrompt"), sessionClock: byId("sessionClock"), toastRegion: byId("toastRegion"),
-      pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), peerBadge: byId("peerBadge"),
+      pairPanel: byId("pairPanel"), roomCode: byId("roomCode"), roomUrl: byId("roomUrl"), qrCanvas: byId("qrCanvas"), qrLink: byId("qrLink"), peerBadge: byId("peerBadge"),
       pipButton: byId("pipButton"),
     };
   }

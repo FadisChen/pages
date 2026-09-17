@@ -711,6 +711,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
       this.resumptionHandle = "";
       this.initialContextSent = false;
       this.gestureUsed = false;
+      this.turnHadAudio = false;
     }
     start(config) {
       this.disconnect(false);
@@ -720,6 +721,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
       this.resumptionHandle = "";
       this.initialContextSent = false;
       this.gestureUsed = false;
+      this.turnHadAudio = false;
       this.connect(false);
     }
     disconnect(notify = true) {
@@ -802,6 +804,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
         const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
         const playAudio = shouldPlayLiveAudio({ interrupted: content.interrupted });
         if (audioParts.length && playAudio) for (const part of audioParts) {
+          this.turnHadAudio = true;
           const sampleRate = Number(/(?:^|;)rate=(\d+)/.exec(part.inlineData.mimeType)?.[1]) || AUDIO_OUTPUT_RATE;
           this.bus.emit("gemini.audio", { bytes: base64ToBytes(part.inlineData.data), sampleRate });
         }
@@ -814,7 +817,13 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
       }
       if (message.toolCallCancellation?.ids) this.bus.emit("avatar.gesture-cancel", { ids: message.toolCallCancellation.ids });
       if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls, Boolean(content?.interrupted));
-      if (content?.turnComplete) { this.gestureUsed = false; this.bus.emit("avatar.gesture-turn-complete", {}); }
+      // Gemini 3.8 often calls tools in a turn without speech, then speaks in the next turn after the toolResponse.
+      // Ending that silent turn must not drop the queued gesture (the gesture player still expires it after 8 s).
+      if (content?.turnComplete) {
+        this.gestureUsed = false;
+        if (this.turnHadAudio) this.bus.emit("avatar.gesture-turn-complete", {});
+        this.turnHadAudio = false;
+      }
       // Automatic VAD cannot tell us locally whether the user has finished speaking.
       // Receive until the server closes, then resume; this notice must not cut off speech.
       if (message.goAway) this.bus.emit("gemini.go-away", { timeLeft: message.goAway.timeLeft });
@@ -835,6 +844,9 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
     }
     handleToolCalls(socket, calls, interrupted = false) {
       let applied = false;
+      // Answer every call from one toolCall in a single toolResponse: with WHEN_IDLE,
+      // each separate response makes Gemini generate another spoken reply.
+      const responses = [];
       for (const call of calls) {
         let result;
         if (call?.name === AVATAR_GESTURE_TOOL.name) {
@@ -848,7 +860,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
             this.bus.emit("avatar.gesture", { gesture: result.gesture, id: call.id });
             result.result = "queued";
           }
-          this.sendToolResponse(socket, call, result);
+          responses.push([call, result]);
           continue;
         }
         if (call?.name !== AVATAR_EMOTION_TOOL.name) {
@@ -865,12 +877,14 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
           applied = true;
           this.bus.emit("gemini.avatar-emotion", { emotion: result.emotion });
         }
-        this.sendToolResponse(socket, call, result);
+        responses.push([call, result]);
       }
+      this.sendToolResponses(socket, responses);
     }
-    sendToolResponse(socket, call, result) {
-      if (socket?.readyState !== 1) return;
-      socket.send(JSON.stringify(createAvatarToolResponse(call, result)));
+    sendToolResponses(socket, responses) {
+      if (socket?.readyState !== 1 || !responses.length) return;
+      const functionResponses = responses.map(([call, result]) => createAvatarToolResponse(call, result).toolResponse.functionResponses[0]);
+      socket.send(JSON.stringify({ toolResponse: { functionResponses } }));
     }
     handleClose(socket, event) {
       if (socket !== this.socket || this.stopped) return;
@@ -878,6 +892,7 @@ import { toTraditionalChinese } from "./traditional-chinese.js";
       this.socket = null;
       if (!this.resumptionHandle) this.initialContextSent = false;
       this.gestureUsed = false;
+      this.turnHadAudio = false;
       this.bus.emit("gemini.connection-lost", {});
       this.failures += 1;
       if (this.failures >= 3) { this.bus.emit("gemini.status", { status: "failed" }); this.bus.emit("gemini.error", new Error(`Gemini 連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`)); return; }

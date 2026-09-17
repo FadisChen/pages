@@ -22,6 +22,7 @@ class GeminiLiveClient {
     this.suppressAudio = false;
     this.initialContextSent = false;
     this.gestureUsed = false;
+    this.turnHadAudio = false;
     bus.on("audio.drained", () => { this.playbackPending = false; this.reconnectWhenIdle(); });
   }
   start(config) {
@@ -33,6 +34,7 @@ class GeminiLiveClient {
     this.resumptionHandle = "";
     this.initialContextSent = false;
     this.gestureUsed = false;
+    this.turnHadAudio = false;
     this.connect(false);
   }
   disconnect(notify = true) {
@@ -148,6 +150,7 @@ class GeminiLiveClient {
       const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
       const playAudio = !content.interrupted && !this.inputActive && !this.suppressAudio;
       if (audioParts.length && playAudio) for (const part of audioParts) {
+        this.turnHadAudio = true;
         this.responsePending = true;
         this.playbackPending = true;
         const rate = Number(/(?:^|;)rate=(\d+)/.exec(part.inlineData.mimeType)?.[1]) || AUDIO_OUTPUT_RATE;
@@ -162,7 +165,13 @@ class GeminiLiveClient {
     }
     if (message.toolCallCancellation?.ids) this.bus.emit("avatar.gesture-cancel", { ids: message.toolCallCancellation.ids });
     if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls, Boolean(content?.interrupted));
-    if (content?.turnComplete) { this.gestureUsed = false; this.bus.emit("avatar.gesture-turn-complete", {}); }
+    // Gemini 3.8 常先用一個沒有語音的回合呼叫 tool，等 toolResponse 後才在下一個回合開口；
+    // 這種回合結束時不能清掉待播動作，否則動作會在語音開始前就被丟棄（仍有 8 秒逾時保護）。
+    if (content?.turnComplete) {
+      this.gestureUsed = false;
+      if (this.turnHadAudio) this.bus.emit("avatar.gesture-turn-complete", {});
+      this.turnHadAudio = false;
+    }
     if (message.goAway) this.goAway = true;
     this.reconnectWhenIdle();
   }
@@ -189,6 +198,9 @@ class GeminiLiveClient {
   }
   handleToolCalls(socket, calls, interrupted = false) {
     let applied = false;
+    // 同一則 toolCall 的結果必須合併成一則 toolResponse：WHEN_IDLE 下每則回覆都會讓 Gemini 再講一段，
+    // 分開送會造成重複發言（例如先「歡迎 James 上台」、再「感謝 James 上台」）。
+    const responses = [];
     for (const call of calls) {
       let result;
       if (call?.name === AVATAR_GESTURE_TOOL.name) {
@@ -202,7 +214,7 @@ class GeminiLiveClient {
           this.bus.emit("avatar.gesture", { gesture: result.gesture, id: call.id });
           result.result = "queued";
         }
-        this.sendToolResponse(socket, call, result);
+        responses.push([call, result]);
         continue;
       }
       if (call?.name !== AVATAR_EMOTION_TOOL.name) {
@@ -219,12 +231,14 @@ class GeminiLiveClient {
         applied = true;
         this.bus.emit("gemini.avatar-emotion", { emotion: result.emotion });
       }
-      this.sendToolResponse(socket, call, result);
+      responses.push([call, result]);
     }
+    this.sendToolResponses(socket, responses);
   }
-  sendToolResponse(socket, call, result) {
-    if (socket?.readyState !== 1) return;
-    socket.send(JSON.stringify(createAvatarToolResponse(call, result)));
+  sendToolResponses(socket, responses) {
+    if (socket?.readyState !== 1 || !responses.length) return;
+    const functionResponses = responses.map(([call, result]) => createAvatarToolResponse(call, result).toolResponse.functionResponses[0]);
+    socket.send(JSON.stringify({ toolResponse: { functionResponses } }));
   }
   handleClose(socket, event) {
     if (socket !== this.socket || this.stopped) return;
@@ -236,6 +250,7 @@ class GeminiLiveClient {
     this.suppressAudio = false;
     this.goAway = false;
     this.gestureUsed = false;
+    this.turnHadAudio = false;
     if (!this.resumptionHandle) this.initialContextSent = false;
     this.bus.emit("gemini.connection-lost", {});
     this.failures += 1;
