@@ -1,0 +1,373 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>加密網頁產生器</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --panel: #fff;
+    --border: #d6dae0;
+    --text: #1c1f24;
+    --muted: #666e79;
+    --accent: #2f6fed;
+    --danger: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c;
+      --panel: #1e2126;
+      --border: #363b43;
+      --text: #e6e8eb;
+      --muted: #99a1ac;
+      --accent: #5b8dff;
+      --danger: #ff6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 system-ui, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  .lede { color: var(--muted); margin: 0 0 1.5rem; }
+  fieldset {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem 1.25rem;
+    margin: 0 0 1.25rem;
+  }
+  legend { font-weight: 600; padding: 0 .4rem; }
+  label { display: block; font-weight: 500; margin: .85rem 0 .3rem; }
+  input, textarea {
+    width: 100%;
+    padding: .55rem .7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+  }
+  textarea { min-height: 220px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; resize: vertical; }
+  input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { color: var(--muted); font-size: 13px; margin: .35rem 0 0; }
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .row > div { flex: 1 1 220px; }
+  .actions { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    padding: .6rem 1.2rem;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; border-color: var(--border); color: var(--text); }
+  button:disabled { opacity: .55; cursor: progress; }
+  [role="alert"] { color: var(--danger); font-weight: 500; }
+  .warn {
+    border-left: 3px solid var(--danger);
+    padding: .5rem 0 .5rem .85rem;
+    color: var(--muted);
+    font-size: 13px;
+    margin: 1rem 0 0;
+  }
+  output:not(:empty) { display: block; margin-top: 1rem; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>加密網頁產生器</h1>
+  <p class="lede">把內容用 AES-GCM 加密，產生一個單檔、純前端的網頁。開啟時必須輸入密碼才會顯示內容。</p>
+
+  <form id="generator">
+    <fieldset>
+      <legend>內容</legend>
+
+      <label for="page-title">頁面標題</label>
+      <input id="page-title" name="page-title" type="text" value="受保護的內容" required>
+      <p class="hint">會顯示在密碼輸入畫面上，<strong>不會被加密</strong>，任何人都看得到。</p>
+
+      <label for="content">要加密的 HTML</label>
+      <textarea id="content" name="content" required spellcheck="false">&lt;h1&gt;哈囉&lt;/h1&gt;
+&lt;p&gt;這段內容只有知道密碼的人看得到。&lt;/p&gt;</textarea>
+      <p class="hint">會以 <code>innerHTML</code> 插入頁面，所以 HTML 標籤與 <code>style</code> 都有效，但其中的 <code>&lt;script&gt;</code> 不會執行。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>密碼</legend>
+      <div class="row">
+        <div>
+          <label for="password">密碼</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+        </div>
+        <div>
+          <label for="confirm">再輸入一次</label>
+          <input id="confirm" name="confirm" type="password" autocomplete="new-password" required minlength="8">
+        </div>
+      </div>
+      <p class="hint">密文人人可下載、可離線無限次嘗試破解，<strong>安全性完全取決於密碼強度</strong>。建議使用 4 個以上不相關的隨機單詞或 16 字元以上的隨機密碼。</p>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" id="generate">產生加密網頁</button>
+      <button type="button" id="download" class="secondary" hidden>下載 protected.html</button>
+      <button type="button" id="preview" class="secondary" hidden>在新分頁預覽</button>
+      <p id="error" role="alert" hidden></p>
+    </div>
+    <output id="status"></output>
+
+    <p class="warn">
+      這是真加密，不是把內容藏起來。但它沒有伺服器端的嘗試次數限制，弱密碼等於沒加密。
+      適合私人筆記、邀請函這類內容；<strong>不要</strong>拿來放個資、金鑰或商業機密。
+    </p>
+  </form>
+</main>
+
+<script>
+const PBKDF2_ITERATIONS = 600000;
+const SALT_BYTES = 16;
+const IV_BYTES = 12;
+
+async function deriveKey(password, salt) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+// 封包格式：base64( salt(16) || iv(12) || ciphertext )，salt 與 iv 不需保密。
+async function encryptText(plaintext, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const key = await deriveKey(password, salt);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext)
+  ));
+
+  const packed = new Uint8Array(salt.length + iv.length + ciphertext.length);
+  packed.set(salt, 0);
+  packed.set(iv, salt.length);
+  packed.set(ciphertext, salt.length + iv.length);
+
+  let binary = '';
+  for (const byte of packed) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// 模板裡的結尾標籤都寫成 <\/script>、<\/body>、<\/html>：反斜線在樣板字串中會被忽略，
+// 但可避免瀏覽器的 HTML 剖析器提早關閉外層 script，也避免 VS Code Live Server 之類的
+// 工具把自動重載程式碼注入到這個字串中間。
+function buildProtectedPage(title, payload) {
+  return `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>${escapeHtml(title)}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    font: 16px/1.7 system-ui, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  }
+  #content { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
+  dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 1.75rem;
+    width: min(92vw, 360px);
+    box-shadow: 0 12px 40px rgb(0 0 0 / .25);
+  }
+  dialog::backdrop { background: rgb(0 0 0 / .55); backdrop-filter: blur(3px); }
+  dialog h1 { font-size: 1.15rem; margin: 0 0 1.25rem; }
+  label { display: block; font-size: 14px; font-weight: 500; margin-bottom: .35rem; }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: .6rem .7rem;
+    font: inherit;
+    border: 1px solid #b9bfc7;
+    border-radius: 6px;
+  }
+  button {
+    width: 100%;
+    margin-top: 1rem;
+    padding: .65rem;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: #2f6fed;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: progress; }
+  #error { color: #c0392b; font-size: 14px; margin: .75rem 0 0; }
+</style>
+</head>
+<body>
+<dialog id="gate">
+  <form id="unlock-form">
+    <h1>${escapeHtml(title)}</h1>
+    <label for="password">密碼</label>
+    <input id="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit" id="submit">解鎖</button>
+    <p id="error" role="alert" hidden>密碼錯誤，請再試一次。</p>
+  </form>
+</dialog>
+
+<div id="content"></div>
+
+<script>
+(function () {
+  var PAYLOAD = '${payload}';
+  var ITERATIONS = ${PBKDF2_ITERATIONS};
+  var gate = document.getElementById('gate');
+  var form = document.getElementById('unlock-form');
+  var input = document.getElementById('password');
+  var error = document.getElementById('error');
+  var submit = document.getElementById('submit');
+  var content = document.getElementById('content');
+
+  gate.showModal();
+  // 沒輸入密碼就沒有內容可看，所以擋掉 Esc 關閉。
+  gate.addEventListener('cancel', function (event) { event.preventDefault(); });
+
+  function base64ToBytes(base64) {
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  async function decrypt(password) {
+    var packed = base64ToBytes(PAYLOAD);
+    var salt = packed.slice(0, 16);
+    var iv = packed.slice(16, 28);
+    var ciphertext = packed.slice(28);
+
+    var baseKey = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+    );
+    var key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: salt, iterations: ITERATIONS, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+    // 密碼錯誤時 AES-GCM 的驗證標籤會讓這裡直接 reject。
+    var plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ciphertext);
+    return new TextDecoder().decode(plaintext);
+  }
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    submit.textContent = '解密中…';
+    // 讓瀏覽器先畫出上面的狀態，再做會卡住主執行緒的金鑰導出。
+    await new Promise(function (resolve) { setTimeout(resolve, 30); });
+
+    try {
+      content.innerHTML = await decrypt(input.value);
+      gate.close();
+    } catch (err) {
+      error.hidden = false;
+      input.select();
+    } finally {
+      submit.disabled = false;
+      submit.textContent = '解鎖';
+    }
+  });
+})();
+<\/script>
+<\/body>
+<\/html>
+`;
+}
+
+const form = document.getElementById('generator');
+const statusEl = document.getElementById('status');
+const errorEl = document.getElementById('error');
+const generateBtn = document.getElementById('generate');
+const downloadBtn = document.getElementById('download');
+const previewBtn = document.getElementById('preview');
+let generatedHtml = '';
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const title = document.getElementById('page-title').value;
+  const content = document.getElementById('content').value;
+  const password = document.getElementById('password').value;
+  const confirm = document.getElementById('confirm').value;
+
+  errorEl.hidden = true;
+  statusEl.textContent = '';
+  downloadBtn.hidden = true;
+  previewBtn.hidden = true;
+
+  if (password !== confirm) {
+    errorEl.textContent = '兩次輸入的密碼不一致。';
+    errorEl.hidden = false;
+    return;
+  }
+
+  generateBtn.disabled = true;
+  generateBtn.textContent = '加密中…';
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  try {
+    const payload = await encryptText(content, password);
+    generatedHtml = buildProtectedPage(title, payload);
+    downloadBtn.hidden = false;
+    previewBtn.hidden = false;
+    statusEl.textContent = `已產生 ${generatedHtml.length.toLocaleString()} 位元組的單檔網頁，密文 ${payload.length.toLocaleString()} 字元。`;
+  } catch (err) {
+    errorEl.textContent = '加密失敗：' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.textContent = '產生加密網頁';
+  }
+});
+
+downloadBtn.addEventListener('click', () => {
+  const blob = new Blob([generatedHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'protected.html';
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+previewBtn.addEventListener('click', () => {
+  const tab = window.open('', '_blank');
+  tab.document.write(generatedHtml);
+  tab.document.close();
+});
+</script>
+</body>
+</html>
