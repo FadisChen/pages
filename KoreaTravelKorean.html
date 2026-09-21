@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>韓國旅遊韓語小幫手</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  *,*::before,*::after{box-sizing:border-box;}
+  [hidden]{display:none !important;}
+
+  :root{
+    --paper:#faf6ef;
+    --surface:#fffcf7;
+    --ink:#241f2e;
+    --ink-soft:#6b6478;
+    --ink-faint:#9b93a8;
+    --accent:#1f8f78;
+    --accent-soft:#dff3ee;
+    --accent-ink:#0d5445;
+    --coral:#e05a3d;
+    --coral-soft:#fbe4dc;
+    --line:rgba(36,31,46,.14);
+    --line-strong:rgba(36,31,46,.26);
+    --shadow:0 1px 2px rgba(36,31,46,.06),0 8px 24px -12px rgba(36,31,46,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#171320;
+      --surface:#211c2c;
+      --ink:#f3ece2;
+      --ink-soft:#bfb6cf;
+      --ink-faint:#847c96;
+      --accent:#4fcdaf;
+      --accent-soft:#1c332e;
+      --accent-ink:#9df0dd;
+      --coral:#ff8163;
+      --coral-soft:#3a2620;
+      --line:rgba(243,236,226,.16);
+      --line-strong:rgba(243,236,226,.28);
+      --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 28px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#171320;
+    --surface:#211c2c;
+    --ink:#f3ece2;
+    --ink-soft:#bfb6cf;
+    --ink-faint:#847c96;
+    --accent:#4fcdaf;
+    --accent-soft:#1c332e;
+    --accent-ink:#9df0dd;
+    --coral:#ff8163;
+    --coral-soft:#3a2620;
+    --line:rgba(243,236,226,.16);
+    --line-strong:rgba(243,236,226,.28);
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 28px -12px rgba(0,0,0,.6);
+  }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Noto Sans TC","Noto Sans",-apple-system,sans-serif;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:48px;
+  }
+
+  header.page-header{
+    padding:20px 16px 12px;
+    max-width:880px;
+    margin:0 auto;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+  }
+  header.page-header h1{
+    font-size:1.35rem;
+    font-weight:900;
+    margin:0 0 4px;
+  }
+  header.page-header p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:.88rem;
+  }
+  .theme-toggle{
+    flex:0 0 auto;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:999px;
+    padding:8px 14px;
+    font-size:.85rem;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .theme-toggle:hover{border-color:var(--line-strong);}
+
+  #tts-banner{
+    max-width:880px;
+    margin:0 auto 8px;
+    padding:0 16px;
+  }
+  #tts-banner .banner-inner{
+    background:var(--coral-soft);
+    color:var(--coral);
+    border-radius:10px;
+    padding:10px 14px;
+    font-size:.85rem;
+  }
+
+  .tab-bar{
+    max-width:880px;
+    margin:0 auto;
+    padding:4px 16px 10px;
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+  }
+  .tab-bar::-webkit-scrollbar{height:0;}
+  .tab-btn{
+    flex:0 0 auto;
+    scroll-snap-align:start;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-soft);
+    padding:9px 16px;
+    border-radius:999px;
+    font-size:.88rem;
+    font-family:inherit;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .tab-btn:hover{border-color:var(--line-strong);color:var(--ink);}
+  .tab-btn.is-active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+    font-weight:700;
+  }
+  .tab-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  main{
+    max-width:880px;
+    margin:0 auto;
+    padding:0 16px;
+  }
+  .tab-panel{display:none;}
+  .tab-panel.is-active{display:block;}
+
+  .panel-intro{
+    color:var(--ink-soft);
+    font-size:.9rem;
+    margin:4px 0 16px;
+    padding:12px 14px;
+    background:var(--accent-soft);
+    border-radius:10px;
+  }
+  .subsection-title{
+    font-size:1rem;
+    font-weight:700;
+    margin:20px 0 10px;
+    color:var(--ink);
+  }
+  .subsection-title:first-of-type{margin-top:4px;}
+
+  .phrase-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  @media (min-width:520px){
+    .phrase-grid{grid-template-columns:1fr 1fr;}
+  }
+  .hangul-grid{
+    grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  }
+
+  .phrase-card{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:4px;
+    width:100%;
+    min-height:56px;
+    text-align:left;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+    font-family:inherit;
+    color:var(--ink);
+    transition:transform .1s ease, border-color .15s ease;
+  }
+  .phrase-card:hover{border-color:var(--accent);}
+  .phrase-card:active{transform:scale(.98);}
+  .phrase-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .phrase-card.is-speaking{border-color:var(--accent);background:var(--accent-soft);}
+
+  .phrase-tag{
+    display:inline-block;
+    font-size:.72rem;
+    font-weight:700;
+    color:var(--accent-ink);
+    background:var(--accent-soft);
+    padding:2px 8px;
+    border-radius:999px;
+    margin-bottom:2px;
+  }
+  .phrase-zh{
+    font-size:.85rem;
+    color:var(--ink-soft);
+  }
+  .phrase-ko{
+    font-family:"Noto Sans KR","Noto Sans TC",sans-serif;
+    font-size:1.35rem;
+    font-weight:700;
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .speaker-icon{font-size:1rem;opacity:.8;}
+  .phrase-ro{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:.78rem;
+    color:var(--ink-faint);
+  }
+
+  #toast{
+    position:fixed;
+    left:50%;
+    bottom:24px;
+    transform:translateX(-50%) translateY(12px);
+    background:var(--ink);
+    color:var(--paper);
+    padding:10px 18px;
+    border-radius:999px;
+    font-size:.85rem;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:20;
+    max-width:90vw;
+    text-align:center;
+  }
+  #toast.is-visible{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+
+  footer.page-footer{
+    max-width:880px;
+    margin:24px auto 0;
+    padding:0 16px;
+    color:var(--ink-faint);
+    font-size:.78rem;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div>
+    <h1>🇰🇷 韓國旅遊韓語小幫手</h1>
+    <p>點一下卡片，立刻用語音念出韓文發音</p>
+  </div>
+  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="切換深色／淺色模式">🌓 主題</button>
+</header>
+
+<div id="tts-banner" hidden>
+  <div class="banner-inner" role="status"></div>
+</div>
+
+<div class="tab-bar" role="tablist" aria-label="學習情境分類" id="tab-bar"></div>
+
+<main id="tab-panels"></main>
+
+<footer class="page-footer">
+  資料僅供旅遊隨身參考；發音以裝置內建的韓文語音合成播放，實際腔調請以真人教學或當地人為準。
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var TABS = [
+    { id:'hangul',      label:'韓文字母基礎' },
+    { id:'greetings',   label:'問候寒暄' },
+    { id:'numbers',     label:'數字與價格' },
+    { id:'restaurant',  label:'餐廳點餐' },
+    { id:'transport',   label:'交通移動' },
+    { id:'shopping',    label:'購物殺價' },
+    { id:'hotel',       label:'住宿' },
+    { id:'sightseeing', label:'觀光問路' },
+    { id:'emergency',   label:'緊急狀況' }
+  ];
+
+  var PHRASES = {
+    greetings:[
+      { zh:'你好',           ko:'안녕하세요',     ro:'annyeonghaseyo' },
+      { zh:'謝謝',           ko:'감사합니다',     ro:'gamsahamnida' },
+      { zh:'謝謝（口語）',    ko:'고마워요',       ro:'gomawoyo' },
+      { zh:'不客氣',         ko:'천만에요',       ro:'cheonmaneyo' },
+      { zh:'對不起／抱歉',    ko:'죄송합니다',     ro:'joesonghamnida' },
+      { zh:'不好意思（呼叫）',ko:'저기요',         ro:'jeogiyo' },
+      { zh:'再見（離開的人說）',ko:'안녕히 가세요', ro:'annyeonghi gaseyo' },
+      { zh:'再見（留下的人說）',ko:'안녕히 계세요', ro:'annyeonghi gyeseyo' },
+      { zh:'是／好',         ko:'네',             ro:'ne' },
+      { zh:'不是',           ko:'아니요',         ro:'aniyo' },
+      { zh:'請',             ko:'주세요',         ro:'juseyo' },
+      { zh:'我叫……',         ko:'저는 ○○이에요', ro:'jeoneun ○○ieyo' }
+    ],
+    numbers:[
+      { zh:'一', ko:'일', ro:'il' },
+      { zh:'二', ko:'이', ro:'i' },
+      { zh:'三', ko:'삼', ro:'sam' },
+      { zh:'四', ko:'사', ro:'sa' },
+      { zh:'五', ko:'오', ro:'o' },
+      { zh:'六', ko:'육', ro:'yuk' },
+      { zh:'七', ko:'칠', ro:'chil' },
+      { zh:'八', ko:'팔', ro:'pal' },
+      { zh:'九', ko:'구', ro:'gu' },
+      { zh:'十', ko:'십', ro:'sip' },
+      { zh:'百', ko:'백', ro:'baek' },
+      { zh:'千', ko:'천', ro:'cheon' },
+      { zh:'萬', ko:'만', ro:'man' },
+      { zh:'5,000元', ko:'오천 원', ro:'ocheon won' },
+      { zh:'10,000元', ko:'만 원', ro:'man won' },
+      { zh:'多少錢？', ko:'얼마예요?', ro:'eolmayeyo?' },
+      { zh:'太貴了', ko:'너무 비싸요', ro:'neomu bissayo' },
+      { zh:'可以算便宜一點嗎？', ko:'좀 깎아 주세요', ro:'jom kkakka juseyo' },
+      { zh:'可以刷卡嗎？', ko:'카드 되나요?', ro:'kadeu doenayo?' }
+    ],
+    restaurant:[
+      { zh:'歡迎光臨（店員用語）', ko:'어서 오세요', ro:'eoseo oseyo' },
+      { zh:'請給我菜單', ko:'메뉴판 주세요', ro:'menyupan juseyo' },
+      { zh:'這個請給我一份', ko:'이거 하나 주세요', ro:'igeo hana juseyo' },
+      { zh:'請給我兩份', ko:'두 개 주세요', ro:'du gae juseyo' },
+      { zh:'不要辣', ko:'안 맵게 해주세요', ro:'an maepge haejuseyo' },
+      { zh:'好吃', ko:'맛있어요', ro:'masisseoyo' },
+      { zh:'請給我水', ko:'물 주세요', ro:'mul juseyo' },
+      { zh:'請結帳', ko:'계산해 주세요', ro:'gyesanhae juseyo' },
+      { zh:'內用還是外帶？', ko:'여기서 드세요, 포장이세요?', ro:'yeogiseo deuseyo, pojangiseyo?' },
+      { zh:'外帶', ko:'포장이요', ro:'pojangiyo' },
+      { zh:'我不吃……', ko:'저는 ○○을 안 먹어요', ro:'jeoneun ○○eul an meogeoyo' },
+      { zh:'再給我一份餐具', ko:'수저 하나 더 주세요', ro:'sujeo hana deo juseyo' }
+    ],
+    transport:[
+      { zh:'請問地鐵站在哪裡？', ko:'지하철역이 어디예요?', ro:'jihacheollyeogi eodiyeyo?' },
+      { zh:'到明洞怎麼走？', ko:'명동에 어떻게 가요?', ro:'myeongdonge eotteoke gayo?' },
+      { zh:'請到這裡（給司機看）', ko:'여기로 가주세요', ro:'yeogiro gajuseyo' },
+      { zh:'計程車招呼站在哪？', ko:'택시 정류장이 어디예요?', ro:'taeksi jeongnyujangi eodiyeyo?' },
+      { zh:'請問這班車有到……嗎？', ko:'이 버스가 ○○에 가요?', ro:'i beoseuga ○○e gayo?' },
+      { zh:'我要下車', ko:'내릴게요', ro:'naerilgeyo' },
+      { zh:'請問到機場要多久？', ko:'공항까지 얼마나 걸려요?', ro:'gonghangkkaji eolmana geollyeoyo?' },
+      { zh:'交通卡在哪裡買？', ko:'교통카드 어디서 사요?', ro:'gyotongkadeu eodiseo sayo?' },
+      { zh:'請幫我加值', ko:'충전해 주세요', ro:'chungjeonhae juseyo' },
+      { zh:'單程票', ko:'편도표', ro:'pyeondopyo' },
+      { zh:'請問月台在哪？', ko:'플랫폼이 어디예요?', ro:'peullaespomi eodiyeyo?' }
+    ],
+    shopping:[
+      { zh:'請問這個多少錢？', ko:'이거 얼마예요?', ro:'igeo eolmayeyo?' },
+      { zh:'我只是看看', ko:'그냥 구경하는 거예요', ro:'geunyang gugyeonghaneun geoyeyo' },
+      { zh:'我要買這個', ko:'이거 주세요', ro:'igeo juseyo' },
+      { zh:'可以試穿嗎？', ko:'입어 봐도 돼요?', ro:'ibeo bwado dwaeyo?' },
+      { zh:'有其他顏色嗎？', ko:'다른 색깔 있어요?', ro:'dareun saekkkal isseoyo?' },
+      { zh:'有小一點／大一點的尺寸嗎？', ko:'작은／큰 사이즈 있어요?', ro:'jageun/keun saijeu isseoyo?' },
+      { zh:'算便宜一點好不好？', ko:'싸게 해 주세요', ro:'ssage hae juseyo' },
+      { zh:'可以退貨嗎？', ko:'환불 돼요?', ro:'hwanbul dwaeyo?' },
+      { zh:'請幫我包裝', ko:'포장해 주세요', ro:'pojanghae juseyo' },
+      { zh:'有免稅嗎？', ko:'면세 되나요?', ro:'myeonse doenayo?' },
+      { zh:'收據可以給我嗎？', ko:'영수증 주세요', ro:'yeongsujeung juseyo' }
+    ],
+    hotel:[
+      { zh:'我要辦理入住', ko:'체크인 하려고요', ro:'chekeuin haryeogoyo' },
+      { zh:'我有預訂', ko:'예약했어요', ro:'yeyakhaesseoyo' },
+      { zh:'我要退房', ko:'체크아웃 할게요', ro:'chekeuaut halgeyo' },
+      { zh:'可以寄放行李嗎？', ko:'짐 맡길 수 있어요?', ro:'jim matgil su isseoyo?' },
+      { zh:'房間可以看一下嗎？', ko:'방을 볼 수 있어요?', ro:'bangeul bol su isseoyo?' },
+      { zh:'有沒有可以升級的房型？', ko:'업그레이드 되나요?', ro:'eopgeureideu doenayo?' },
+      { zh:'Wi-Fi密碼是什麼？', ko:'와이파이 비밀번호가 뭐예요?', ro:'waipai bimilbeonhoga mwoyeyo?' },
+      { zh:'請幫我打掃房間', ko:'청소해 주세요', ro:'cheongsohae juseyo' },
+      { zh:'熱水出不來', ko:'뜨거운 물이 안 나와요', ro:'tteugeoun muri an nawayo' },
+      { zh:'早餐幾點開始？', ko:'조식은 몇 시부터예요?', ro:'josigeun myeot sibuteoyeyo?' }
+    ],
+    sightseeing:[
+      { zh:'請問廁所在哪裡？', ko:'화장실이 어디예요?', ro:'hwajangsiri eodiyeyo?' },
+      { zh:'這裡是哪裡？', ko:'여기가 어디예요?', ro:'yeogiga eodiyeyo?' },
+      { zh:'請問怎麼去景福宮？', ko:'경복궁에 어떻게 가요?', ro:'gyeongbokgunge eotteoke gayo?' },
+      { zh:'可以拍照嗎？', ko:'사진 찍어도 돼요?', ro:'sajin jjigeodo dwaeyo?' },
+      { zh:'可以幫我拍張照嗎？', ko:'사진 좀 찍어 주세요', ro:'sajin jom jjigeo juseyo' },
+      { zh:'入場費多少？', ko:'입장료가 얼마예요?', ro:'ipjangnyoga eolmayeyo?' },
+      { zh:'幾點休息／打烊？', ko:'몇 시에 문 닫아요?', ro:'myeot sie mun dadayo?' },
+      { zh:'我迷路了', ko:'길을 잃었어요', ro:'gireul ireosseoyo' },
+      { zh:'請問附近有便利商店嗎？', ko:'근처에 편의점 있어요?', ro:'geuncheoe pyeonuijeom isseoyo?' },
+      { zh:'謝謝，幫了大忙', ko:'덕분에 도움이 많이 됐어요', ro:'deokbune doumi mani dwaesseoyo' }
+    ],
+    emergency:[
+      { zh:'救命！', ko:'도와주세요!', ro:'dowajuseyo!' },
+      { zh:'請叫救護車', ko:'구급차 불러 주세요', ro:'gugeupcha bulleo juseyo' },
+      { zh:'請叫警察', ko:'경찰을 불러 주세요', ro:'gyeongchareul bulleo juseyo' },
+      { zh:'我生病了', ko:'저 아파요', ro:'jeo apayo' },
+      { zh:'附近有醫院嗎？', ko:'근처에 병원이 있어요?', ro:'geuncheoe byeongwoni isseoyo?' },
+      { zh:'我的護照丟了', ko:'여권을 잃어버렸어요', ro:'yeogwoneul ireobeoryeosseoyo' },
+      { zh:'我的東西被偷了', ko:'물건을 도둑맞았어요', ro:'mulgeoneul dodungmajasseoyo' },
+      { zh:'我聽不懂韓文', ko:'한국어를 몰라요', ro:'hangugeoreul mollayo' },
+      { zh:'可以說英文嗎？', ko:'영어 할 수 있어요?', ro:'yeongeo hal su isseoyo?' },
+      { zh:'請幫幫我', ko:'좀 도와주세요', ro:'jom dowajuseyo' }
+    ]
+  };
+
+  var HANGUL = {
+    consonants:[
+      { tag:'ㄱ', zh:'示範音節', ko:'가', ro:'ga' },
+      { tag:'ㄴ', zh:'示範音節', ko:'나', ro:'na' },
+      { tag:'ㄷ', zh:'示範音節', ko:'다', ro:'da' },
+      { tag:'ㄹ', zh:'示範音節', ko:'라', ro:'ra' },
+      { tag:'ㅁ', zh:'示範音節', ko:'마', ro:'ma' },
+      { tag:'ㅂ', zh:'示範音節', ko:'바', ro:'ba' },
+      { tag:'ㅅ', zh:'示範音節', ko:'사', ro:'sa' },
+      { tag:'ㅇ', zh:'示範音節（無聲母）', ko:'아', ro:'a' },
+      { tag:'ㅈ', zh:'示範音節', ko:'자', ro:'ja' },
+      { tag:'ㅊ', zh:'示範音節', ko:'차', ro:'cha' },
+      { tag:'ㅋ', zh:'示範音節', ko:'카', ro:'ka' },
+      { tag:'ㅌ', zh:'示範音節', ko:'타', ro:'ta' },
+      { tag:'ㅍ', zh:'示範音節', ko:'파', ro:'pa' },
+      { tag:'ㅎ', zh:'示範音節', ko:'하', ro:'ha' }
+    ],
+    vowels:[
+      { tag:'ㅏ', zh:'示範音節', ko:'아', ro:'a' },
+      { tag:'ㅑ', zh:'示範音節', ko:'야', ro:'ya' },
+      { tag:'ㅓ', zh:'示範音節', ko:'어', ro:'eo' },
+      { tag:'ㅕ', zh:'示範音節', ko:'여', ro:'yeo' },
+      { tag:'ㅗ', zh:'示範音節', ko:'오', ro:'o' },
+      { tag:'ㅛ', zh:'示範音節', ko:'요', ro:'yo' },
+      { tag:'ㅜ', zh:'示範音節', ko:'우', ro:'u' },
+      { tag:'ㅠ', zh:'示範音節', ko:'유', ro:'yu' },
+      { tag:'ㅡ', zh:'示範音節', ko:'으', ro:'eu' },
+      { tag:'ㅣ', zh:'示範音節', ko:'이', ro:'i' }
+    ],
+    syllableExamples:[
+      { tag:'ㄱ + ㅏ',      zh:'初聲＋中聲',       ko:'가', ro:'ga' },
+      { tag:'ㄴ + ㅏ',      zh:'初聲＋中聲',       ko:'나', ro:'na' },
+      { tag:'ㅅ + ㅏ',      zh:'初聲＋中聲',       ko:'사', ro:'sa' },
+      { tag:'ㅅ + ㅏ + ㅇ', zh:'初聲＋中聲＋終聲', ko:'상', ro:'sang' },
+      { tag:'ㅎ + ㅏ + ㄴ', zh:'初聲＋中聲＋終聲', ko:'한', ro:'han' },
+      { tag:'ㄱ + ㅜ + ㄱ', zh:'初聲＋中聲＋終聲', ko:'국', ro:'guk' },
+      { tag:'ㅁ + ㅏ + ㄴ', zh:'初聲＋中聲＋終聲', ko:'만', ro:'man' }
+    ]
+  };
+
+  /* ---------- TTS ---------- */
+
+  var ttsSupported = 'speechSynthesis' in window;
+  var koreanVoice = null;
+  var toastTimer = null;
+
+  function pickKoreanVoice(){
+    var voices = speechSynthesis.getVoices();
+    koreanVoice = null;
+    for (var i = 0; i < voices.length; i++){
+      if (voices[i].lang === 'ko-KR'){ koreanVoice = voices[i]; break; }
+    }
+    if (!koreanVoice){
+      for (var j = 0; j < voices.length; j++){
+        if (voices[j].lang && voices[j].lang.toLowerCase().indexOf('ko') === 0){
+          koreanVoice = voices[j];
+          break;
+        }
+      }
+    }
+  }
+
+  function showToast(msg){
+    var toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      toast.classList.remove('is-visible');
+    }, 2600);
+  }
+
+  function showBanner(msg){
+    var banner = document.getElementById('tts-banner');
+    banner.hidden = false;
+    banner.querySelector('.banner-inner').textContent = msg;
+  }
+
+  var speakingCard = null;
+
+  function speak(koreanText, cardEl){
+    if (!ttsSupported){
+      showToast('此瀏覽器不支援語音播放，請依羅馬拼音自行發音。');
+      return;
+    }
+    speechSynthesis.cancel();
+    if (speakingCard) speakingCard.classList.remove('is-speaking');
+    speakingCard = cardEl || null;
+
+    var utter = new SpeechSynthesisUtterance(koreanText);
+    utter.lang = 'ko-KR';
+    if (koreanVoice) utter.voice = koreanVoice;
+    utter.rate = 0.9;
+    if (cardEl) cardEl.classList.add('is-speaking');
+    utter.onend = function(){ if (cardEl) cardEl.classList.remove('is-speaking'); };
+    utter.onerror = function(){
+      if (cardEl) cardEl.classList.remove('is-speaking');
+      showToast('播放失敗，請確認裝置的韓文語音是否已安裝。');
+    };
+    speechSynthesis.speak(utter);
+    if (!koreanVoice){
+      showToast('未偵測到韓文語音，嘗試以系統預設語音播放。');
+    }
+  }
+
+  if (ttsSupported){
+    pickKoreanVoice();
+    if (typeof speechSynthesis.onvoiceschanged !== 'undefined'){
+      speechSynthesis.onvoiceschanged = pickKoreanVoice;
+    }
+  } else {
+    showBanner('此瀏覽器不支援語音播放功能，仍可依羅馬拼音自行發音。建議改用 Chrome、Safari 或 Edge 開啟本頁。');
+  }
+
+  /* ---------- Rendering ---------- */
+
+  function renderCard(entry){
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'phrase-card';
+    card.setAttribute('aria-label', '播放韓文發音：' + entry.ko + '，' + entry.ro + '，' + entry.zh);
+
+    if (entry.tag){
+      var tag = document.createElement('span');
+      tag.className = 'phrase-tag';
+      tag.textContent = entry.tag;
+      card.appendChild(tag);
+    }
+
+    var zh = document.createElement('span');
+    zh.className = 'phrase-zh';
+    zh.textContent = entry.zh;
+    card.appendChild(zh);
+
+    var ko = document.createElement('span');
+    ko.className = 'phrase-ko';
+    ko.lang = 'ko';
+    ko.appendChild(document.createTextNode(entry.ko));
+    var icon = document.createElement('span');
+    icon.className = 'speaker-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '🔊';
+    ko.appendChild(icon);
+    card.appendChild(ko);
+
+    var ro = document.createElement('span');
+    ro.className = 'phrase-ro';
+    ro.textContent = entry.ro;
+    card.appendChild(ro);
+
+    card.addEventListener('click', function(){ speak(entry.ko, card); });
+    return card;
+  }
+
+  function renderGrid(container, entries, extraClass){
+    var grid = document.createElement('div');
+    grid.className = 'phrase-grid' + (extraClass ? ' ' + extraClass : '');
+    entries.forEach(function(entry){
+      grid.appendChild(renderCard(entry));
+    });
+    container.appendChild(grid);
+  }
+
+  function buildPanels(){
+    var panelsRoot = document.getElementById('tab-panels');
+
+    TABS.forEach(function(tab){
+      var panel = document.createElement('section');
+      panel.className = 'tab-panel';
+      panel.id = 'panel-' + tab.id;
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', 'tab-' + tab.id);
+      panel.dataset.tab = tab.id;
+
+      if (tab.id === 'hangul'){
+        var intro = document.createElement('p');
+        intro.className = 'panel-intro';
+        intro.textContent = '韓文字是把「子音＋母音（＋收尾子音）」拼成一個方塊字。例如 ㄱ＋ㅏ＝가（ga），ㅎ＋ㅏ＋ㄴ＝한（han）。點下面的卡片可以聽發音。';
+        panel.appendChild(intro);
+
+        var h1 = document.createElement('h2');
+        h1.className = 'subsection-title';
+        h1.textContent = '基本子音（14個）';
+        panel.appendChild(h1);
+        renderGrid(panel, HANGUL.consonants, 'hangul-grid');
+
+        var h2 = document.createElement('h2');
+        h2.className = 'subsection-title';
+        h2.textContent = '基本母音（10個）';
+        panel.appendChild(h2);
+        renderGrid(panel, HANGUL.vowels, 'hangul-grid');
+
+        var h3 = document.createElement('h2');
+        h3.className = 'subsection-title';
+        h3.textContent = '拆字拼音範例';
+        panel.appendChild(h3);
+        renderGrid(panel, HANGUL.syllableExamples, 'hangul-grid');
+      } else {
+        renderGrid(panel, PHRASES[tab.id]);
+      }
+
+      panelsRoot.appendChild(panel);
+    });
+  }
+
+  /* ---------- Tabs ---------- */
+
+  var STORAGE_TAB_KEY = 'kt-last-tab';
+  var STORAGE_THEME_KEY = 'kt-theme';
+
+  function buildTabBar(){
+    var bar = document.getElementById('tab-bar');
+    TABS.forEach(function(tab){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tab-btn';
+      btn.id = 'tab-' + tab.id;
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('aria-controls', 'panel-' + tab.id);
+      btn.tabIndex = -1;
+      btn.dataset.tab = tab.id;
+      btn.textContent = tab.label;
+      bar.appendChild(btn);
+    });
+  }
+
+  function initTabs(){
+    var btns = Array.prototype.slice.call(document.querySelectorAll('.tab-btn'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
+
+    function activate(id){
+      btns.forEach(function(b){
+        var on = b.dataset.tab === id;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      panels.forEach(function(p){
+        p.classList.toggle('is-active', p.dataset.tab === id);
+      });
+      try { localStorage.setItem(STORAGE_TAB_KEY, id); } catch (e) {}
+    }
+
+    btns.forEach(function(b, i){
+      b.addEventListener('click', function(){
+        activate(b.dataset.tab);
+        b.focus();
+      });
+      b.addEventListener('keydown', function(e){
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        e.preventDefault();
+        var dir = e.key === 'ArrowRight' ? 1 : -1;
+        var next = btns[(i + dir + btns.length) % btns.length];
+        next.focus();
+        activate(next.dataset.tab);
+      });
+    });
+
+    var saved = null;
+    try { saved = localStorage.getItem(STORAGE_TAB_KEY); } catch (e) {}
+    var savedValid = saved && btns.some(function(b){ return b.dataset.tab === saved; });
+    activate(savedValid ? saved : btns[0].dataset.tab);
+  }
+
+  /* ---------- Theme ---------- */
+
+  function initTheme(){
+    var toggle = document.getElementById('theme-toggle');
+    var stored = null;
+    try { stored = localStorage.getItem(STORAGE_THEME_KEY); } catch (e) {}
+    if (stored === 'light' || stored === 'dark'){
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+
+    toggle.addEventListener('click', function(){
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var current = document.documentElement.getAttribute('data-theme') || (prefersDark ? 'dark' : 'light');
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem(STORAGE_THEME_KEY, next); } catch (e) {}
+    });
+  }
+
+  /* ---------- Init ---------- */
+
+  document.addEventListener('DOMContentLoaded', function(){
+    buildTabBar();
+    buildPanels();
+    initTabs();
+    initTheme();
+  });
+})();
+</script>
+</body>
+</html>
