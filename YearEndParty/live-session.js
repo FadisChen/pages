@@ -17,6 +17,9 @@ class GeminiLiveClient {
     this.resumptionHandle = "";
     this.inputActive = false;
     this.responsePending = false;
+    this.interactionStatus = "";
+    this.turnHadTool = false;
+    this.emotionUsed = false;
     this.playbackPending = false;
     this.goAway = false;
     this.suppressAudio = false;
@@ -38,6 +41,9 @@ class GeminiLiveClient {
     this.connect(false);
   }
   disconnect(notify = true) {
+    this.interactionStatus = "";
+    this.turnHadTool = false;
+    this.emotionUsed = false;
     this.stopped = true;
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -136,6 +142,11 @@ class GeminiLiveClient {
     const update = message.sessionResumptionUpdate;
     if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
     const content = message.serverContent;
+    const interactionStatus = content?.interactionStatus || message.interactionStatus;
+    if (interactionStatus) {
+      this.interactionStatus = interactionStatus;
+      this.responsePending = interactionStatus !== "IDLE";
+    }
     if (message.error) {
       this.fail(new Error(message.error.message || "Gemini Live 回傳錯誤。"));
       return;
@@ -145,6 +156,8 @@ class GeminiLiveClient {
         this.suppressAudio = false;
         this.playbackPending = false;
         this.gestureUsed = false;
+        this.emotionUsed = false;
+        this.turnHadTool = false;
         this.bus.emit("gemini.interrupted", {});
       }
       const audioParts = content.modelTurn?.parts?.filter((part) => part.inlineData?.data && part.inlineData.mimeType?.startsWith("audio/pcm")) || [];
@@ -161,16 +174,28 @@ class GeminiLiveClient {
       if (inputText) this.bus.emit("gemini.user-transcript", inputText);
       if (outputText && playAudio) this.bus.emit("gemini.model-transcript", outputText);
       if (audioParts.length && playAudio) this.bus.emit("gemini.audio-turn", {});
-      if (content.turnComplete) { this.suppressAudio = false; this.responsePending = false; this.bus.emit("gemini.turn-complete", {}); }
+      if (content.turnComplete) {
+        this.suppressAudio = false;
+        // A tool-only turn can precede the speech generated from its result.
+        this.responsePending = this.interactionStatus === "IN_PROGRESS" || (this.turnHadTool && !this.turnHadAudio && interactionStatus !== "IDLE");
+        this.bus.emit("gemini.turn-complete", {});
+      }
     }
     if (message.toolCallCancellation?.ids) this.bus.emit("avatar.gesture-cancel", { ids: message.toolCallCancellation.ids });
     if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls, Boolean(content?.interrupted));
     // Gemini 3.8 常先用一個沒有語音的回合呼叫 tool，等 toolResponse 後才在下一個回合開口；
     // 這種回合結束時不能清掉待播動作，否則動作會在語音開始前就被丟棄（仍有 8 秒逾時保護）。
     if (content?.turnComplete) {
-      this.gestureUsed = false;
+      if (!this.responsePending) { this.gestureUsed = false; this.emotionUsed = false; }
       if (this.turnHadAudio) this.bus.emit("avatar.gesture-turn-complete", {});
       this.turnHadAudio = false;
+      this.turnHadTool = false;
+    }
+    if (interactionStatus === "IDLE" && !content?.turnComplete && !message.toolCall) {
+      this.gestureUsed = false;
+      this.emotionUsed = false;
+      this.turnHadTool = false;
+      this.bus.emit("gemini.turn-complete", {});
     }
     if (message.goAway) this.goAway = true;
     this.reconnectWhenIdle();
@@ -197,9 +222,7 @@ class GeminiLiveClient {
     }
   }
   handleToolCalls(socket, calls, interrupted = false) {
-    let applied = false;
-    // 同一則 toolCall 的結果必須合併成一則 toolResponse：WHEN_IDLE 下每則回覆都會讓 Gemini 再講一段，
-    // 分開送會造成重複發言（例如先「歡迎 James 上台」、再「感謝 James 上台」）。
+    // 同一則 toolCall 的結果合併回傳，減少模型接收結果後重複接話的機會。
     const responses = [];
     for (const call of calls) {
       let result;
@@ -210,9 +233,12 @@ class GeminiLiveClient {
         if (interrupted) result = { ok: false, error: "The response was interrupted; the gesture was cancelled." };
         else if (result.ok && this.gestureUsed) result = { ok: false, error: "At most one Avatar gesture is allowed per response." };
         if (result.ok) {
-          this.gestureUsed = true;
-          this.bus.emit("avatar.gesture", { gesture: result.gesture, id: call.id });
-          result.result = "queued";
+          const request = { gesture: result.gesture, id: call.id, accepted: false };
+          this.bus.emit("avatar.gesture", request);
+          if (request.accepted) {
+            this.gestureUsed = true;
+            result.result = "queued";
+          } else result = { ok: false, error: "Avatar is not ready or another gesture is still queued or playing." };
         }
         responses.push([call, result]);
         continue;
@@ -226,9 +252,10 @@ class GeminiLiveClient {
         }
         result = normalizeAvatarEmotion(args);
       }
-      if (result.ok && applied) result = { ok: false, error: "每個回覆最多套用一個 Avatar emotion。" };
+      if (result.ok && interrupted) result = { ok: false, error: "The response was interrupted; the emotion was cancelled." };
+      if (result.ok && this.emotionUsed) result = { ok: false, error: "每個回覆最多套用一個 Avatar emotion。" };
       if (result.ok) {
-        applied = true;
+        this.emotionUsed = true;
         this.bus.emit("gemini.avatar-emotion", { emotion: result.emotion });
       }
       responses.push([call, result]);
@@ -236,12 +263,22 @@ class GeminiLiveClient {
     this.sendToolResponses(socket, responses);
   }
   sendToolResponses(socket, responses) {
-    if (socket?.readyState !== 1 || !responses.length) return;
+    if (!responses.length) return;
+    if (socket !== this.socket || !this.ready || socket?.readyState !== 1) {
+      this.bus.emit("gemini.error", new Error("工具結果未送出：連線未就緒或已關閉。"));
+      return;
+    }
     const functionResponses = responses.map(([call, result]) => createAvatarToolResponse(call, result).toolResponse.functionResponses[0]);
     socket.send(JSON.stringify({ toolResponse: { functionResponses } }));
+    this.responsePending = true;
+    this.turnHadTool = true;
+    this.bus.emit("gemini.response-pending", {});
   }
   handleClose(socket, event) {
     if (socket !== this.socket || this.stopped) return;
+    this.interactionStatus = "";
+    this.turnHadTool = false;
+    this.emotionUsed = false;
     this.ready = false;
     this.socket = null;
     this.inputActive = false;

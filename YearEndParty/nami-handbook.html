@@ -619,7 +619,7 @@ sequenceDiagram
     WS-->>App: gemini.audio / gemini.model-transcript
     G-->>WS: toolCall（functionCalls）
     WS-->>App: avatar.gesture / gemini.avatar-emotion
-    WS->>G: toolResponse（每個 call 各回一個結果）
+    WS->>G: toolResponse（合併每個 call 的結果）
     G-->>WS: turnComplete
     WS-->>App: gemini.turn-complete
         </pre>
@@ -638,7 +638,7 @@ sequenceDiagram
 
     <section id="s4">
       <div class="sec-head"><span class="sec-num">04</span><h2>Function Calling：把說話變成表情與動作</h2></div>
-      <p class="lede">Gemini 3.8 Live 支援<b>非同步（NON_BLOCKING）</b> function calling。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作；工具結果以 <code class="inline">WHEN_IDLE</code> 排程回報，避免阻塞目前的語音回合。</p>
+      <p class="lede">Gemini 3.8 Live 支援<b>非同步（NON_BLOCKING）</b> function calling。這裡定義了兩個工具，讓模型在生成語音的同時，「順手」決定 Nami 該做什麼表情、動什麼動作；同一包工具呼叫的結果合併回傳，不送出 <code class="inline">scheduling</code> 欄位；非阻塞行為由工具宣告設定。</p>
 
       <h3><span class="n">4.1</span>兩個工具的定義</h3>
       <div class="grid-2">

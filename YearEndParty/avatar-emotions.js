@@ -35,8 +35,8 @@ function normalizeAvatarEmotion(args) {
 
 function createAvatarToolResponse(call, result) {
   const response = result?.ok
-    ? { result: result.result || "applied", scheduling: "WHEN_IDLE" }
-    : { error: result?.error || "set_avatar_emotion 參數無效。", scheduling: "WHEN_IDLE" };
+    ? { result: result.result || "applied" }
+    : { error: result?.error || "set_avatar_emotion 參數無效。" };
   const functionResponse = {
     id: call?.id || "",
     name: call?.name || AVATAR_EMOTION_TOOL.name,
