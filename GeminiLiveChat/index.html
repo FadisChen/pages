@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gemini Live 即時語音對談測試</title>
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --border:#e0e2e7;
+    --text:#1c1e21;
+    --muted:#6b7280;
+    --primary:#3b6ef6;
+    --primary-dark:#2c56d1;
+    --danger:#e0483f;
+    --ok:#1f9d55;
+    --warn:#b7791f;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",Segoe UI,Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:16px;
+    padding-bottom:48px;
+  }
+  h1{font-size:1.25rem;margin:0 0 4px;}
+  .subtitle{color:var(--muted);font-size:.85rem;margin-bottom:16px;line-height:1.5;}
+  .container{max-width:720px;margin:0 auto;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .card h2{font-size:1rem;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+  .card p.hint{font-size:.78rem;color:var(--muted);line-height:1.6;margin:4px 0 12px;}
+  label{display:block;font-size:.85rem;font-weight:600;margin-bottom:6px;color:var(--text);}
+  input[type=text],input[type=password],input[type=number],textarea,select{
+    width:100%;
+    font-size:16px;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:#fbfbfc;
+    color:var(--text);
+    font-family:inherit;
+  }
+  textarea{resize:vertical;min-height:72px;line-height:1.4;}
+  .field{margin-bottom:14px;}
+  .field:last-child{margin-bottom:0;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row .field{flex:1;min-width:140px;}
+  .key-row{position:relative;}
+  .key-row input{padding-right:52px;}
+  .key-toggle{
+    position:absolute;right:6px;top:6px;bottom:6px;
+    border:none;background:transparent;color:var(--muted);
+    font-size:.8rem;padding:0 10px;cursor:pointer;border-radius:6px;
+  }
+  .key-toggle:hover{background:#eef0f3;}
+  details.settings-adv summary{
+    cursor:pointer;font-size:.9rem;font-weight:600;color:var(--primary);
+    list-style:none;padding:4px 0;
+  }
+  details.settings-adv summary::-webkit-details-marker{display:none;}
+  details.settings-adv summary::before{content:"▸ ";}
+  details.settings-adv[open] summary::before{content:"▾ ";}
+  details.settings-adv{margin-top:6px;}
+  .toggle-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}
+  .toggle-row input[type=checkbox]{width:18px;height:18px;margin-top:2px;flex:none;}
+  .toggle-row .toggle-text{flex:1;}
+  .toggle-row .toggle-text .t-title{font-weight:600;font-size:.9rem;}
+  .toggle-row .toggle-text .t-desc{font-size:.78rem;color:var(--muted);line-height:1.5;margin-top:2px;}
+  .btn{
+    appearance:none;border:none;border-radius:8px;
+    padding:12px 16px;font-size:.95rem;font-weight:600;cursor:pointer;
+    transition:transform .05s ease, opacity .15s ease, background .15s ease;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover:not(:disabled){background:var(--primary-dark);}
+  .btn-danger{background:var(--danger);color:#fff;}
+  .btn-secondary{background:#eef0f3;color:var(--text);}
+  .btn-secondary:hover:not(:disabled){background:#e2e5ea;}
+  .btn-block{width:100%;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .btn-row .btn{flex:1;min-width:120px;}
+  .status-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:.78rem;font-weight:600;padding:5px 10px;border-radius:999px;
+    background:#eef0f3;color:var(--muted);
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  .badge.ok{background:#e7f7ee;color:var(--ok);}
+  .badge.ok .dot{background:var(--ok);}
+  .badge.warn{background:#fdf4e3;color:var(--warn);}
+  .badge.warn .dot{background:var(--warn);}
+  .badge.danger{background:#fdeceb;color:var(--danger);}
+  .badge.danger .dot{background:var(--danger);}
+  .badge.busy .dot{animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .level-meter{
+    margin-top:12px;height:8px;border-radius:4px;background:#eef0f3;overflow:hidden;
+  }
+  .level-meter-fill{height:100%;width:0%;background:linear-gradient(90deg,#3b6ef6,#1f9d55);transition:width .05s linear;}
+  .hidden{display:none !important;}
+  .error-box{
+    background:#fdeceb;border:1px solid #f6c8c4;color:var(--danger);
+    padding:10px 12px;border-radius:8px;font-size:.85rem;margin-top:10px;white-space:pre-wrap;word-break:break-word;
+  }
+  .log-box{
+    border:1px solid var(--border);border-radius:10px;background:#fafafa;
+    height:340px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .log-entry{
+    font-size:.85rem;line-height:1.5;padding:7px 10px;border-radius:8px;
+    background:#fff;border:1px solid var(--border);border-left-width:4px;word-break:break-word;
+    white-space:pre-wrap;
+  }
+  .log-entry .log-meta{display:block;font-size:.68rem;color:var(--muted);margin-bottom:2px;}
+  .log-entry.user{border-left-color:var(--primary);}
+  .log-entry.model{border-left-color:var(--ok);}
+  .log-entry.tool-call{border-left-color:var(--warn);background:#fffaf0;}
+  .log-entry.tool-pending{border-left-color:var(--warn);background:#fffaf0;}
+  .log-entry.tool-done{border-left-color:#0d9488;background:#f0fdfa;}
+  .log-entry.tool-error{border-left-color:var(--danger);background:#fdeceb;}
+  .log-entry.tool-cancel{border-left-color:var(--muted);color:var(--muted);text-decoration:line-through;}
+  .log-entry.interrupt{border-left-color:var(--danger);background:#fdeceb;font-weight:600;}
+  .log-entry.system{border-left-color:var(--muted);color:var(--muted);font-style:italic;}
+  .text-send-row{display:flex;gap:8px;margin-top:12px;}
+  .text-send-row input{flex:1;}
+  .text-send-row button{flex:none;}
+  ol.script-list{margin:0;padding-left:20px;font-size:.85rem;line-height:1.7;}
+  ol.script-list li{margin-bottom:8px;}
+  ol.script-list b{color:var(--text);}
+  footer{text-align:center;color:var(--muted);font-size:.75rem;margin-top:24px;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎙️ Gemini Live 即時語音對談測試</h1>
+  <p class="subtitle">
+    使用 Gemini Live API（WebSocket）打造的純前端即時語音對談頁面，BYOK（自備 API Key）。
+    專門用來測試兩件事：① 呼叫工具（tool）時 Gemini 能否邊「思考／說話」邊等候幾秒才回來的工具結果；
+    ② 開啟「主動語音判斷」後，Gemini 能否依收到的聲音內容自行判斷需不需要回應。
+  </p>
+
+  <div class="card">
+    <h2>⚙️ API 設定</h2>
+    <div class="field key-row">
+      <label for="apiKey">Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="貼上你的 Gemini API Key（僅存在你的瀏覽器）">
+      <button type="button" class="key-toggle" id="toggleKey">顯示</button>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="modelName">Model 名稱</label>
+        <input type="text" id="modelName" list="modelList" placeholder="gemini-3.8-live-extended-thinking">
+        <datalist id="modelList">
+          <option value="gemini-3.8-live-extended-thinking">
+          <option value="gemini-3.8-live">
+          <option value="gemini-3.5-transcribe-live">
+          <option value="gemini-3.5-live-translate-preview">
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="responseModality">回應模式</label>
+        <select id="responseModality">
+          <option value="AUDIO">語音（AUDIO）</option>
+          <option value="TEXT">純文字（TEXT，方便除錯）</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="voiceName">語音音色（AUDIO 模式適用）</label>
+        <input type="text" id="voiceName" list="voiceList" placeholder="Zephyr">
+        <datalist id="voiceList">
+          <option value="Zephyr"><option value="Puck"><option value="Charon">
+          <option value="Kore"><option value="Fenrir"><option value="Aoede">
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="thinkingLevel">思考等級（僅 extended-thinking 模型會送出）</label>
+        <select id="thinkingLevel">
+          <option value="minimal">minimal</option>
+          <option value="low" selected>low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+    </div>
+
+    <details class="settings-adv">
+      <summary>進階設定（VAD 靈敏度／逐字稿／工具排程）</summary>
+      <div style="margin-top:12px;">
+        <div class="toggle-row">
+          <input type="checkbox" id="enableProactivity" checked>
+          <div class="toggle-text">
+            <div class="t-title">🧠 啟用「主動語音判斷」(proactivity.proactiveAudio)</div>
+            <div class="t-desc">開啟後 Gemini 會自行判斷收到的聲音是不是在跟它說話；不相關的聲音（例如你在跟旁人講話、背景雜音）它會保持沉默、不回應。這個功能目前只在 v1alpha 版本可用，本頁已固定使用 v1alpha 端點。</div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="enableInputTranscript" checked>
+          <div class="toggle-text">
+            <div class="t-title">📝 顯示使用者語音逐字稿 (inputAudioTranscription)</div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="enableOutputTranscript" checked>
+          <div class="toggle-text">
+            <div class="t-title">📝 顯示 Gemini 語音逐字稿 (outputAudioTranscription)</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="activityHandling">插話行為 activityHandling</label>
+            <select id="activityHandling">
+              <option value="START_OF_ACTIVITY_INTERRUPTS">使用者一開口就打斷 Gemini（預設）</option>
+              <option value="NO_INTERRUPTION">不因使用者說話而打斷 Gemini</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="schedulingSelect">slow_lookup 工具結果排程 scheduling</label>
+            <select id="schedulingSelect">
+              <option value="WHEN_IDLE" selected>WHEN_IDLE（等 Gemini 閒下來再講結果）</option>
+              <option value="INTERRUPT">INTERRUPT（結果一到就立刻打斷插話）</option>
+              <option value="SILENT">SILENT（結果放進上下文但不主動開口）</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="startSensitivity">開始說話靈敏度</label>
+            <select id="startSensitivity">
+              <option value="">（API 預設）</option>
+              <option value="START_SENSITIVITY_HIGH">HIGH（較容易判定開始說話）</option>
+              <option value="START_SENSITIVITY_LOW">LOW（較不容易誤判）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="endSensitivity">結束說話靈敏度</label>
+            <select id="endSensitivity">
+              <option value="">（API 預設）</option>
+              <option value="END_SENSITIVITY_HIGH">HIGH（較快判定講完）</option>
+              <option value="END_SENSITIVITY_LOW">LOW（多等一下再判定講完）</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="silenceDuration">靜音判定時間 silenceDurationMs</label>
+            <input type="number" id="silenceDuration" placeholder="（留空使用 API 預設）" min="0" step="50">
+          </div>
+          <div class="field">
+            <label for="prefixPadding">前置緩衝 prefixPaddingMs</label>
+            <input type="number" id="prefixPadding" placeholder="（留空使用 API 預設）" min="0" step="10">
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>🗒️ 系統提示 (systemInstruction)</h2>
+    <textarea id="systemInstruction"></textarea>
+    <p class="hint">可自行修改。內容會告訴 Gemini 目前有哪些工具可用、以及呼叫「需要等待的工具」時應該怎麼表現（先簡短回應再繼續，而不是整段沉默）。</p>
+  </div>
+
+  <div class="card">
+    <h2>🔧 本頁註冊的測試用工具</h2>
+    <p class="hint">這兩個工具都是純前端模擬（setTimeout），不會真的打任何 API，只是用來製造「工具呼叫」與「刻意延遲幾秒才回應」的情境。</p>
+    <ol class="script-list">
+      <li><b>get_current_time</b> — 立即回傳目前時間，幾乎沒有延遲，作為對照組。</li>
+      <li><b>slow_lookup(query)</b> — 刻意延遲 4～7 秒（隨機）才回傳模擬查詢結果，用來測試 Gemini 是否會邊等待邊自然對話，而不是整段安靜卡住。</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>▶️ 連線與對話</h2>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="connectBtn">連線並開始對話</button>
+      <button type="button" class="btn btn-danger hidden" id="disconnectBtn">結束連線</button>
+      <button type="button" class="btn btn-secondary" id="muteBtn" disabled>🎤 靜音麥克風</button>
+      <button type="button" class="btn btn-secondary" id="muteOutputBtn" disabled>🔊 靜音喇叭</button>
+    </div>
+    <div class="status-row">
+      <span class="badge" id="connBadge"><span class="dot"></span><span>未連線</span></span>
+      <span class="badge" id="micBadge"><span class="dot"></span><span>麥克風關閉</span></span>
+      <span class="badge" id="geminiBadge"><span class="dot"></span><span>閒置</span></span>
+    </div>
+    <div class="level-meter"><div class="level-meter-fill" id="levelFill"></div></div>
+    <div class="error-box hidden" id="errorBox"></div>
+  </div>
+
+  <div class="card">
+    <h2>💬 對話紀錄</h2>
+    <div class="log-box" id="logBox"></div>
+    <div class="text-send-row">
+      <input type="text" id="textInput" placeholder="也可以直接打字傳送，例如：幫我查一下台北101的資料" disabled>
+      <button type="button" class="btn btn-primary" id="sendTextBtn" disabled>送出</button>
+    </div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="btn btn-secondary btn-block" id="clearLogBtn">清除紀錄</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🧪 建議測試腳本</h2>
+    <ol class="script-list">
+      <li><b>測試①：工具等待時 Gemini 會不會邊想邊講。</b>
+        連線後說（或打字）：「幫我查一下台北101的資料」。這句話會觸發 <b>slow_lookup</b>，
+        它刻意要等 4～7 秒才有結果。留意 Gemini 是不是會先說「好，我查一下」之類的話，
+        並在等待這幾秒之間仍可以自然回應你的追問，而不是整段安靜卡住；結果出來後才用查到的內容接續對話。
+      </li>
+      <li><b>測試②：Gemini 能不能自己判斷要不要回應。</b>
+        在「進階設定」打開「啟用主動語音判斷」後重新連線，然後：
+        <br>(a) 直接對它說「嗨 Gemini，現在幾點？」——應該正常回應（會觸發 get_current_time）。
+        <br>(b) 講一句明顯不是對它說的話，例如轉頭說「欸等一下要吃什麼」，或只是清喉嚨、背景雜音——
+        Gemini 應該保持安靜、不主動開口。可以對照關掉這個選項後的行為差異。
+      </li>
+    </ol>
+    <p class="hint">建議戴耳機測試，避免喇叭聲音被麥克風錄到造成回音／誤觸發。</p>
+  </div>
+
+  <footer>
+    API Key 與語音僅存在、僅使用於你目前的瀏覽器，直接以 WebSocket 呼叫 Gemini Live API，不會經過任何中介伺服器。<br>
+    工具呼叫（get_current_time / slow_lookup）皆為前端模擬，不會送出任何額外的網路請求。
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var LS_PREFIX = "geminiLiveChat.";
+  var LS_KEYS = {
+    apiKey: LS_PREFIX + "apiKey",
+    model: LS_PREFIX + "model",
+    voice: LS_PREFIX + "voice",
+    modality: LS_PREFIX + "modality",
+    thinkingLevel: LS_PREFIX + "thinkingLevel",
+    systemInstruction: LS_PREFIX + "systemInstruction",
+    proactivity: LS_PREFIX + "proactivity",
+    inputTranscript: LS_PREFIX + "inputTranscript",
+    outputTranscript: LS_PREFIX + "outputTranscript",
+    activityHandling: LS_PREFIX + "activityHandling",
+    scheduling: LS_PREFIX + "scheduling",
+    startSensitivity: LS_PREFIX + "startSensitivity",
+    endSensitivity: LS_PREFIX + "endSensitivity",
+    silenceDuration: LS_PREFIX + "silenceDuration",
+    prefixPadding: LS_PREFIX + "prefixPadding"
+  };
+
+  var DEFAULTS = {
+    model: "gemini-3.8-live-extended-thinking",
+    voice: "Zephyr",
+    modality: "AUDIO",
+    thinkingLevel: "low",
+    systemInstruction:
+      "你是一個以繁體中文為主的語音助理，目前正在協助使用者測試 Gemini Live API 的兩個行為：" +
+      "(1) 呼叫工具（tool）時能不能邊等待邊自然對話；(2) 能不能依聲音內容自行判斷需不需要回應。\n" +
+      "你有兩個工具可用：get_current_time（立即回傳目前時間）與 slow_lookup（模擬查詢，需要幾秒鐘才有結果）。\n" +
+      "呼叫 slow_lookup 時，請先用一兩句話簡短告訴使用者你正在查詢（例如「好，我查一下」），" +
+      "可以繼續自然對話或回應使用者的其他問題，不要整段沉默乾等；查詢結果送回來之後，再用自然的口吻告訴使用者結果。\n" +
+      "如果主動語音判斷（proactive audio）功能開啟，且聽到的內容明顯不是在對你說話（例如背景雜音、使用者在跟別人講話、與你無關的自言自語），請保持沉默、不要回應。"
+  };
+
+  var MIC_SAMPLE_RATE = 16000;
+  var TOOL_DECLARATIONS = [
+    {
+      name: "get_current_time",
+      description: "取得使用者瀏覽器目前的日期與時間，幾乎立即回傳，不需要等待。",
+      parameters: { type: "OBJECT", properties: {} }
+    },
+    {
+      name: "slow_lookup",
+      description:
+        "查詢一個模擬的『幕後知識庫』。這個工具刻意設計成需要等待數秒才會回傳結果，" +
+        "用來測試你在等待期間是否能維持自然對話。呼叫時請先簡短告知使用者你正在查詢，" +
+        "結果送達後再用口語化的方式告知查詢結果。",
+      behavior: "NON_BLOCKING",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          query: { type: "STRING", description: "要查詢的關鍵字或問題" }
+        },
+        required: ["query"]
+      }
+    }
+  ];
+
+  var el = {};
+  [
+    "apiKey","toggleKey","modelName","responseModality","voiceName","thinkingLevel",
+    "enableProactivity","enableInputTranscript","enableOutputTranscript",
+    "activityHandling","schedulingSelect","startSensitivity","endSensitivity",
+    "silenceDuration","prefixPadding","systemInstruction",
+    "connectBtn","disconnectBtn","muteBtn","muteOutputBtn",
+    "connBadge","micBadge","geminiBadge","levelFill","errorBox",
+    "logBox","textInput","sendTextBtn","clearLogBtn"
+  ].forEach(function(id){ el[id] = document.getElementById(id); });
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){ /* storage unavailable, ignore */ }
+  }
+
+  function loadSettings(){
+    el.apiKey.value = localStorage.getItem(LS_KEYS.apiKey) || "";
+    el.modelName.value = localStorage.getItem(LS_KEYS.model) || DEFAULTS.model;
+    el.voiceName.value = localStorage.getItem(LS_KEYS.voice) || DEFAULTS.voice;
+    el.responseModality.value = localStorage.getItem(LS_KEYS.modality) || DEFAULTS.modality;
+    el.thinkingLevel.value = localStorage.getItem(LS_KEYS.thinkingLevel) || DEFAULTS.thinkingLevel;
+    el.systemInstruction.value = localStorage.getItem(LS_KEYS.systemInstruction) || DEFAULTS.systemInstruction;
+    var prox = localStorage.getItem(LS_KEYS.proactivity);
+    el.enableProactivity.checked = prox === null ? true : prox === "true";
+    var inT = localStorage.getItem(LS_KEYS.inputTranscript);
+    el.enableInputTranscript.checked = inT === null ? true : inT === "true";
+    var outT = localStorage.getItem(LS_KEYS.outputTranscript);
+    el.enableOutputTranscript.checked = outT === null ? true : outT === "true";
+    el.activityHandling.value = localStorage.getItem(LS_KEYS.activityHandling) || "START_OF_ACTIVITY_INTERRUPTS";
+    el.schedulingSelect.value = localStorage.getItem(LS_KEYS.scheduling) || "WHEN_IDLE";
+    el.startSensitivity.value = localStorage.getItem(LS_KEYS.startSensitivity) || "";
+    el.endSensitivity.value = localStorage.getItem(LS_KEYS.endSensitivity) || "";
+    el.silenceDuration.value = localStorage.getItem(LS_KEYS.silenceDuration) || "";
+    el.prefixPadding.value = localStorage.getItem(LS_KEYS.prefixPadding) || "";
+  }
+
+  el.apiKey.addEventListener("input", function(){ persist(LS_KEYS.apiKey, el.apiKey.value); });
+  el.modelName.addEventListener("input", function(){ persist(LS_KEYS.model, el.modelName.value); });
+  el.voiceName.addEventListener("input", function(){ persist(LS_KEYS.voice, el.voiceName.value); });
+  el.responseModality.addEventListener("change", function(){ persist(LS_KEYS.modality, el.responseModality.value); });
+  el.thinkingLevel.addEventListener("change", function(){ persist(LS_KEYS.thinkingLevel, el.thinkingLevel.value); });
+  el.systemInstruction.addEventListener("input", function(){ persist(LS_KEYS.systemInstruction, el.systemInstruction.value); });
+  el.enableProactivity.addEventListener("change", function(){ persist(LS_KEYS.proactivity, el.enableProactivity.checked); });
+  el.enableInputTranscript.addEventListener("change", function(){ persist(LS_KEYS.inputTranscript, el.enableInputTranscript.checked); });
+  el.enableOutputTranscript.addEventListener("change", function(){ persist(LS_KEYS.outputTranscript, el.enableOutputTranscript.checked); });
+  el.activityHandling.addEventListener("change", function(){ persist(LS_KEYS.activityHandling, el.activityHandling.value); });
+  el.schedulingSelect.addEventListener("change", function(){ persist(LS_KEYS.scheduling, el.schedulingSelect.value); });
+  el.startSensitivity.addEventListener("change", function(){ persist(LS_KEYS.startSensitivity, el.startSensitivity.value); });
+  el.endSensitivity.addEventListener("change", function(){ persist(LS_KEYS.endSensitivity, el.endSensitivity.value); });
+  el.silenceDuration.addEventListener("input", function(){ persist(LS_KEYS.silenceDuration, el.silenceDuration.value); });
+  el.prefixPadding.addEventListener("input", function(){ persist(LS_KEYS.prefixPadding, el.prefixPadding.value); });
+
+  el.toggleKey.addEventListener("click", function(){
+    var isPwd = el.apiKey.type === "password";
+    el.apiKey.type = isPwd ? "text" : "password";
+    el.toggleKey.textContent = isPwd ? "隱藏" : "顯示";
+  });
+
+  function showError(msg){
+    el.errorBox.textContent = msg;
+    el.errorBox.classList.remove("hidden");
+  }
+  function clearError(){
+    el.errorBox.classList.add("hidden");
+    el.errorBox.textContent = "";
+  }
+
+  // ---------- log / transcript UI ----------
+
+  function logEvent(type, text){
+    var entry = document.createElement("div");
+    entry.className = "log-entry " + type;
+    var meta = document.createElement("span");
+    meta.className = "log-meta";
+    meta.textContent = new Date().toLocaleTimeString("zh-TW", { hour12:false });
+    var body = document.createElement("span");
+    body.className = "log-body";
+    body.textContent = text;
+    entry.appendChild(meta);
+    entry.appendChild(body);
+    el.logBox.appendChild(entry);
+    el.logBox.scrollTop = el.logBox.scrollHeight;
+    return entry;
+  }
+  function updateLogEntry(entry, text){
+    if (!entry) return;
+    var body = entry.querySelector(".log-body");
+    if (body) body.textContent = text;
+    el.logBox.scrollTop = el.logBox.scrollHeight;
+  }
+
+  var currentUserLine = null;
+  var currentModelLine = null;
+
+  function appendUserTranscript(text){
+    if (!currentUserLine){
+      currentUserLine = logEvent("user", "🧑 " + text);
+    } else {
+      var body = currentUserLine.querySelector(".log-body");
+      body.textContent = body.textContent + text;
+      el.logBox.scrollTop = el.logBox.scrollHeight;
+    }
+  }
+  function appendModelTranscript(text){
+    if (!currentModelLine){
+      currentModelLine = logEvent("model", "🤖 " + text);
+    } else {
+      var body = currentModelLine.querySelector(".log-body");
+      body.textContent = body.textContent + text;
+      el.logBox.scrollTop = el.logBox.scrollHeight;
+    }
+  }
+  function finalizeTurn(){
+    currentUserLine = null;
+    currentModelLine = null;
+  }
+
+  el.clearLogBtn.addEventListener("click", function(){
+    el.logBox.innerHTML = "";
+    currentUserLine = null;
+    currentModelLine = null;
+  });
+
+  // ---------- status badges ----------
+
+  function setBadge(elm, level, text){
+    elm.className = "badge" + (level ? " " + level : "");
+    elm.querySelector("span:last-child").textContent = text;
+  }
+  function setConnBadge(state){
+    if (state === "connected") setBadge(el.connBadge, "ok", "已連線");
+    else if (state === "connecting") setBadge(el.connBadge, "warn busy", "連線中…");
+    else setBadge(el.connBadge, "", "未連線");
+  }
+  function setMicBadge(state){
+    if (state === "on") setBadge(el.micBadge, "ok", "麥克風開啟中");
+    else if (state === "muted") setBadge(el.micBadge, "warn", "麥克風已靜音");
+    else setBadge(el.micBadge, "", "麥克風關閉");
+  }
+  function setGeminiBadge(state){
+    if (state === "speaking") setBadge(el.geminiBadge, "ok busy", "說話中…");
+    else if (state === "tool") setBadge(el.geminiBadge, "warn busy", "執行工具中…");
+    else if (state === "listening") setBadge(el.geminiBadge, "ok", "聆聽中");
+    else setBadge(el.geminiBadge, "", "閒置");
+  }
+
+  // ---------- PCM helpers ----------
+
+  function floatTo16BitPCM(float32Array){
+    var out = new Int16Array(float32Array.length);
+    for (var i = 0; i < float32Array.length; i++){
+      var s = Math.max(-1, Math.min(1, float32Array[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+  function pcm16ToFloat32(int16Array){
+    var out = new Float32Array(int16Array.length);
+    for (var i = 0; i < int16Array.length; i++){ out[i] = int16Array[i] / 32768; }
+    return out;
+  }
+  function arrayBufferToBase64(buffer){
+    var bytes = new Uint8Array(buffer);
+    var binary = "";
+    var chunkSize = 0x8000;
+    for (var i = 0; i < bytes.length; i += chunkSize){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+  function base64ToBytes(base64){
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++){ bytes[i] = binary.charCodeAt(i); }
+    return bytes;
+  }
+  function downsampleTo16k(float32Array, inputSampleRate){
+    if (inputSampleRate === MIC_SAMPLE_RATE) return float32Array;
+    var ratio = inputSampleRate / MIC_SAMPLE_RATE;
+    var newLength = Math.max(1, Math.round(float32Array.length / ratio));
+    var result = new Float32Array(newLength);
+    for (var i = 0; i < newLength; i++){
+      var srcIndex = i * ratio;
+      var idx0 = Math.floor(srcIndex);
+      var idx1 = Math.min(idx0 + 1, float32Array.length - 1);
+      var frac = srcIndex - idx0;
+      result[i] = float32Array[idx0] * (1 - frac) + float32Array[idx1] * frac;
+    }
+    return result;
+  }
+  function computeRms(float32Array){
+    var sum = 0;
+    for (var i = 0; i < float32Array.length; i++){ sum += float32Array[i] * float32Array[i]; }
+    return Math.sqrt(sum / float32Array.length);
+  }
+
+  // ---------- mic capture ----------
+
+  var MIC_WORKLET_SRC =
+    "class MicCaptureProcessor extends AudioWorkletProcessor {" +
+    "  constructor(options){" +
+    "    super();" +
+    "    var frameSize = (options && options.processorOptions && options.processorOptions.frameSize) || 2048;" +
+    "    this._target = frameSize;" +
+    "    this._buffer = new Float32Array(frameSize);" +
+    "    this._offset = 0;" +
+    "  }" +
+    "  process(inputs){" +
+    "    var input = inputs[0];" +
+    "    if (input && input[0] && input[0].length){" +
+    "      var channel = input[0];" +
+    "      var read = 0;" +
+    "      while (read < channel.length){" +
+    "        var space = this._target - this._offset;" +
+    "        var toCopy = Math.min(space, channel.length - read);" +
+    "        this._buffer.set(channel.subarray(read, read + toCopy), this._offset);" +
+    "        this._offset += toCopy;" +
+    "        read += toCopy;" +
+    "        if (this._offset >= this._target){" +
+    "          this.port.postMessage(this._buffer.slice(0));" +
+    "          this._offset = 0;" +
+    "        }" +
+    "      }" +
+    "    }" +
+    "    return true;" +
+    "  }" +
+    "}" +
+    "registerProcessor('mic-capture-processor', MicCaptureProcessor);";
+
+  var micState = {
+    stream: null,
+    context: null,
+    sourceNode: null,
+    workletNode: null,
+    muted: false
+  };
+
+  function startMicCapture(onChunkBase64, onLevel){
+    return navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    }).then(function(stream){
+      micState.stream = stream;
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      var context = new AudioCtx();
+      micState.context = context;
+      var blob = new Blob([MIC_WORKLET_SRC], { type: "application/javascript" });
+      var workletUrl = URL.createObjectURL(blob);
+      return context.audioWorklet.addModule(workletUrl).then(function(){
+        URL.revokeObjectURL(workletUrl);
+        var sourceNode = context.createMediaStreamSource(stream);
+        var workletNode = new AudioWorkletNode(context, "mic-capture-processor", {
+          processorOptions: { frameSize: 2048 }
+        });
+        micState.sourceNode = sourceNode;
+        micState.workletNode = workletNode;
+        workletNode.port.onmessage = function(evt){
+          var float32 = evt.data;
+          if (onLevel) onLevel(computeRms(float32));
+          if (micState.muted) return;
+          var down = downsampleTo16k(float32, context.sampleRate);
+          var pcm16 = floatTo16BitPCM(down);
+          var b64 = arrayBufferToBase64(pcm16.buffer);
+          onChunkBase64(b64);
+        };
+        sourceNode.connect(workletNode);
+        // Not connected to destination: we don't want to hear our own mic locally.
+        var silentSink = context.createGain();
+        silentSink.gain.value = 0;
+        workletNode.connect(silentSink);
+        silentSink.connect(context.destination);
+      });
+    });
+  }
+
+  function stopMicCapture(){
+    if (micState.workletNode){ try { micState.workletNode.disconnect(); } catch(e){} }
+    if (micState.sourceNode){ try { micState.sourceNode.disconnect(); } catch(e){} }
+    if (micState.stream){ micState.stream.getTracks().forEach(function(t){ t.stop(); }); }
+    if (micState.context){ try { micState.context.close(); } catch(e){} }
+    micState = { stream:null, context:null, sourceNode:null, workletNode:null, muted:false };
+  }
+
+  // ---------- playback ----------
+
+  function PCMPlayer(sampleRate){
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AudioCtx({ sampleRate: sampleRate });
+    this.gainNode = this.ctx.createGain();
+    this.gainNode.connect(this.ctx.destination);
+    this.nextStartTime = 0;
+    this.sources = [];
+  }
+  PCMPlayer.prototype.playChunk = function(float32){
+    if (this.ctx.state === "suspended") this.ctx.resume();
+    var buffer = this.ctx.createBuffer(1, float32.length, this.ctx.sampleRate);
+    buffer.copyToChannel(float32, 0);
+    var src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.gainNode);
+    var now = this.ctx.currentTime;
+    var startAt = Math.max(now, this.nextStartTime);
+    src.start(startAt);
+    this.nextStartTime = startAt + buffer.duration;
+    var self = this;
+    this.sources.push(src);
+    src.onended = function(){
+      var idx = self.sources.indexOf(src);
+      if (idx >= 0) self.sources.splice(idx, 1);
+    };
+  };
+  PCMPlayer.prototype.stopAll = function(){
+    this.sources.forEach(function(s){ try { s.stop(); } catch(e){} });
+    this.sources = [];
+    this.nextStartTime = this.ctx.currentTime;
+  };
+  PCMPlayer.prototype.setMuted = function(muted){ this.gainNode.gain.value = muted ? 0 : 1; };
+  PCMPlayer.prototype.close = function(){
+    this.stopAll();
+    try { this.ctx.close(); } catch(e){}
+  };
+
+  var player = null;
+
+  // ---------- tool implementations ----------
+
+  var pendingToolIds = {};
+
+  function executeGetCurrentTime(){
+    var now = new Date();
+    return {
+      iso: now.toISOString(),
+      localTime: now.toLocaleString("zh-TW", { hour12:false })
+    };
+  }
+
+  function executeSlowLookup(args, id){
+    return new Promise(function(resolve){
+      var query = (args && args.query) || "";
+      var delayMs = 4000 + Math.random() * 3000;
+      var startedAt = Date.now();
+      var entry = logEvent("tool-pending",
+        "⏳ slow_lookup(\"" + query + "\") 開始執行，模擬需要 " + (delayMs/1000).toFixed(1) + " 秒…");
+      var timer = setInterval(function(){
+        if (!pendingToolIds[id]) { clearInterval(timer); return; }
+        var remain = Math.max(0, delayMs - (Date.now() - startedAt));
+        updateLogEntry(entry, "⏳ slow_lookup(\"" + query + "\") 執行中…還剩約 " + (remain/1000).toFixed(1) + " 秒");
+        if (remain <= 0) clearInterval(timer);
+      }, 300);
+      setTimeout(function(){
+        clearInterval(timer);
+        resolve({
+          query: query,
+          summary: "這是關於「" + query + "」的模擬查詢結果（示範用，非真實資料）。",
+          elapsedMs: Date.now() - startedAt
+        });
+      }, delayMs);
+    });
+  }
+
+  function handleFunctionCall(call){
+    var id = call.id;
+    var name = call.name;
+    var args = call.args || {};
+    pendingToolIds[id] = true;
+    setGeminiBadge("tool");
+    logEvent("tool-call", "🔧 Gemini 呼叫工具「" + name + "」，參數：" + JSON.stringify(args));
+
+    var work;
+    if (name === "get_current_time"){
+      work = Promise.resolve(executeGetCurrentTime());
+    } else if (name === "slow_lookup"){
+      work = executeSlowLookup(args, id);
+    } else {
+      work = Promise.resolve({ error: "未知的工具：" + name });
+    }
+
+    work.then(function(result){
+      if (!pendingToolIds[id]) return; // cancelled while running
+      delete pendingToolIds[id];
+      var scheduling = name === "slow_lookup" ? el.schedulingSelect.value : "INTERRUPT";
+      sendToolResponse(id, name, { result: result }, scheduling);
+      logEvent("tool-done", "✅ 工具「" + name + "」執行完成，結果已回傳給 Gemini");
+      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+    }).catch(function(err){
+      if (!pendingToolIds[id]) return;
+      delete pendingToolIds[id];
+      sendToolResponse(id, name, { error: String(err && err.message || err) }, "INTERRUPT");
+      logEvent("tool-error", "❌ 工具「" + name + "」執行失敗：" + err);
+      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+    });
+  }
+
+  // ---------- websocket ----------
+
+  var ws = null;
+  var setupDone = false;
+
+  function buildSetupConfig(){
+    var model = (el.modelName.value || DEFAULTS.model).trim();
+    var modality = el.responseModality.value || "AUDIO";
+    var voice = (el.voiceName.value || DEFAULTS.voice).trim();
+    var isExtendedThinking = /extended-thinking/i.test(model);
+
+    var generationConfig = { responseModalities: [modality] };
+    if (modality === "AUDIO" && voice){
+      generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } };
+    }
+    if (isExtendedThinking){
+      generationConfig.thinkingConfig = { thinkingLevel: el.thinkingLevel.value || "low" };
+    }
+
+    var setup = {
+      model: model.indexOf("models/") === 0 ? model : "models/" + model,
+      generationConfig: generationConfig,
+      systemInstruction: { parts: [{ text: el.systemInstruction.value || DEFAULTS.systemInstruction }] },
+      tools: [{ functionDeclarations: TOOL_DECLARATIONS }]
+    };
+
+    if (el.enableInputTranscript.checked) setup.inputAudioTranscription = {};
+    if (el.enableOutputTranscript.checked) setup.outputAudioTranscription = {};
+
+    var aad = {};
+    var hasAad = false;
+    if (el.startSensitivity.value){ aad.startOfSpeechSensitivity = el.startSensitivity.value; hasAad = true; }
+    if (el.endSensitivity.value){ aad.endOfSpeechSensitivity = el.endSensitivity.value; hasAad = true; }
+    if (el.silenceDuration.value){ aad.silenceDurationMs = parseInt(el.silenceDuration.value, 10); hasAad = true; }
+    if (el.prefixPadding.value){ aad.prefixPaddingMs = parseInt(el.prefixPadding.value, 10); hasAad = true; }
+
+    var realtimeInputConfig = { activityHandling: el.activityHandling.value || "START_OF_ACTIVITY_INTERRUPTS" };
+    if (hasAad) realtimeInputConfig.automaticActivityDetection = aad;
+    setup.realtimeInputConfig = realtimeInputConfig;
+
+    if (el.enableProactivity.checked){
+      setup.proactivity = { proactiveAudio: true };
+    }
+
+    return setup;
+  }
+
+  function sendToolResponse(id, name, response, scheduling){
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    var fr = { id: id, name: name, response: response };
+    if (scheduling) fr.scheduling = scheduling;
+    ws.send(JSON.stringify({ toolResponse: { functionResponses: [fr] } }));
+  }
+
+  function sendAudioChunk(base64){
+    if (!ws || ws.readyState !== WebSocket.OPEN || !setupDone) return;
+    ws.send(JSON.stringify({
+      realtimeInput: { audio: { data: base64, mimeType: "audio/pcm;rate=" + MIC_SAMPLE_RATE } }
+    }));
+  }
+
+  function sendTextMessage(text){
+    if (!ws || ws.readyState !== WebSocket.OPEN || !setupDone) return;
+    ws.send(JSON.stringify({
+      clientContent: { turns: [{ role: "user", parts: [{ text: text }] }], turnComplete: true }
+    }));
+    appendUserTranscript(text);
+    finalizeTurn();
+  }
+
+  function handleServerMessage(event){
+    var raw = event.data;
+    if (typeof raw === "string"){
+      onServerJson(raw);
+    } else if (raw instanceof Blob){
+      raw.text().then(onServerJson);
+    } else {
+      try { onServerJson(new TextDecoder().decode(raw)); } catch(e){ /* ignore */ }
+    }
+  }
+
+  function onServerJson(text){
+    var msg;
+    try { msg = JSON.parse(text); } catch(e){ logEvent("system", "⚠️ 無法解析伺服器訊息"); return; }
+
+    if (msg.setupComplete){
+      setupDone = true;
+      logEvent("system", "✅ 連線設定完成 (setupComplete)，開始串流麥克風音訊");
+      setConnBadge("connected");
+      setGeminiBadge("listening");
+      beginMicStreaming();
+      return;
+    }
+
+    if (msg.serverContent){
+      var sc = msg.serverContent;
+      if (sc.interrupted){
+        if (player) player.stopAll();
+        logEvent("interrupt", "⚡ 偵測到使用者插話，Gemini 的語音播放已中斷");
+      }
+      if (sc.modelTurn && sc.modelTurn.parts){
+        sc.modelTurn.parts.forEach(function(part){
+          if (part.inlineData && part.inlineData.data){
+            var mime = part.inlineData.mimeType || "";
+            var rateMatch = /rate=(\d+)/.exec(mime);
+            var rate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+            if (!player || player.ctx.sampleRate !== rate){
+              if (player) player.close();
+              player = new PCMPlayer(rate);
+              player.setMuted(el.muteOutputBtn.dataset.muted === "1");
+            }
+            var bytes = base64ToBytes(part.inlineData.data);
+            var int16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+            player.playChunk(pcm16ToFloat32(int16));
+            setGeminiBadge("speaking");
+          }
+          if (typeof part.text === "string" && part.text){
+            appendModelTranscript(part.text);
+          }
+        });
+      }
+      if (sc.inputTranscription && typeof sc.inputTranscription.text === "string"){
+        appendUserTranscript(sc.inputTranscription.text);
+      }
+      if (sc.outputTranscription && typeof sc.outputTranscription.text === "string"){
+        appendModelTranscript(sc.outputTranscription.text);
+      }
+      if (sc.turnComplete){
+        finalizeTurn();
+        if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+      }
+      return;
+    }
+
+    if (msg.toolCall && msg.toolCall.functionCalls){
+      msg.toolCall.functionCalls.forEach(handleFunctionCall);
+      return;
+    }
+
+    if (msg.toolCallCancellation && msg.toolCallCancellation.ids){
+      msg.toolCallCancellation.ids.forEach(function(id){
+        delete pendingToolIds[id];
+        logEvent("tool-cancel", "🚫 工具呼叫已被 Gemini 取消 (id: " + id + ")");
+      });
+      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+      return;
+    }
+
+    if (msg.goAway){
+      logEvent("system", "⚠️ 伺服器即將中斷連線 (goAway" + (msg.goAway.timeLeft ? "，剩餘 " + msg.goAway.timeLeft : "") + ")");
+      return;
+    }
+  }
+
+  function beginMicStreaming(){
+    startMicCapture(sendAudioChunk, updateLevelMeter).then(function(){
+      setMicBadge("on");
+      el.muteBtn.disabled = false;
+    }).catch(function(err){
+      showError("無法啟動麥克風：" + (err && err.message ? err.message : String(err)));
+      disconnect();
+    });
+  }
+
+  function updateLevelMeter(rms){
+    var pct = Math.min(100, Math.round(rms * 400));
+    el.levelFill.style.width = pct + "%";
+  }
+
+  function connect(){
+    clearError();
+    var apiKey = el.apiKey.value.trim();
+    if (!apiKey){ showError("請先輸入 Gemini API Key。"); return; }
+
+    setupDone = false;
+    setConnBadge("connecting");
+    el.connectBtn.disabled = true;
+
+    var wsUrl = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch(e){
+      showError("建立 WebSocket 連線失敗：" + (e && e.message ? e.message : String(e)));
+      setConnBadge("disconnected");
+      el.connectBtn.disabled = false;
+      return;
+    }
+
+    ws.onopen = function(){
+      logEvent("system", "🔌 WebSocket 已開啟，送出 setup…");
+      ws.send(JSON.stringify({ setup: buildSetupConfig() }));
+    };
+    ws.onmessage = handleServerMessage;
+    ws.onerror = function(){
+      showError("WebSocket 發生錯誤，請確認 API Key 與 Model 名稱是否正確。");
+    };
+    ws.onclose = function(evt){
+      logEvent("system", "🔌 連線已關閉（code: " + evt.code + (evt.reason ? "，原因：" + evt.reason : "") + "）");
+      if (evt.code && evt.code !== 1000){
+        showError("連線關閉，代碼 " + evt.code + (evt.reason ? "：" + evt.reason : "。若代碼為 1007，通常表示送出的設定欄位不被目前的 model／API 版本接受，可嘗試關閉「主動語音判斷」或更換 model 名稱再試一次。"));
+      }
+      resetUiToDisconnected();
+    };
+
+    el.connectBtn.classList.add("hidden");
+    el.disconnectBtn.classList.remove("hidden");
+    el.textInput.disabled = false;
+    el.sendTextBtn.disabled = false;
+    el.muteOutputBtn.disabled = false;
+  }
+
+  function disconnect(){
+    if (ws){
+      try { ws.close(1000, "user disconnect"); } catch(e){}
+    }
+    resetUiToDisconnected();
+  }
+
+  function resetUiToDisconnected(){
+    stopMicCapture();
+    if (player){ player.close(); player = null; }
+    pendingToolIds = {};
+    setupDone = false;
+    ws = null;
+    setConnBadge("disconnected");
+    setMicBadge("off");
+    setGeminiBadge("idle");
+    el.levelFill.style.width = "0%";
+    el.connectBtn.classList.remove("hidden");
+    el.connectBtn.disabled = false;
+    el.disconnectBtn.classList.add("hidden");
+    el.muteBtn.disabled = true;
+    el.muteOutputBtn.disabled = true;
+    el.textInput.disabled = true;
+    el.sendTextBtn.disabled = true;
+    finalizeTurn();
+  }
+
+  el.connectBtn.addEventListener("click", connect);
+  el.disconnectBtn.addEventListener("click", disconnect);
+
+  el.muteBtn.addEventListener("click", function(){
+    micState.muted = !micState.muted;
+    el.muteBtn.textContent = micState.muted ? "🎤 取消靜音" : "🎤 靜音麥克風";
+    setMicBadge(micState.muted ? "muted" : "on");
+  });
+
+  el.muteOutputBtn.addEventListener("click", function(){
+    var muted = el.muteOutputBtn.dataset.muted !== "1";
+    el.muteOutputBtn.dataset.muted = muted ? "1" : "0";
+    el.muteOutputBtn.textContent = muted ? "🔊 取消靜音" : "🔊 靜音喇叭";
+    if (player) player.setMuted(muted);
+  });
+
+  el.sendTextBtn.addEventListener("click", function(){
+    var text = el.textInput.value;
+    if (!text.trim()) return;
+    sendTextMessage(text);
+    el.textInput.value = "";
+  });
+  el.textInput.addEventListener("keydown", function(evt){
+    if (evt.key === "Enter"){ el.sendTextBtn.click(); }
+  });
+
+  loadSettings();
+  setConnBadge("disconnected");
+  setMicBadge("off");
+  setGeminiBadge("idle");
+})();
+</script>
+</body>
+</html>
