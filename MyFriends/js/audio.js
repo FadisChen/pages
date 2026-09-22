@@ -1,7 +1,8 @@
 export class BrowserAudioEngine {
-  constructor({ onAudioChunk, onLevel } = {}) {
+  constructor({ onAudioChunk, onLevel, onPlaybackChange } = {}) {
     this.onAudioChunk = onAudioChunk;
     this.onLevel = onLevel;
+    this.onPlaybackChange = onPlaybackChange;
     this.context = null;
     this.stream = null;
     this.source = null;
@@ -71,15 +72,23 @@ export class BrowserAudioEngine {
     source.start(startAt);
     this.nextPlayTime = startAt + buffer.duration;
     this.activeSources.add(source);
-    source.onended = () => this.activeSources.delete(source);
+    this.onPlaybackChange?.(true);
+    source.onended = () => {
+      this.activeSources.delete(source);
+      source.disconnect();
+      if (!this.activeSources.size) this.onPlaybackChange?.(false);
+    };
   }
 
   flushPlayback() {
     for (const source of this.activeSources) {
+      source.onended = null;
       try { source.stop(); } catch { /* Source may already be stopped. */ }
+      try { source.disconnect(); } catch { /* Source may already be disconnected. */ }
     }
     this.activeSources.clear();
     if (this.context) this.nextPlayTime = this.context.currentTime;
+    this.onPlaybackChange?.(false);
   }
 
   async playSessionCue(kind) {
