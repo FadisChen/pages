@@ -159,6 +159,13 @@
       <input type="password" id="apiKey" placeholder="貼上你的 Gemini API Key（僅存在你的瀏覽器）">
       <button type="button" class="key-toggle" id="toggleKey">顯示</button>
     </div>
+    <div class="field">
+      <label>思考模式快速切換（方便 A/B 比較）</label>
+      <div class="btn-row">
+        <button type="button" class="btn btn-secondary" id="useExtendedThinkingBtn">🧠 延伸思考版</button>
+        <button type="button" class="btn btn-secondary" id="useRegularBtn">⚡ 一般版（無延伸思考）</button>
+      </div>
+    </div>
     <div class="row">
       <div class="field">
         <label for="modelName">Model 名稱</label>
@@ -188,9 +195,8 @@
         </datalist>
       </div>
       <div class="field">
-        <label for="thinkingLevel">思考等級（僅 extended-thinking 模型會送出）</label>
+        <label for="thinkingLevel">思考等級（僅 extended-thinking 模型會送出，只支援 low／medium／high）</label>
         <select id="thinkingLevel">
-          <option value="minimal">minimal</option>
           <option value="low" selected>low</option>
           <option value="medium">medium</option>
           <option value="high">high</option>
@@ -316,10 +322,17 @@
   <div class="card">
     <h2>🧪 建議測試腳本</h2>
     <ol class="script-list">
-      <li><b>測試①：工具等待時 Gemini 會不會邊想邊講。</b>
+      <li><b>測試①：非同步工具（NON_BLOCKING）——邊調用工具邊繼續對話。</b>
         連線後說（或打字）：「幫我查一下台北101的資料」。這句話會觸發 <b>slow_lookup</b>，
-        它刻意要等 4～7 秒才有結果。留意 Gemini 是不是會先說「好，我查一下」之類的話，
-        並在等待這幾秒之間仍可以自然回應你的追問，而不是整段安靜卡住；結果出來後才用查到的內容接續對話。
+        它刻意要等 4～7 秒才有結果，且已宣告為 <code>behavior: "NON_BLOCKING"</code>。
+        留意 Gemini 是不是會先說「好，我查一下」之類的話，並在等待這幾秒之間仍可以自然回應你的追問或閒聊，
+        而不是整段安靜卡住；結果出來後才用查到的內容接續對話。
+        右上角「Gemini 狀態」燈號會顯示「執行工具中」，之後可能轉成「背景思考／處理中」——
+        這代表伺服器雖然送出 <code>turnComplete:true</code>，但 <code>interactionStatus</code> 仍是
+        <code>IN_PROGRESS</code>，代表 Gemini 還沒真正 idle，仍在背景處理。
+        <br>可以用上方「🧠 延伸思考版／⚡ 一般版」按鈕切換模型再重新連線比較：
+        延伸思考版通常會有更明顯的「先講一句、背景繼續處理、之後再接話」的行為；
+        一般版雖然一樣支援 NON_BLOCKING 工具，但沒有背景思考規劃的過程。
       </li>
       <li><b>測試②：Gemini 能不能自己判斷要不要回應。</b>
         在「進階設定」打開「啟用主動語音判斷」後重新連線，然後：
@@ -398,9 +411,13 @@
     }
   ];
 
+  var MODEL_EXTENDED_THINKING = "gemini-3.8-live-extended-thinking";
+  var MODEL_REGULAR = "gemini-3.8-live";
+
   var el = {};
   [
-    "apiKey","toggleKey","modelName","responseModality","voiceName","thinkingLevel",
+    "apiKey","toggleKey","modelName","useExtendedThinkingBtn","useRegularBtn",
+    "responseModality","voiceName","thinkingLevel",
     "enableProactivity","enableInputTranscript","enableOutputTranscript",
     "activityHandling","schedulingSelect","startSensitivity","endSensitivity",
     "silenceDuration","prefixPadding","systemInstruction",
@@ -434,8 +451,28 @@
     el.prefixPadding.value = localStorage.getItem(LS_KEYS.prefixPadding) || "";
   }
 
+  function isExtendedThinkingModel(){
+    return /extended-thinking/i.test(el.modelName.value || "");
+  }
+  function updateThinkingModeUi(){
+    var extended = isExtendedThinkingModel();
+    el.thinkingLevel.disabled = !extended;
+    el.useExtendedThinkingBtn.className = "btn " + (extended ? "btn-primary" : "btn-secondary");
+    el.useRegularBtn.className = "btn " + (!extended ? "btn-primary" : "btn-secondary");
+  }
+  el.useExtendedThinkingBtn.addEventListener("click", function(){
+    el.modelName.value = MODEL_EXTENDED_THINKING;
+    persist(LS_KEYS.model, el.modelName.value);
+    updateThinkingModeUi();
+  });
+  el.useRegularBtn.addEventListener("click", function(){
+    el.modelName.value = MODEL_REGULAR;
+    persist(LS_KEYS.model, el.modelName.value);
+    updateThinkingModeUi();
+  });
+
   el.apiKey.addEventListener("input", function(){ persist(LS_KEYS.apiKey, el.apiKey.value); });
-  el.modelName.addEventListener("input", function(){ persist(LS_KEYS.model, el.modelName.value); });
+  el.modelName.addEventListener("input", function(){ persist(LS_KEYS.model, el.modelName.value); updateThinkingModeUi(); });
   el.voiceName.addEventListener("input", function(){ persist(LS_KEYS.voice, el.voiceName.value); });
   el.responseModality.addEventListener("change", function(){ persist(LS_KEYS.modality, el.responseModality.value); });
   el.thinkingLevel.addEventListener("change", function(){ persist(LS_KEYS.thinkingLevel, el.thinkingLevel.value); });
@@ -540,8 +577,19 @@
   function setGeminiBadge(state){
     if (state === "speaking") setBadge(el.geminiBadge, "ok busy", "說話中…");
     else if (state === "tool") setBadge(el.geminiBadge, "warn busy", "執行工具中…");
+    else if (state === "thinking") setBadge(el.geminiBadge, "warn busy", "背景思考／處理中…（turnComplete 但尚未 idle）");
     else if (state === "listening") setBadge(el.geminiBadge, "ok", "聆聽中");
     else setBadge(el.geminiBadge, "", "閒置");
+  }
+
+  // interactionStatus 是比 turnComplete 更準確的忙碌指標：延伸思考模型送出
+  // turnComplete:true 之後，伺服器仍可能在背景思考或等待非同步工具結果，
+  // 這時 interactionStatus 會是 IN_PROGRESS，並不代表真的 idle。
+  var lastInteractionStatus = null;
+  function refreshGeminiBadge(){
+    if (Object.keys(pendingToolIds).length > 0){ setGeminiBadge("tool"); return; }
+    if (lastInteractionStatus === "IN_PROGRESS"){ setGeminiBadge("thinking"); return; }
+    setGeminiBadge("listening");
   }
 
   // ---------- PCM helpers ----------
@@ -780,13 +828,13 @@
       var scheduling = name === "slow_lookup" ? el.schedulingSelect.value : "INTERRUPT";
       sendToolResponse(id, name, { result: result }, scheduling);
       logEvent("tool-done", "✅ 工具「" + name + "」執行完成，結果已回傳給 Gemini");
-      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+      refreshGeminiBadge();
     }).catch(function(err){
       if (!pendingToolIds[id]) return;
       delete pendingToolIds[id];
       sendToolResponse(id, name, { error: String(err && err.message || err) }, "INTERRUPT");
       logEvent("tool-error", "❌ 工具「" + name + "」執行失敗：" + err);
-      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+      refreshGeminiBadge();
     });
   }
 
@@ -877,7 +925,9 @@
 
     if (msg.setupComplete){
       setupDone = true;
-      logEvent("system", "✅ 連線設定完成 (setupComplete)，開始串流麥克風音訊");
+      lastInteractionStatus = null;
+      var modeLabel = isExtendedThinkingModel() ? "延伸思考 extended-thinking" : "一般（無延伸思考）";
+      logEvent("system", "✅ 連線設定完成 (setupComplete)，模型：" + el.modelName.value + "（" + modeLabel + "），開始串流麥克風音訊");
       setConnBadge("connected");
       setGeminiBadge("listening");
       beginMicStreaming();
@@ -886,6 +936,10 @@
 
     if (msg.serverContent){
       var sc = msg.serverContent;
+      if (typeof sc.interactionStatus === "string"){
+        lastInteractionStatus = sc.interactionStatus;
+        refreshGeminiBadge();
+      }
       if (sc.interrupted){
         if (player) player.stopAll();
         logEvent("interrupt", "⚡ 偵測到使用者插話，Gemini 的語音播放已中斷");
@@ -919,7 +973,12 @@
       }
       if (sc.turnComplete){
         finalizeTurn();
-        if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+        // turnComplete 不代表真的 idle：延伸思考模型可能仍在背景思考或等待
+        // 非同步工具結果，這裡改用 interactionStatus／pendingToolIds 判斷實際狀態。
+        if (lastInteractionStatus === "IN_PROGRESS" || Object.keys(pendingToolIds).length > 0){
+          logEvent("system", "ℹ️ 收到 turnComplete，但 Gemini 仍在背景處理中（interactionStatus=IN_PROGRESS 或工具尚未完成），尚未真正 idle");
+        }
+        refreshGeminiBadge();
       }
       return;
     }
@@ -934,7 +993,7 @@
         delete pendingToolIds[id];
         logEvent("tool-cancel", "🚫 工具呼叫已被 Gemini 取消 (id: " + id + ")");
       });
-      if (Object.keys(pendingToolIds).length === 0) setGeminiBadge("listening");
+      refreshGeminiBadge();
       return;
     }
 
@@ -1012,6 +1071,7 @@
     stopMicCapture();
     if (player){ player.close(); player = null; }
     pendingToolIds = {};
+    lastInteractionStatus = null;
     setupDone = false;
     ws = null;
     setConnBadge("disconnected");
@@ -1055,6 +1115,7 @@
   });
 
   loadSettings();
+  updateThinkingModeUi();
   setConnBadge("disconnected");
   setMicBadge("off");
   setGeminiBadge("idle");
