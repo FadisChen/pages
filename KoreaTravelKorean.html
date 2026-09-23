@@ -266,6 +266,341 @@
     color:var(--ink-faint);
     font-size:.78rem;
   }
+
+  /* ---------- Shared controls ---------- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    margin-bottom:14px;
+  }
+  .btn{
+    border:1px solid var(--line-strong);
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:999px;
+    padding:9px 16px;
+    font-size:.9rem;
+    font-family:inherit;
+    cursor:pointer;
+    min-height:40px;
+  }
+  .btn:hover:not(:disabled){border-color:var(--accent);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+  .btn-danger{background:var(--coral);border-color:var(--coral);color:#fff;font-weight:700;}
+  .btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .hint{font-size:.8rem;color:var(--ink-faint);margin:10px 0 0;}
+  .hint a{color:var(--accent-ink);}
+  .empty-note{color:var(--ink-faint);font-size:.85rem;margin:0;}
+
+  /* ---------- Game ---------- */
+  .game-hud-top{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .level-title{font-weight:900;font-size:1.05rem;}
+  .level-sub{font-size:.8rem;color:var(--ink-soft);}
+  .xp-bar{
+    height:10px;
+    border-radius:999px;
+    background:var(--accent-soft);
+    overflow:hidden;
+    margin-top:8px;
+  }
+  .xp-bar > div{
+    height:100%;
+    background:linear-gradient(90deg,var(--accent),var(--coral));
+    border-radius:999px;
+    transition:width .4s ease;
+  }
+  .stamp-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+  }
+  .stamp{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    width:62px;
+    height:62px;
+    border-radius:50%;
+    border:2px dashed var(--line-strong);
+    color:var(--ink-faint);
+    font-size:.62rem;
+    text-align:center;
+    line-height:1.2;
+  }
+  .stamp .stamp-icon{font-size:1.25rem;filter:grayscale(1);opacity:.45;}
+  .stamp.is-earned{
+    border-style:solid;
+    border-color:var(--coral);
+    color:var(--coral);
+    background:var(--coral-soft);
+    transform:rotate(-8deg);
+  }
+  .stamp.is-earned .stamp-icon{filter:none;opacity:1;}
+  .game-controls{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    margin:4px 0 12px;
+    font-size:.88rem;
+  }
+  select, input[type="text"], input[type="password"]{
+    font-family:inherit;
+    font-size:.9rem;
+    color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    border-radius:10px;
+    padding:8px 10px;
+    min-height:40px;
+    max-width:100%;
+  }
+  select:focus-visible, input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .mode-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+  @media (min-width:520px){ .mode-grid{grid-template-columns:1fr 1fr;} }
+  @media (min-width:780px){ .mode-grid{grid-template-columns:1fr 1fr 1fr;} }
+  .mode-card{
+    text-align:left;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+    font-family:inherit;
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    transition:transform .1s ease,border-color .15s ease;
+  }
+  .mode-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .mode-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .mode-card .mode-title{font-weight:900;font-size:1rem;}
+  .mode-card .mode-desc{font-size:.82rem;color:var(--ink-soft);}
+  .mode-card .mode-best{font-size:.75rem;color:var(--accent-ink);font-family:"JetBrains Mono",ui-monospace,monospace;}
+
+  .quiz-hud{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    font-weight:700;
+    font-size:.95rem;
+  }
+  .quiz-hud .combo{color:var(--coral);}
+  .quiz-progress{
+    height:6px;
+    border-radius:999px;
+    background:var(--line);
+    overflow:hidden;
+    margin:10px 0 16px;
+  }
+  .quiz-progress > div{height:100%;background:var(--accent);transition:width .3s ease;}
+  .quiz-prompt{
+    text-align:center;
+    padding:18px 8px;
+    min-height:120px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+  }
+  .quiz-kind{font-size:.8rem;color:var(--ink-faint);}
+  .quiz-big-ko{
+    font-family:"Noto Sans KR","Noto Sans TC",sans-serif;
+    font-size:2rem;
+    font-weight:700;
+    word-break:keep-all;
+  }
+  .quiz-big-zh{font-size:1.6rem;font-weight:900;}
+  .quiz-reveal{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.85rem;color:var(--ink-faint);min-height:1.3em;}
+  .play-btn{
+    width:84px;
+    height:84px;
+    border-radius:50%;
+    border:none;
+    background:var(--accent);
+    color:#fff;
+    font-size:2rem;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .play-btn:focus-visible{outline:3px solid var(--accent-ink);outline-offset:3px;}
+  .option-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+  @media (min-width:520px){ .option-grid{grid-template-columns:1fr 1fr;} }
+  .option-btn{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    text-align:left;
+    min-height:56px;
+    padding:10px 14px;
+    border-radius:12px;
+    border:1.5px solid var(--line-strong);
+    background:var(--surface);
+    color:var(--ink);
+    font-family:inherit;
+    font-size:1rem;
+    cursor:pointer;
+  }
+  .option-btn .opt-key{
+    flex:0 0 auto;
+    width:24px;
+    height:24px;
+    border-radius:6px;
+    background:var(--accent-soft);
+    color:var(--accent-ink);
+    font-size:.75rem;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .option-btn.is-ko{font-family:"Noto Sans KR","Noto Sans TC",sans-serif;font-size:1.15rem;font-weight:700;}
+  .option-btn:hover:not(:disabled){border-color:var(--accent);}
+  .option-btn:disabled{cursor:default;}
+  .option-btn.is-correct{border-color:var(--accent);background:var(--accent-soft);}
+  .option-btn.is-wrong{border-color:var(--coral);background:var(--coral-soft);animation:shake .3s;}
+  @keyframes shake{25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+  .quiz-feedback{text-align:center;min-height:1.6em;margin-top:12px;font-weight:700;}
+  .quiz-feedback.ok{color:var(--accent-ink);}
+  .quiz-feedback.bad{color:var(--coral);}
+  .result-score{font-size:2.6rem;font-weight:900;text-align:center;margin:4px 0;}
+  .result-stars{font-size:2rem;text-align:center;letter-spacing:4px;}
+  .result-stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    text-align:center;
+    margin:12px 0;
+  }
+  .result-stats div{background:var(--accent-soft);border-radius:10px;padding:8px 4px;font-size:.78rem;color:var(--ink-soft);}
+  .result-stats b{display:block;font-size:1.15rem;color:var(--ink);}
+  .result-badge{text-align:center;color:var(--coral);font-weight:900;}
+
+  .match-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+  }
+  @media (min-width:520px){ .match-grid{grid-template-columns:repeat(4,1fr);} }
+  .match-card{
+    min-height:84px;
+    border-radius:12px;
+    border:1.5px solid var(--line-strong);
+    background:var(--accent);
+    color:#fff;
+    font-family:inherit;
+    font-size:1.4rem;
+    cursor:pointer;
+    padding:6px;
+    word-break:keep-all;
+    overflow-wrap:anywhere;
+  }
+  .match-card.is-open, .match-card.is-done{
+    background:var(--surface);
+    color:var(--ink);
+    font-size:.9rem;
+  }
+  .match-card.is-open .ko, .match-card.is-done .ko{font-family:"Noto Sans KR","Noto Sans TC",sans-serif;font-size:1.05rem;font-weight:700;}
+  .match-card.is-done{border-color:var(--accent);background:var(--accent-soft);cursor:default;}
+  .match-card:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px;}
+
+  /* ---------- Tutor ---------- */
+  .field{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--ink-soft);min-width:0;}
+  .field select, .field input{width:100%;}
+  .field-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+    margin-top:10px;
+  }
+  @media (min-width:520px){ .field-grid{grid-template-columns:1fr 1fr;} }
+  .key-row{display:flex;gap:8px;}
+  .key-row input{flex:1 1 auto;min-width:0;font-family:"JetBrains Mono",ui-monospace,monospace;}
+  .check{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--ink-soft);margin-top:8px;}
+  .status-row{display:flex;align-items:center;gap:10px;margin-top:12px;}
+  .badge{
+    flex:0 0 auto;
+    font-size:.78rem;
+    font-weight:700;
+    padding:4px 10px;
+    border-radius:999px;
+    background:var(--line);
+    color:var(--ink-soft);
+  }
+  .badge.is-live{background:var(--accent-soft);color:var(--accent-ink);}
+  .badge.is-speaking{background:var(--coral-soft);color:var(--coral);}
+  .meter{flex:1 1 auto;height:8px;border-radius:999px;background:var(--line);overflow:hidden;}
+  .meter > div{height:100%;width:0;background:var(--accent);transition:width .08s linear;}
+  .error-box{
+    margin-top:12px;
+    background:var(--coral-soft);
+    color:var(--coral);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:.85rem;
+  }
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}
+  .chip{
+    border:1px solid var(--line-strong);
+    background:var(--surface);
+    color:var(--ink-soft);
+    border-radius:999px;
+    padding:6px 12px;
+    font-size:.8rem;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .chip:hover:not(:disabled){border-color:var(--accent);color:var(--ink);}
+  .chip:disabled{opacity:.45;cursor:not-allowed;}
+  .chat{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-height:420px;
+    overflow-y:auto;
+    padding:12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+  }
+  .bubble{
+    max-width:85%;
+    padding:8px 12px;
+    border-radius:14px;
+    font-size:.9rem;
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+  }
+  .bubble.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px;}
+  .bubble.model{align-self:flex-start;background:var(--accent-soft);color:var(--ink);border-bottom-left-radius:4px;}
+  .bubble.system{align-self:center;background:transparent;color:var(--ink-faint);font-size:.78rem;text-align:center;}
+  .chat-input{display:flex;gap:8px;margin-top:10px;}
+  .chat-input input{flex:1 1 auto;min-width:0;}
 </style>
 </head>
 <body>
@@ -273,7 +608,7 @@
 <header class="page-header">
   <div>
     <h1>🇰🇷 韓國旅遊韓語小幫手</h1>
-    <p>點一下卡片，立刻用語音念出韓文發音</p>
+    <p>點卡片聽發音、玩遊戲闖關，還能和 AI 家教即時對話練口說</p>
   </div>
   <button type="button" class="theme-toggle" id="theme-toggle" aria-label="切換深色／淺色模式">🌓 主題</button>
 </header>
@@ -284,7 +619,82 @@
 
 <div class="tab-bar" role="tablist" aria-label="學習情境分類" id="tab-bar"></div>
 
-<main id="tab-panels"></main>
+<main id="tab-panels">
+  <section class="tab-panel" id="panel-game" role="tabpanel" aria-labelledby="tab-game" data-tab="game">
+    <div id="game-root"></div>
+  </section>
+
+  <section class="tab-panel" id="panel-tutor" role="tabpanel" aria-labelledby="tab-tutor" data-tab="tutor">
+    <p class="panel-intro">用 Gemini Live 3.8 即時語音和 AI 韓語家教對話：可以自由發問，也能在餐廳、計程車、購物等情境做角色扮演。採 BYOK（自備金鑰）方式，填入你自己的 Gemini API Key 即可開始，按下「開始上課」後需允許麥克風權限。</p>
+
+    <div class="card">
+      <label class="field" for="tutor-key">Gemini API Key</label>
+      <div class="key-row">
+        <input id="tutor-key" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的 API Key">
+        <button type="button" class="btn" id="tutor-key-toggle">顯示</button>
+      </div>
+      <label class="check"><input type="checkbox" id="tutor-remember"> 記住金鑰（僅存於這台裝置的瀏覽器）</label>
+
+      <div class="field-grid">
+        <label class="field">練習情境
+          <select id="tutor-scenario"></select>
+        </label>
+        <label class="field">家教聲音
+          <select id="tutor-voice">
+            <option value="Zephyr">Zephyr</option>
+            <option value="Puck">Puck</option>
+            <option value="Charon">Charon</option>
+            <option value="Kore">Kore</option>
+            <option value="Fenrir">Fenrir</option>
+            <option value="Aoede">Aoede</option>
+          </select>
+        </label>
+        <label class="field">模型
+          <select id="tutor-model">
+            <option value="gemini-3.8-live">gemini-3.8-live（反應快，推薦）</option>
+            <option value="gemini-3.8-live-extended-thinking">gemini-3.8-live-extended-thinking（延伸思考）</option>
+          </select>
+        </label>
+        <label class="field">思考深度（僅延伸思考版）
+          <select id="tutor-thinking">
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="HIGH">HIGH</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="hint">金鑰只會由你的瀏覽器直接連線到 Google，不會傳到其他伺服器；公用電腦請勿勾選「記住金鑰」。還沒有金鑰？到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> 申請。更換模型、聲音或情境後需重新開始上課才會生效。</p>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="tutor-connect">🎙️ 開始上課</button>
+        <button type="button" class="btn btn-danger" id="tutor-disconnect" hidden>⏹ 結束上課</button>
+        <button type="button" class="btn" id="tutor-mic" disabled>🎤 麥克風靜音</button>
+        <button type="button" class="btn" id="tutor-speaker" disabled>🔈 喇叭靜音</button>
+      </div>
+      <div class="status-row">
+        <span class="badge" id="tutor-status">未連線</span>
+        <div class="meter" aria-hidden="true"><div id="tutor-level"></div></div>
+      </div>
+      <div class="error-box" id="tutor-error" role="alert" hidden></div>
+    </div>
+
+    <h2 class="subsection-title">家教小卡</h2>
+    <div id="tutor-cards" class="phrase-grid">
+      <p class="empty-note" id="tutor-cards-empty">上課時，家教教到的句子會出現在這裡，點一下可以重聽發音。</p>
+    </div>
+
+    <h2 class="subsection-title">對話紀錄</h2>
+    <div class="chip-row" id="tutor-chips"></div>
+    <div id="tutor-chat" class="chat" aria-live="polite">
+      <div class="bubble system">還沒開始上課。</div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="tutor-text" disabled placeholder="也可以打字，例如：「謝謝」的韓文怎麼說？" aria-label="輸入要傳給家教的文字">
+      <button type="button" class="btn btn-primary" id="tutor-send" disabled>送出</button>
+    </div>
+  </section>
+</main>
 
 <footer class="page-footer">
   資料僅供旅遊隨身參考；發音以裝置內建的韓文語音合成播放，實際腔調請以真人教學或當地人為準。
@@ -297,6 +707,8 @@
   "use strict";
 
   var TABS = [
+    { id:'game',        label:'🎮 遊戲挑戰', custom:true },
+    { id:'tutor',       label:'🎓 AI 家教', custom:true },
     { id:'hangul',      label:'韓文字母基礎' },
     { id:'greetings',   label:'問候寒暄' },
     { id:'numbers',     label:'數字與價格' },
@@ -589,6 +1001,7 @@
     var panelsRoot = document.getElementById('tab-panels');
 
     TABS.forEach(function(tab){
+      if (tab.custom) return; // static panels already in the markup
       var panel = document.createElement('section');
       panel.className = 'tab-panel';
       panel.id = 'panel-' + tab.id;
@@ -649,6 +1062,8 @@
     });
   }
 
+  var activateTab = function(){};
+
   function initTabs(){
     var btns = Array.prototype.slice.call(document.querySelectorAll('.tab-btn'));
     var panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
@@ -681,6 +1096,8 @@
       });
     });
 
+    activateTab = activate;
+
     var saved = null;
     try { saved = localStorage.getItem(STORAGE_TAB_KEY); } catch (e) {}
     var savedValid = saved && btns.some(function(b){ return b.dataset.tab === saved; });
@@ -706,6 +1123,1380 @@
     });
   }
 
+  /* ---------- Game ---------- */
+
+  var STORAGE_GAME_KEY = 'kt-game-v1';
+  var ROUND_SIZE = 10;
+  var MAX_HEARTS = 3;
+  var RUSH_SECONDS = 60;
+  var MATCH_PAIRS = 6;
+  var WRONG_LIMIT = 60;
+  var XP_PER_LEVEL = 300;
+  var LEVEL_TITLES = ['觀光新手','地鐵探險家','小吃獵人','市場殺價王','韓語旅人','首爾通','韓國在地人'];
+  var STAMP_ICONS = {
+    hangul:'🔤', greetings:'👋', numbers:'💰', restaurant:'🍜', transport:'🚇',
+    shopping:'🛍️', hotel:'🏨', sightseeing:'🏯', emergency:'🚑'
+  };
+
+  var GAME_MODES = {
+    listen: { title:'👂 聽音辨義', desc:'聽韓文發音，選出正確的中文意思', kind:'quiz' },
+    read:   { title:'👀 看字辨義', desc:'只看韓文（不給拼音），選出中文意思', kind:'quiz' },
+    zh2ko:  { title:'🗣️ 中翻韓', desc:'看中文，選出正確的韓文說法', kind:'quiz' },
+    rush:   { title:'⏱️ 60 秒衝刺', desc:'混合題型，限時內答越多越好，沒有生命限制', kind:'quiz' },
+    match:  { title:'🃏 翻牌配對', desc:'翻開卡片，把韓文和中文配成一對', kind:'match' },
+    review: { title:'📕 錯題複習', desc:'專攻答錯過的句子，答對就從錯題本移除', kind:'quiz' }
+  };
+  var QUIZ_SUBTYPES = ['listen','read','zh2ko'];
+
+  var gameStore = loadGameStore();
+  var POOL = [];
+  var POOL_BY_KO = {};
+  var gameRoot = null;
+  var gameCat = 'all';
+  var round = null;       // active quiz or match state
+  var hubVisible = false;
+  var sfxCtx = null;
+
+  function loadGameStore(){
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem(STORAGE_GAME_KEY) || 'null'); } catch (e) {}
+    if (!d || typeof d !== 'object') d = {};
+    return {
+      xp: Math.max(0, parseInt(d.xp, 10) || 0),
+      best: d.best && typeof d.best === 'object' ? d.best : {},
+      stamps: d.stamps && typeof d.stamps === 'object' ? d.stamps : {},
+      wrong: Array.isArray(d.wrong) ? d.wrong.filter(function(x){ return typeof x === 'string'; }) : [],
+      sfx: d.sfx !== false,
+      cat: typeof d.cat === 'string' ? d.cat : 'all'
+    };
+  }
+  function saveGameStore(){
+    try { localStorage.setItem(STORAGE_GAME_KEY, JSON.stringify(gameStore)); } catch (e) {}
+  }
+
+  function buildPool(){
+    Object.keys(PHRASES).forEach(function(cat){
+      PHRASES[cat].forEach(function(p){
+        if (p.ko.indexOf('○') >= 0 || POOL_BY_KO[p.ko]) return; // skip fill-in-the-blank templates
+        var item = { cat:cat, ko:p.ko, ro:p.ro, zh:p.zh, meaning:p.zh };
+        POOL.push(item);
+        POOL_BY_KO[p.ko] = item;
+      });
+    });
+    HANGUL.consonants.concat(HANGUL.vowels).forEach(function(h){
+      if (POOL_BY_KO[h.ko]) return;
+      var item = { cat:'hangul', ko:h.ko, ro:h.ro, zh:h.tag, meaning:'拼音 ' + h.ro + '（' + h.tag + '）' };
+      POOL.push(item);
+      POOL_BY_KO[h.ko] = item;
+    });
+  }
+
+  function shuffle(arr){
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function poolFor(cat){
+    return cat === 'all' ? POOL.slice() : POOL.filter(function(p){ return p.cat === cat; });
+  }
+
+  function levelInfo(xp){
+    var level = Math.floor(xp / XP_PER_LEVEL) + 1;
+    return {
+      level: level,
+      title: LEVEL_TITLES[Math.min(level - 1, LEVEL_TITLES.length - 1)],
+      into: xp % XP_PER_LEVEL
+    };
+  }
+
+  function addXp(amount){
+    var before = levelInfo(gameStore.xp).level;
+    gameStore.xp += Math.max(0, Math.round(amount));
+    saveGameStore();
+    var after = levelInfo(gameStore.xp);
+    if (after.level > before){
+      showToast('🎉 升級！Lv.' + after.level + '「' + after.title + '」');
+    }
+    if (hubVisible) renderHub();
+  }
+
+  function addWrong(ko){
+    var idx = gameStore.wrong.indexOf(ko);
+    if (idx >= 0) gameStore.wrong.splice(idx, 1);
+    gameStore.wrong.unshift(ko);
+    if (gameStore.wrong.length > WRONG_LIMIT) gameStore.wrong.length = WRONG_LIMIT;
+    saveGameStore();
+  }
+  function removeWrong(ko){
+    var idx = gameStore.wrong.indexOf(ko);
+    if (idx >= 0){ gameStore.wrong.splice(idx, 1); saveGameStore(); }
+  }
+  function wrongItems(){
+    return gameStore.wrong.map(function(ko){ return POOL_BY_KO[ko]; }).filter(Boolean);
+  }
+
+  function sfx(ok){
+    if (!gameStore.sfx) return;
+    try {
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!sfxCtx) sfxCtx = new AudioCtx();
+      if (sfxCtx.state === 'suspended') sfxCtx.resume();
+      var t = sfxCtx.currentTime;
+      var notes = ok ? [660, 990] : [260, 180];
+      notes.forEach(function(freq, i){
+        var osc = sfxCtx.createOscillator();
+        var gain = sfxCtx.createGain();
+        osc.type = ok ? 'triangle' : 'square';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.12, t + i * 0.1 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.1 + 0.16);
+        osc.connect(gain);
+        gain.connect(sfxCtx.destination);
+        osc.start(t + i * 0.1);
+        osc.stop(t + i * 0.1 + 0.18);
+      });
+    } catch (e) {}
+  }
+
+  function el(tag, className, text){
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  function button(className, text, onClick){
+    var b = el('button', className, text);
+    b.type = 'button';
+    if (onClick) b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function catLabel(cat){
+    if (cat === 'all') return '全部混合';
+    for (var i = 0; i < TABS.length; i++){ if (TABS[i].id === cat) return TABS[i].label; }
+    return cat;
+  }
+
+  function stopRound(){
+    if (round && round.timer) clearInterval(round.timer);
+    if (round && round.advance) clearTimeout(round.advance);
+    round = null;
+    hubVisible = false;
+    document.removeEventListener('keydown', onQuizKey);
+  }
+
+  /* ----- Hub ----- */
+
+  function renderHub(){
+    stopRound();
+    gameRoot.textContent = '';
+
+    var info = levelInfo(gameStore.xp);
+    var status = el('div', 'card');
+    var top = el('div', 'game-hud-top');
+    var who = el('div');
+    who.appendChild(el('div', 'level-title', 'Lv.' + info.level + '　' + info.title));
+    who.appendChild(el('div', 'level-sub', '累積 ' + gameStore.xp + ' XP，再 ' + (XP_PER_LEVEL - info.into) + ' XP 升級｜錯題本 ' + wrongItems().length + ' 題'));
+    top.appendChild(who);
+    var sfxBtn = button('btn', gameStore.sfx ? '🔔 音效：開' : '🔕 音效：關', function(){
+      gameStore.sfx = !gameStore.sfx;
+      saveGameStore();
+      renderHub();
+    });
+    top.appendChild(sfxBtn);
+    status.appendChild(top);
+    var bar = el('div', 'xp-bar');
+    var fill = el('div');
+    fill.style.width = Math.round(info.into / XP_PER_LEVEL * 100) + '%';
+    bar.appendChild(fill);
+    status.appendChild(bar);
+
+    var passportNote = el('p', 'hint', '🛂 旅遊護照：選擇單一主題，在聽音／看字／中翻韓模式答對 8 題以上即可蓋章。');
+    status.appendChild(passportNote);
+    var stamps = el('div', 'stamp-row');
+    TABS.forEach(function(tab){
+      if (tab.custom) return;
+      var s = el('div', 'stamp' + (gameStore.stamps[tab.id] ? ' is-earned' : ''));
+      s.title = tab.label + (gameStore.stamps[tab.id] ? '（已蓋章）' : '（尚未取得）');
+      s.appendChild(el('span', 'stamp-icon', STAMP_ICONS[tab.id] || '⭐'));
+      s.appendChild(el('span', null, tab.label));
+      stamps.appendChild(s);
+    });
+    status.appendChild(stamps);
+    gameRoot.appendChild(status);
+
+    var controls = el('div', 'game-controls');
+    var label = el('label', null, '題目主題：');
+    var sel = document.createElement('select');
+    sel.setAttribute('aria-label', '題目主題');
+    ['all'].concat(TABS.filter(function(t){ return !t.custom; }).map(function(t){ return t.id; })).forEach(function(id){
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = catLabel(id);
+      sel.appendChild(opt);
+    });
+    sel.value = gameCat;
+    sel.addEventListener('change', function(){
+      gameCat = sel.value;
+      gameStore.cat = gameCat;
+      saveGameStore();
+      renderHub();
+    });
+    label.appendChild(sel);
+    controls.appendChild(label);
+    gameRoot.appendChild(controls);
+
+    var grid = el('div', 'mode-grid');
+    Object.keys(GAME_MODES).forEach(function(id){
+      var mode = GAME_MODES[id];
+      var card = button('mode-card', null, function(){ startMode(id); });
+      card.appendChild(el('span', 'mode-title', mode.title));
+      card.appendChild(el('span', 'mode-desc', mode.desc));
+      var bestKey = id === 'review' ? null : id + ':' + gameCat;
+      var best = bestKey ? gameStore.best[bestKey] : null;
+      var extra = id === 'review' ? '目前 ' + wrongItems().length + ' 題' : (best ? '最佳：' + best : '尚無紀錄');
+      card.appendChild(el('span', 'mode-best', extra));
+      grid.appendChild(card);
+    });
+    gameRoot.appendChild(grid);
+    hubVisible = true;
+  }
+
+  function startMode(id){
+    if (GAME_MODES[id].kind === 'match') startMatch();
+    else startQuiz(id);
+  }
+
+  /* ----- Quiz ----- */
+
+  function makeQuestion(item, sub){
+    var field = sub === 'zh2ko' ? 'ko' : 'meaning';
+    var sameCat = shuffle(POOL.filter(function(p){ return p.cat === item.cat && p !== item; }));
+    var others = shuffle(POOL.filter(function(p){ return p.cat !== item.cat; }));
+    var options = [item];
+    var seen = {};
+    seen[item[field]] = true;
+    sameCat.concat(others).some(function(c){
+      if (!seen[c[field]]){
+        seen[c[field]] = true;
+        options.push(c);
+      }
+      return options.length >= 4;
+    });
+    return { item:item, sub:sub, field:field, options:shuffle(options) };
+  }
+
+  function startQuiz(mode){
+    var items;
+    if (mode === 'review'){
+      items = shuffle(wrongItems());
+      if (!items.length){
+        showToast('錯題本是空的，先去玩其他模式吧！');
+        return;
+      }
+      items = items.slice(0, ROUND_SIZE);
+    } else {
+      items = shuffle(poolFor(gameCat));
+      if (mode !== 'rush') items = items.slice(0, ROUND_SIZE);
+    }
+    stopRound();
+    round = {
+      kind:'quiz',
+      mode:mode,
+      cat: mode === 'review' ? 'review' : gameCat,
+      items:items,
+      idx:0,
+      asked:0,
+      correct:0,
+      score:0,
+      combo:0,
+      maxCombo:0,
+      hearts: mode === 'rush' ? null : MAX_HEARTS,
+      timeLeft: mode === 'rush' ? RUSH_SECONDS : null,
+      locked:false,
+      q:null
+    };
+    document.addEventListener('keydown', onQuizKey);
+    if (round.timeLeft !== null){
+      round.timer = setInterval(function(){
+        if (!round || round.kind !== 'quiz') return;
+        round.timeLeft--;
+        updateQuizHud();
+        if (round.timeLeft <= 0) finishQuiz();
+      }, 1000);
+    }
+    nextQuestion();
+  }
+
+  function nextQuestion(){
+    if (!round) return;
+    if (round.mode === 'rush' && round.idx >= round.items.length){
+      round.items = shuffle(round.items);
+      round.idx = 0;
+    }
+    if (round.idx >= round.items.length || round.hearts === 0){
+      finishQuiz();
+      return;
+    }
+    var item = round.items[round.idx++];
+    var sub = (round.mode === 'rush' || round.mode === 'review')
+      ? QUIZ_SUBTYPES[Math.floor(Math.random() * QUIZ_SUBTYPES.length)]
+      : round.mode;
+    round.q = makeQuestion(item, sub);
+    round.locked = false;
+    renderQuestion();
+  }
+
+  function renderQuestion(){
+    var q = round.q;
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+
+    var hud = el('div', 'quiz-hud');
+    hud.id = 'quiz-hud';
+    card.appendChild(hud);
+    var prog = el('div', 'quiz-progress');
+    var progFill = el('div');
+    progFill.id = 'quiz-progress';
+    prog.appendChild(progFill);
+    card.appendChild(prog);
+
+    var prompt = el('div', 'quiz-prompt');
+    var kindText = { listen:'👂 聽發音，選出中文意思', read:'👀 這句韓文是什麼意思？', zh2ko:'🗣️ 這句話韓文怎麼說？' }[q.sub];
+    prompt.appendChild(el('div', 'quiz-kind', kindText));
+    if (q.sub === 'listen'){
+      var play = button('play-btn', '🔊', function(){ speak(q.item.ko); });
+      play.setAttribute('aria-label', '再聽一次');
+      prompt.appendChild(play);
+      prompt.appendChild(el('div', 'quiz-kind', '點喇叭可以再聽一次（快捷鍵 R）'));
+    } else if (q.sub === 'read'){
+      var big = el('div', 'quiz-big-ko', q.item.ko);
+      big.lang = 'ko';
+      prompt.appendChild(big);
+    } else {
+      prompt.appendChild(el('div', 'quiz-big-zh', q.item.meaning));
+    }
+    var reveal = el('div', 'quiz-reveal');
+    reveal.id = 'quiz-reveal';
+    prompt.appendChild(reveal);
+    card.appendChild(prompt);
+
+    var grid = el('div', 'option-grid');
+    q.options.forEach(function(opt, i){
+      var b = button('option-btn' + (q.field === 'ko' ? ' is-ko' : ''), null, function(){ answer(i); });
+      b.appendChild(el('span', 'opt-key', String(i + 1)));
+      var text = el('span', null, opt[q.field]);
+      if (q.field === 'ko') text.lang = 'ko';
+      b.appendChild(text);
+      b.dataset.idx = String(i);
+      grid.appendChild(b);
+    });
+    card.appendChild(grid);
+
+    var fb = el('div', 'quiz-feedback');
+    fb.id = 'quiz-feedback';
+    fb.setAttribute('role', 'status');
+    card.appendChild(fb);
+
+    var foot = el('div', 'btn-row');
+    foot.appendChild(button('btn', '🏳️ 結束這局', function(){ finishQuiz(); }));
+    card.appendChild(foot);
+
+    gameRoot.appendChild(card);
+    updateQuizHud();
+    if (q.sub === 'listen') speak(q.item.ko);
+  }
+
+  function updateQuizHud(){
+    var hud = document.getElementById('quiz-hud');
+    if (!hud || !round || round.kind !== 'quiz') return;
+    var left = round.hearts !== null
+      ? '❤️'.repeat(round.hearts) + '🤍'.repeat(MAX_HEARTS - round.hearts)
+      : '⏱️ ' + Math.max(0, round.timeLeft) + ' 秒';
+    hud.textContent = '';
+    hud.appendChild(el('span', null, left));
+    hud.appendChild(el('span', 'combo', round.combo >= 2 ? '🔥 ' + round.combo + ' 連擊' : ''));
+    hud.appendChild(el('span', null, '⭐ ' + round.score));
+    var prog = document.getElementById('quiz-progress');
+    if (prog){
+      var pct = round.timeLeft !== null
+        ? round.timeLeft / RUSH_SECONDS * 100
+        : round.asked / round.items.length * 100;
+      prog.style.width = pct + '%';
+    }
+  }
+
+  function answer(i){
+    if (!round || round.kind !== 'quiz' || round.locked) return;
+    round.locked = true;
+    var q = round.q;
+    var picked = q.options[i];
+    var ok = picked === q.item;
+    round.asked++;
+
+    var btns = gameRoot.querySelectorAll('.option-btn');
+    Array.prototype.forEach.call(btns, function(b){
+      b.disabled = true;
+      var opt = q.options[parseInt(b.dataset.idx, 10)];
+      if (opt === q.item) b.classList.add('is-correct');
+      else if (opt === picked) b.classList.add('is-wrong');
+    });
+
+    var fb = document.getElementById('quiz-feedback');
+    var reveal = document.getElementById('quiz-reveal');
+    if (reveal) reveal.textContent = q.item.ko + '｜' + q.item.ro + '｜' + q.item.meaning;
+
+    if (ok){
+      round.correct++;
+      round.combo++;
+      round.maxCombo = Math.max(round.maxCombo, round.combo);
+      var gained = 100 + Math.min(round.combo - 1, 10) * 10;
+      round.score += gained;
+      fb.className = 'quiz-feedback ok';
+      fb.textContent = ['答對了！', '太厲害了！', '完美！', '잘했어요！'][Math.floor(Math.random() * 4)] + ' +' + gained;
+      if (round.mode === 'review') removeWrong(q.item.ko);
+      sfx(true);
+    } else {
+      round.combo = 0;
+      if (round.hearts !== null) round.hearts--;
+      fb.className = 'quiz-feedback bad';
+      fb.textContent = '差一點！正確答案：' + q.item[q.field];
+      addWrong(q.item.ko);
+      sfx(false);
+    }
+    updateQuizHud();
+    if (q.sub !== 'listen' || !ok) speak(q.item.ko);
+
+    var fast = round.mode === 'rush';
+    var delay = ok ? (fast ? 700 : 1200) : (fast ? 1400 : 2200);
+    round.advance = setTimeout(nextQuestion, delay);
+  }
+
+  function onQuizKey(e){
+    if (!round || round.kind !== 'quiz') return;
+    var panel = document.getElementById('panel-game');
+    if (!panel || !panel.classList.contains('is-active')) return;
+    if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key >= '1' && e.key <= '4'){
+      var i = parseInt(e.key, 10) - 1;
+      if (round.q && i < round.q.options.length){ e.preventDefault(); answer(i); }
+    } else if ((e.key === 'r' || e.key === 'R') && round.q){
+      speak(round.q.item.ko);
+    }
+  }
+
+  function finishQuiz(){
+    if (!round || round.kind !== 'quiz') return;
+    var r = round;
+    stopRound();
+
+    var accuracy = r.asked ? Math.round(r.correct / r.asked * 100) : 0;
+    var stars = r.mode === 'rush'
+      ? (r.correct >= 20 ? 3 : r.correct >= 12 ? 2 : r.correct >= 5 ? 1 : 0)
+      : (accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0);
+
+    var badges = [];
+    if (r.mode !== 'review'){
+      var bestKey = r.mode + ':' + r.cat;
+      if (r.score > (gameStore.best[bestKey] || 0)){
+        if (gameStore.best[bestKey]) badges.push('🏆 新紀錄！');
+        gameStore.best[bestKey] = r.score;
+      }
+    }
+    var stampable = r.cat !== 'all' && r.cat !== 'review' && QUIZ_SUBTYPES.indexOf(r.mode) >= 0;
+    if (stampable && r.correct >= 8 && !gameStore.stamps[r.cat]){
+      gameStore.stamps[r.cat] = true;
+      badges.push('🛂 取得「' + catLabel(r.cat) + '」護照印章！');
+    }
+    saveGameStore();
+    var xpGain = Math.round(r.score / 10);
+    addXp(xpGain);
+
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'quiz-kind', GAME_MODES[r.mode].title + '｜' + (r.cat === 'review' ? '錯題本' : catLabel(r.cat))));
+    card.appendChild(el('div', 'result-stars', '★'.repeat(stars) + '☆'.repeat(3 - stars)));
+    card.appendChild(el('div', 'result-score', String(r.score)));
+    var stats = el('div', 'result-stats');
+    [['答對', r.correct + '/' + r.asked], ['正確率', accuracy + '%'], ['最高連擊', r.maxCombo]].forEach(function(pair){
+      var d = el('div', null, pair[0]);
+      d.insertBefore(el('b', null, String(pair[1])), d.firstChild);
+      stats.appendChild(d);
+    });
+    card.appendChild(stats);
+    card.appendChild(el('div', 'result-badge', '+' + xpGain + ' XP'));
+    badges.forEach(function(b){ card.appendChild(el('div', 'result-badge', b)); });
+
+    var row = el('div', 'btn-row');
+    row.appendChild(button('btn btn-primary', '🔁 再玩一次', function(){ startQuiz(r.mode); }));
+    row.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
+    if (wrongItems().length){
+      row.appendChild(button('btn', '🎓 請 AI 家教陪我練錯題', function(){ openTutorScenario('review'); }));
+    }
+    card.appendChild(row);
+    gameRoot.appendChild(card);
+  }
+
+  /* ----- Memory match ----- */
+
+  function startMatch(){
+    var picks = shuffle(poolFor(gameCat)).slice(0, MATCH_PAIRS);
+    if (picks.length < 2){ showToast('這個主題的句子太少，換個主題試試！'); return; }
+    stopRound();
+    var cards = [];
+    picks.forEach(function(item, i){
+      cards.push({ pair:i, item:item, face:'ko' });
+      cards.push({ pair:i, item:item, face:'meaning' });
+    });
+    round = {
+      kind:'match',
+      cat:gameCat,
+      cards:shuffle(cards),
+      open:[],
+      done:0,
+      pairs:picks.length,
+      moves:0,
+      seconds:0,
+      busy:false
+    };
+    round.timer = setInterval(function(){
+      if (!round || round.kind !== 'match') return;
+      round.seconds++;
+      updateMatchHud();
+    }, 1000);
+    renderMatch();
+  }
+
+  function renderMatch(){
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+    var hud = el('div', 'quiz-hud');
+    hud.id = 'match-hud';
+    card.appendChild(hud);
+    card.appendChild(el('p', 'hint', '翻開兩張卡片，韓文和中文意思相同就配對成功。'));
+    var grid = el('div', 'match-grid');
+    round.cards.forEach(function(c, i){
+      var b = button('match-card', '?', function(){ flipCard(i); });
+      b.dataset.idx = String(i);
+      b.setAttribute('aria-label', '第 ' + (i + 1) + ' 張卡片（未翻開）');
+      c.node = b;
+      grid.appendChild(b);
+    });
+    card.appendChild(grid);
+    var foot = el('div', 'btn-row');
+    foot.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
+    card.appendChild(foot);
+    gameRoot.appendChild(card);
+    updateMatchHud();
+  }
+
+  function showFace(c, open){
+    var b = c.node;
+    b.textContent = '';
+    if (!open){
+      b.textContent = '?';
+      b.classList.remove('is-open');
+      b.setAttribute('aria-label', '卡片（未翻開）');
+      return;
+    }
+    b.classList.add('is-open');
+    var span = el('span', c.face === 'ko' ? 'ko' : null, c.item[c.face]);
+    if (c.face === 'ko') span.lang = 'ko';
+    b.appendChild(span);
+    b.setAttribute('aria-label', c.item[c.face]);
+  }
+
+  function updateMatchHud(){
+    var hud = document.getElementById('match-hud');
+    if (!hud || !round || round.kind !== 'match') return;
+    hud.textContent = '';
+    hud.appendChild(el('span', null, '🃏 ' + round.done + '/' + round.pairs + ' 對'));
+    hud.appendChild(el('span', null, '👣 ' + round.moves + ' 步'));
+    hud.appendChild(el('span', null, '⏱️ ' + round.seconds + ' 秒'));
+  }
+
+  function flipCard(i){
+    if (!round || round.kind !== 'match' || round.busy) return;
+    var c = round.cards[i];
+    if (c.matched || round.open.indexOf(c) >= 0) return;
+    showFace(c, true);
+    if (c.face === 'ko') speak(c.item.ko);
+    round.open.push(c);
+    if (round.open.length < 2) return;
+
+    round.moves++;
+    var a = round.open[0], b = round.open[1];
+    round.open = [];
+    if (a.pair === b.pair){
+      a.matched = b.matched = true;
+      a.node.classList.add('is-done');
+      b.node.classList.add('is-done');
+      a.node.disabled = b.node.disabled = true;
+      round.done++;
+      sfx(true);
+      if (c.face !== 'ko') speak(c.item.ko);
+      updateMatchHud();
+      if (round.done === round.pairs) setTimeout(finishMatch, 600);
+    } else {
+      round.busy = true;
+      sfx(false);
+      updateMatchHud();
+      round.advance = setTimeout(function(){
+        if (!round || round.kind !== 'match') return;
+        showFace(a, false);
+        showFace(b, false);
+        round.busy = false;
+      }, 900);
+    }
+  }
+
+  function finishMatch(){
+    if (!round || round.kind !== 'match') return;
+    var r = round;
+    stopRound();
+    var score = Math.max(100, 1200 - Math.max(0, r.moves - r.pairs) * 40 - r.seconds * 5);
+    var perfect = r.moves === r.pairs;
+    var stars = perfect || score >= 900 ? 3 : score >= 600 ? 2 : 1;
+    var bestKey = 'match:' + r.cat;
+    var badges = [];
+    if (score > (gameStore.best[bestKey] || 0)){
+      if (gameStore.best[bestKey]) badges.push('🏆 新紀錄！');
+      gameStore.best[bestKey] = score;
+    }
+    if (perfect) badges.push('🧠 完美記憶！一次都沒翻錯');
+    saveGameStore();
+    var xpGain = Math.round(score / 10);
+    addXp(xpGain);
+
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'quiz-kind', GAME_MODES.match.title + '｜' + catLabel(r.cat)));
+    card.appendChild(el('div', 'result-stars', '★'.repeat(stars) + '☆'.repeat(3 - stars)));
+    card.appendChild(el('div', 'result-score', String(score)));
+    var stats = el('div', 'result-stats');
+    [['配對', r.pairs + ' 對'], ['步數', r.moves], ['秒數', r.seconds]].forEach(function(pair){
+      var d = el('div', null, pair[0]);
+      d.insertBefore(el('b', null, String(pair[1])), d.firstChild);
+      stats.appendChild(d);
+    });
+    card.appendChild(stats);
+    card.appendChild(el('div', 'result-badge', '+' + xpGain + ' XP'));
+    badges.forEach(function(b){ card.appendChild(el('div', 'result-badge', b)); });
+    var row = el('div', 'btn-row');
+    row.appendChild(button('btn btn-primary', '🔁 再玩一次', startMatch));
+    row.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
+    card.appendChild(row);
+    gameRoot.appendChild(card);
+  }
+
+  function initGame(){
+    buildPool();
+    gameRoot = document.getElementById('game-root');
+    var validCat = gameStore.cat === 'all' || TABS.some(function(t){ return !t.custom && t.id === gameStore.cat; });
+    gameCat = validCat ? gameStore.cat : 'all';
+    renderHub();
+  }
+
+  /* ---------- AI Tutor (Gemini Live 3.8, BYOK) ---------- */
+
+  var LIVE_WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent';
+  var MIC_SAMPLE_RATE = 16000;
+  var TUTOR_LS = {
+    apiKey:'kt-tutor-api-key',
+    remember:'kt-tutor-remember',
+    model:'kt-tutor-model',
+    voice:'kt-tutor-voice',
+    thinking:'kt-tutor-thinking',
+    scenario:'kt-tutor-scenario'
+  };
+
+  var TUTOR_SCENARIOS = {
+    free: {
+      label:'💬 自由聊天／問答',
+      prompt:'情境：自由問答。學生可能會問任何旅遊韓語問題，請依問題教學；若學生沒有想法，就從最常用的問候語開始帶。',
+      kickoff:'請用一兩句話打招呼、自我介紹，然後問學生今天想學什麼。'
+    },
+    restaurant: {
+      label:'🍜 角色扮演：餐廳點餐',
+      prompt:'情境：角色扮演。你扮演首爾一間韓式烤肉店的店員，學生是客人。流程：歡迎入座 → 點餐（可能問辣度、份數）→ 加點飲料 → 結帳。你用簡單的韓文說店員台詞，接著用中文簡短說明意思並提示學生可以怎麼回答。',
+      kickoff:'請先用中文說明今天的角色扮演，然後用韓文說出店員歡迎客人的第一句台詞。'
+    },
+    taxi: {
+      label:'🚕 角色扮演：搭計程車',
+      prompt:'情境：角色扮演。你扮演首爾的計程車司機，學生是乘客，要去明洞、景福宮或仁川機場。練習：說出目的地、問多久會到、請司機停車、付款（刷卡／交通卡）。你用簡單韓文說司機台詞，再用中文提示。',
+      kickoff:'請先用中文說明情境，然後用韓文說出司機問「要去哪裡？」的台詞。'
+    },
+    shopping: {
+      label:'🛍️ 角色扮演：明洞購物殺價',
+      prompt:'情境：角色扮演。你扮演明洞服飾店或東大門市場的老闆，學生是觀光客。練習：問價格、說太貴、請求算便宜一點、問尺寸顏色、問能否刷卡或退稅。可以適度討價還價，讓對話有趣。',
+      kickoff:'請先用中文說明情境，然後用韓文熱情招呼客人。'
+    },
+    hotel: {
+      label:'🏨 角色扮演：飯店入住',
+      prompt:'情境：角色扮演。你扮演首爾飯店櫃台人員，學生是房客。練習：辦理入住、說出預訂姓名、詢問早餐時間、Wi-Fi 密碼、寄放行李、退房。',
+      kickoff:'請先用中文說明情境，然後用韓文說出櫃台人員的招呼語。'
+    },
+    pronounce: {
+      label:'🎯 發音教練',
+      prompt:'情境：發音特訓。從常用旅遊句中一次挑一句，先示範慢速與正常速度的發音，請學生跟讀。仔細聽學生的發音並具體指出需要調整的音（例如收尾音、緊音 ㄲㄸㅃㅆㅉ、送氣音），說對就給星星並換下一句，難度逐步提高。',
+      kickoff:'請用中文說明發音特訓的玩法，然後示範第一句並請學生跟讀。'
+    },
+    review: {
+      label:'📕 複習遊戲錯題',
+      prompt:'情境：複習學生在遊戲中答錯的句子（清單附在下方）。一次挑一句，用有趣的方式幫助記憶（諧音、情境小故事、拆解字母），再請學生跟讀或用中文考學生韓文怎麼說。學生答對就給星星並換下一句。',
+      kickoff:'請用一句話說明今天要一起複習錯題，然後從清單中挑第一句開始。'
+    }
+  };
+
+  var TUTOR_CHIPS = [
+    '請再說慢一點',
+    '請再示範一次發音',
+    '給我一個小挑戰',
+    '這句話可以怎麼回答？',
+    '換下一個句子'
+  ];
+
+  var TUTOR_TOOLS = [
+    {
+      name:'show_phrase',
+      description:'在學生螢幕上顯示一張韓語句卡（韓文、羅馬拼音、中文意思）。每次教新句子、或糾正學生說法時都要呼叫。會立即回傳。',
+      parameters:{
+        type:'OBJECT',
+        properties:{
+          korean:{ type:'STRING', description:'韓文句子（韓文字母）' },
+          romanization:{ type:'STRING', description:'羅馬拼音' },
+          chinese:{ type:'STRING', description:'繁體中文意思' },
+          tip:{ type:'STRING', description:'可選：簡短的發音或使用提示（繁體中文，20 字以內）' }
+        },
+        required:['korean','chinese']
+      }
+    },
+    {
+      name:'award_stars',
+      description:'學生用韓文說對、答對挑戰或明顯進步時，給予 1～3 顆星作為獎勵，會轉換成遊戲經驗值。會立即回傳。',
+      parameters:{
+        type:'OBJECT',
+        properties:{
+          stars:{ type:'INTEGER', description:'星星數，1～3' },
+          reason:{ type:'STRING', description:'給星原因（繁體中文，簡短）' }
+        },
+        required:['stars']
+      }
+    }
+  ];
+
+  var tutor = {
+    ws:null,
+    setupDone:false,
+    player:null,
+    mic:null,
+    micMuted:false,
+    speakerMuted:false,
+    interactionStatus:null,
+    bubble:null,
+    bubbleRole:null
+  };
+  var tEl = {};
+
+  function lsGet(key){ try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function lsSet(key, value){ try { localStorage.setItem(key, value); } catch (e) {} }
+  function lsRemove(key){ try { localStorage.removeItem(key); } catch (e) {} }
+
+  function isExtendedModel(){ return /extended-thinking/i.test(tEl.model.value); }
+
+  function buildTutorInstruction(){
+    var scenario = TUTOR_SCENARIOS[tEl.scenario.value] || TUTOR_SCENARIOS.free;
+    var info = levelInfo(gameStore.xp);
+    var lines = [
+      '你是一位親切、有耐心又幽默的韓語家教。學生是以繁體中文為母語、即將到韓國旅遊的台灣人，韓語是初學程度（遊戲等級 Lv.' + info.level + '）。',
+      '規則：',
+      '1. 講解使用繁體中文（台灣用語）；說韓文時要清楚、稍慢，必要時重複一次。',
+      '2. 每次回覆簡短（約 2～4 句），一次只教一個重點，說完就停下來讓學生開口練習。',
+      '3. 每當教一句新的韓文、或糾正學生的說法時，一定要呼叫 show_phrase 工具，把韓文、羅馬拼音與中文意思顯示在學生螢幕上。',
+      '4. 學生用韓文說對或明顯進步時，呼叫 award_stars 給 1～3 顆星並簡短稱讚；說錯時溫柔指出要調整的音，示範後請學生再試一次。',
+      '5. 以旅遊實用句為主，避免艱深文法；適時加入韓國旅遊小知識讓課程更有趣。',
+      '6. 學生的語音辨識可能不準，聽不清楚時請學生再說一次，不要自行猜測或亂給分。',
+      '',
+      scenario.prompt
+    ];
+    if (tEl.scenario.value === 'review'){
+      var wrong = wrongItems().slice(0, 20);
+      lines.push('');
+      if (wrong.length){
+        lines.push('學生的錯題清單（韓文｜拼音｜中文）：');
+        wrong.forEach(function(w){ lines.push('- ' + w.ko + '｜' + w.ro + '｜' + w.meaning); });
+      } else {
+        lines.push('目前錯題清單是空的，請改為複習最常用的旅遊句子。');
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function buildTutorSetup(){
+    var model = tEl.model.value;
+    var extended = isExtendedModel();
+    var generationConfig = {
+      responseModalities:['AUDIO'],
+      speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName: tEl.voice.value || 'Zephyr' } } }
+    };
+    // Only the extended-thinking model accepts thinkingConfig (LOW/MEDIUM/HIGH).
+    if (extended) generationConfig.thinkingConfig = { thinkingLevel: tEl.thinking.value || 'LOW' };
+    return {
+      model:'models/' + model,
+      generationConfig:generationConfig,
+      systemInstruction:{ parts:[{ text: buildTutorInstruction() }] },
+      inputAudioTranscription:{},
+      outputAudioTranscription:{},
+      tools:[{ functionDeclarations: TUTOR_TOOLS.map(function(decl){
+        var tool = Object.assign({}, decl);
+        // Extended-thinking requires every tool to be NON_BLOCKING.
+        if (extended) tool.behavior = 'NON_BLOCKING';
+        return tool;
+      }) }]
+    };
+  }
+
+  /* ----- PCM helpers ----- */
+
+  function floatTo16BitPCM(f32){
+    var out = new Int16Array(f32.length);
+    for (var i = 0; i < f32.length; i++){
+      var s = Math.max(-1, Math.min(1, f32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+  function pcm16ToFloat32(i16){
+    var out = new Float32Array(i16.length);
+    for (var i = 0; i < i16.length; i++) out[i] = i16[i] / 32768;
+    return out;
+  }
+  function bufferToBase64(buffer){
+    var bytes = new Uint8Array(buffer);
+    var binary = '';
+    for (var i = 0; i < bytes.length; i += 0x8000){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+  }
+  function base64ToBytes(b64){
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  function downsampleTo16k(f32, rate){
+    if (rate === MIC_SAMPLE_RATE) return f32;
+    var ratio = rate / MIC_SAMPLE_RATE;
+    var len = Math.max(1, Math.round(f32.length / ratio));
+    var out = new Float32Array(len);
+    for (var i = 0; i < len; i++){
+      var src = i * ratio;
+      var i0 = Math.floor(src);
+      var i1 = Math.min(i0 + 1, f32.length - 1);
+      var frac = src - i0;
+      out[i] = f32[i0] * (1 - frac) + f32[i1] * frac;
+    }
+    return out;
+  }
+  function computeRms(f32){
+    var sum = 0;
+    for (var i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
+    return Math.sqrt(sum / f32.length);
+  }
+
+  var MIC_WORKLET_SRC =
+    'class MicCaptureProcessor extends AudioWorkletProcessor {' +
+    '  constructor(){ super(); this._buf = new Float32Array(2048); this._off = 0; }' +
+    '  process(inputs){' +
+    '    var ch = inputs[0] && inputs[0][0];' +
+    '    if (ch && ch.length){' +
+    '      var read = 0;' +
+    '      while (read < ch.length){' +
+    '        var n = Math.min(this._buf.length - this._off, ch.length - read);' +
+    '        this._buf.set(ch.subarray(read, read + n), this._off);' +
+    '        this._off += n; read += n;' +
+    '        if (this._off >= this._buf.length){ this.port.postMessage(this._buf.slice(0)); this._off = 0; }' +
+    '      }' +
+    '    }' +
+    '    return true;' +
+    '  }' +
+    '}' +
+    'registerProcessor("mic-capture-processor", MicCaptureProcessor);';
+
+  function startMic(onChunk, onLevel){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      return Promise.reject(new Error('此瀏覽器不支援麥克風存取（需使用 HTTPS 網址開啟）'));
+    }
+    var mic = { stream:null, context:null, source:null, node:null };
+    return navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+    }).then(function(stream){
+      mic.stream = stream;
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      mic.context = new AudioCtx();
+      var url = URL.createObjectURL(new Blob([MIC_WORKLET_SRC], { type:'application/javascript' }));
+      return mic.context.audioWorklet.addModule(url).then(function(){
+        URL.revokeObjectURL(url);
+        mic.source = mic.context.createMediaStreamSource(stream);
+        mic.node = new AudioWorkletNode(mic.context, 'mic-capture-processor');
+        mic.node.port.onmessage = function(evt){
+          var f32 = evt.data;
+          onLevel(computeRms(f32));
+          if (tutor.micMuted) return;
+          onChunk(bufferToBase64(floatTo16BitPCM(downsampleTo16k(f32, mic.context.sampleRate)).buffer));
+        };
+        mic.source.connect(mic.node);
+        // Route through a silent gain so the worklet keeps running without echoing the mic.
+        var sink = mic.context.createGain();
+        sink.gain.value = 0;
+        mic.node.connect(sink);
+        sink.connect(mic.context.destination);
+        return mic;
+      });
+    }).catch(function(err){
+      stopMic(mic);
+      throw err;
+    });
+  }
+
+  function stopMic(mic){
+    if (!mic) return;
+    if (mic.node){ try { mic.node.port.onmessage = null; mic.node.disconnect(); } catch (e) {} }
+    if (mic.source){ try { mic.source.disconnect(); } catch (e) {} }
+    if (mic.stream){ mic.stream.getTracks().forEach(function(t){ t.stop(); }); }
+    if (mic.context){ try { mic.context.close(); } catch (e) {} }
+  }
+
+  function PCMPlayer(sampleRate){
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AudioCtx({ sampleRate:sampleRate });
+    this.gain = this.ctx.createGain();
+    this.gain.connect(this.ctx.destination);
+    this.nextStart = 0;
+    this.sources = [];
+  }
+  PCMPlayer.prototype.play = function(f32){
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    var buffer = this.ctx.createBuffer(1, f32.length, this.ctx.sampleRate);
+    buffer.copyToChannel(f32, 0);
+    var src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.gain);
+    var startAt = Math.max(this.ctx.currentTime, this.nextStart);
+    src.start(startAt);
+    this.nextStart = startAt + buffer.duration;
+    var self = this;
+    this.sources.push(src);
+    src.onended = function(){
+      var i = self.sources.indexOf(src);
+      if (i >= 0) self.sources.splice(i, 1);
+    };
+  };
+  PCMPlayer.prototype.stopAll = function(){
+    this.sources.forEach(function(s){ try { s.stop(); } catch (e) {} });
+    this.sources = [];
+    this.nextStart = this.ctx.currentTime;
+  };
+  PCMPlayer.prototype.setMuted = function(m){ this.gain.gain.value = m ? 0 : 1; };
+  PCMPlayer.prototype.close = function(){
+    this.stopAll();
+    try { this.ctx.close(); } catch (e) {}
+  };
+
+  /* ----- UI helpers ----- */
+
+  function setTutorStatus(text, kind){
+    tEl.status.textContent = text;
+    tEl.status.className = 'badge' + (kind ? ' is-' + kind : '');
+  }
+  function showTutorError(msg){
+    tEl.error.textContent = msg;
+    tEl.error.hidden = false;
+  }
+  function clearTutorError(){
+    tEl.error.hidden = true;
+    tEl.error.textContent = '';
+  }
+  function scrollChat(){ tEl.chat.scrollTop = tEl.chat.scrollHeight; }
+  function addSystemLine(text){
+    endBubble();
+    tEl.chat.appendChild(el('div', 'bubble system', text));
+    scrollChat();
+  }
+  function appendBubble(role, text){
+    if (!text) return;
+    if (!tutor.bubble || tutor.bubbleRole !== role){
+      tutor.bubble = el('div', 'bubble ' + role, '');
+      tutor.bubbleRole = role;
+      tEl.chat.appendChild(tutor.bubble);
+    }
+    tutor.bubble.textContent += text;
+    scrollChat();
+  }
+  function endBubble(){
+    tutor.bubble = null;
+    tutor.bubbleRole = null;
+  }
+  function refreshListeningStatus(){
+    if (!tutor.setupDone) return;
+    if (tutor.interactionStatus === 'IN_PROGRESS') setTutorStatus('🤔 家教思考中', 'live');
+    else if (!tutor.mic) setTutorStatus('⌨️ 文字模式', 'live');
+    else if (tutor.micMuted) setTutorStatus('🔇 麥克風已靜音', 'live');
+    else setTutorStatus('👂 聆聽中，請開口說話', 'live');
+  }
+
+  function setLiveControls(connected){
+    tEl.connect.hidden = connected;
+    tEl.connect.disabled = false;
+    tEl.disconnect.hidden = !connected;
+    tEl.speaker.disabled = !connected;
+    tEl.text.disabled = !connected;
+    tEl.send.disabled = !connected;
+    Array.prototype.forEach.call(tEl.chips.querySelectorAll('button'), function(b){ b.disabled = !connected; });
+    [tEl.scenario, tEl.model, tEl.voice, tEl.key].forEach(function(n){ n.disabled = connected; });
+    tEl.thinking.disabled = connected || !isExtendedModel();
+    if (!connected){
+      tEl.mic.disabled = true;
+      tEl.level.style.width = '0%';
+    }
+  }
+
+  /* ----- Tools ----- */
+
+  function renderTutorCard(args){
+    var empty = document.getElementById('tutor-cards-empty');
+    if (empty) empty.remove();
+    var korean = String(args.korean || '').trim();
+    if (!korean) return;
+    var entry = {
+      tag:'家教小卡',
+      zh:String(args.chinese || '') + (args.tip ? '｜' + String(args.tip) : ''),
+      ko:korean,
+      ro:String(args.romanization || '')
+    };
+    var cardNode = renderCard(entry);
+    tEl.cards.insertBefore(cardNode, tEl.cards.firstChild);
+    while (tEl.cards.children.length > 12) tEl.cards.removeChild(tEl.cards.lastChild);
+  }
+
+  function runTool(call){
+    var args = call.args || {};
+    if (call.name === 'show_phrase'){
+      renderTutorCard(args);
+      return { shown:true };
+    }
+    if (call.name === 'award_stars'){
+      var stars = Math.max(1, Math.min(3, parseInt(args.stars, 10) || 1));
+      var gained = stars * 20;
+      addXp(gained);
+      var reason = args.reason ? String(args.reason) : '表現很棒';
+      showToast('⭐'.repeat(stars) + ' +' + gained + ' XP：' + reason);
+      addSystemLine('⭐'.repeat(stars) + ' 獲得 ' + gained + ' XP（' + reason + '）');
+      return { stars:stars, xpGained:gained, totalXp:gameStore.xp };
+    }
+    return { error:'未知的工具：' + call.name };
+  }
+
+  function sendTutor(msg){
+    if (!tutor.ws || tutor.ws.readyState !== WebSocket.OPEN || !tutor.setupDone) return false;
+    try { tutor.ws.send(JSON.stringify(msg)); return true; } catch (e) { return false; }
+  }
+
+  function handleToolCalls(calls){
+    var responses = calls.map(function(call){
+      var result;
+      try { result = { result: runTool(call) }; }
+      catch (err){ result = { error: String(err && err.message || err) }; }
+      // No `scheduling` field: 3.8 models reject it (close code 1007).
+      return { id:call.id, name:call.name, response:result };
+    });
+    if (!sendTutor({ toolResponse:{ functionResponses:responses } })){
+      addSystemLine('⚠️ 工具結果未送出（連線已關閉）');
+    }
+  }
+
+  /* ----- Server messages ----- */
+
+  function onTutorMessage(socket, event){
+    if (socket !== tutor.ws) return;
+    var raw = event.data;
+    if (typeof raw === 'string') onTutorJson(socket, raw);
+    else if (raw instanceof Blob) raw.text().then(function(t){ onTutorJson(socket, t); });
+    else { try { onTutorJson(socket, new TextDecoder().decode(raw)); } catch (e) {} }
+  }
+
+  function onTutorJson(socket, text){
+    if (socket !== tutor.ws) return;
+    var msg;
+    try { msg = JSON.parse(text); } catch (e) { return; }
+
+    if (msg.setupComplete){
+      tutor.setupDone = true;
+      tutor.interactionStatus = null;
+      addSystemLine('✅ 已連線，家教準備好了！');
+      beginTutorMic(socket);
+      var scenario = TUTOR_SCENARIOS[tEl.scenario.value] || TUTOR_SCENARIOS.free;
+      sendTutor({
+        clientContent:{
+          turns:[{ role:'user', parts:[{ text:'（系統：學生已進入教室。' + scenario.kickoff + '）' }] }],
+          turnComplete:true
+        }
+      });
+      refreshListeningStatus();
+      return;
+    }
+
+    // interactionStatus can arrive at the top level or inside serverContent.
+    if (typeof msg.interactionStatus === 'string'){
+      tutor.interactionStatus = msg.interactionStatus;
+      refreshListeningStatus();
+    }
+
+    if (msg.serverContent){
+      var sc = msg.serverContent;
+      if (typeof sc.interactionStatus === 'string'){
+        tutor.interactionStatus = sc.interactionStatus;
+        refreshListeningStatus();
+      }
+      if (sc.interrupted && tutor.player) tutor.player.stopAll();
+      if (sc.modelTurn && sc.modelTurn.parts){
+        sc.modelTurn.parts.forEach(function(part){
+          if (part.inlineData && part.inlineData.data){
+            var m = /rate=(\d+)/.exec(part.inlineData.mimeType || '');
+            var rate = m ? parseInt(m[1], 10) : 24000;
+            if (!tutor.player || tutor.player.ctx.sampleRate !== rate){
+              if (tutor.player) tutor.player.close();
+              tutor.player = new PCMPlayer(rate);
+              tutor.player.setMuted(tutor.speakerMuted);
+            }
+            var bytes = base64ToBytes(part.inlineData.data);
+            tutor.player.play(pcm16ToFloat32(new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2))));
+            setTutorStatus('🗣️ 家教說話中', 'speaking');
+          }
+        });
+      }
+      if (sc.inputTranscription && sc.inputTranscription.text) appendBubble('user', sc.inputTranscription.text);
+      if (sc.outputTranscription && sc.outputTranscription.text) appendBubble('model', sc.outputTranscription.text);
+      if (sc.turnComplete){
+        endBubble();
+        refreshListeningStatus();
+      }
+      return;
+    }
+
+    if (msg.toolCall && msg.toolCall.functionCalls){
+      handleToolCalls(msg.toolCall.functionCalls);
+      return;
+    }
+
+    if (msg.goAway){
+      addSystemLine('⚠️ 伺服器即將結束這次連線，若中斷請重新開始上課。');
+    }
+  }
+
+  function beginTutorMic(socket){
+    startMic(function(b64){
+      sendTutor({ realtimeInput:{ audio:{ data:b64, mimeType:'audio/pcm;rate=' + MIC_SAMPLE_RATE } } });
+    }, function(rms){
+      tEl.level.style.width = Math.min(100, Math.round(rms * 400)) + '%';
+    }).then(function(mic){
+      if (socket !== tutor.ws){ stopMic(mic); return; } // session ended while waiting for permission
+      tutor.mic = mic;
+      tEl.mic.disabled = false;
+      refreshListeningStatus();
+    }).catch(function(err){
+      if (socket !== tutor.ws) return;
+      showTutorError('無法啟動麥克風：' + (err && err.message ? err.message : String(err)) + '。仍可用下方文字框和家教對話。');
+      refreshListeningStatus();
+    });
+  }
+
+  function tutorConnect(){
+    clearTutorError();
+    var key = tEl.key.value.trim();
+    if (!key){ showTutorError('請先填入你的 Gemini API Key。'); tEl.key.focus(); return; }
+    if (!('WebSocket' in window)){ showTutorError('此瀏覽器不支援 WebSocket。'); return; }
+
+    if (tEl.remember.checked) lsSet(TUTOR_LS.apiKey, key);
+    else lsRemove(TUTOR_LS.apiKey);
+
+    if (!(window.AudioContext || window.webkitAudioContext)){ showTutorError('此瀏覽器不支援 Web Audio，無法播放家教語音。'); return; }
+    if (ttsSupported) speechSynthesis.cancel();
+    // Create the player inside the click so browsers allow audio playback.
+    tutor.player = new PCMPlayer(24000);
+    tutor.player.setMuted(tutor.speakerMuted);
+    tutor.player.ctx.resume();
+
+    var socket;
+    try {
+      socket = new WebSocket(LIVE_WS_URL + '?key=' + encodeURIComponent(key));
+    } catch (e){
+      showTutorError('建立連線失敗：' + (e && e.message ? e.message : String(e)));
+      tutorCleanup();
+      return;
+    }
+    tutor.ws = socket;
+    tutor.setupDone = false;
+    tEl.connect.disabled = true;
+    setTutorStatus('⏳ 連線中…');
+    tEl.chat.textContent = '';
+    endBubble();
+    addSystemLine('情境：' + (TUTOR_SCENARIOS[tEl.scenario.value] || TUTOR_SCENARIOS.free).label + '｜模型：' + tEl.model.value);
+
+    socket.onopen = function(){
+      if (socket !== tutor.ws) return;
+      socket.send(JSON.stringify({ setup: buildTutorSetup() }));
+    };
+    socket.onmessage = function(evt){ onTutorMessage(socket, evt); };
+    socket.onerror = function(){
+      if (socket !== tutor.ws) return;
+      showTutorError('連線發生錯誤，請確認 API Key 是否正確、以及該金鑰是否可使用 Gemini Live 3.8 模型。');
+    };
+    socket.onclose = function(evt){
+      if (socket !== tutor.ws) return;
+      if (evt.code && evt.code !== 1000){
+        var hint = evt.code === 1007 ? '（設定欄位不被模型接受，可改用另一個模型再試）'
+          : evt.code === 1008 ? '（API Key 無效或沒有權限）' : '';
+        showTutorError('連線已關閉，代碼 ' + evt.code + (evt.reason ? '：' + evt.reason : '') + hint);
+      }
+      addSystemLine('🔌 下課了，連線已關閉。');
+      tutorCleanup();
+    };
+    setLiveControls(true);
+    tEl.connect.disabled = true;
+  }
+
+  function tutorDisconnect(){
+    var socket = tutor.ws;
+    if (socket){
+      tutor.ws = null; // detach first so onclose is ignored
+      try { socket.close(1000, 'user disconnect'); } catch (e) {}
+      addSystemLine('👋 已結束上課。');
+    }
+    tutorCleanup();
+  }
+
+  function tutorCleanup(){
+    stopMic(tutor.mic);
+    tutor.mic = null;
+    if (tutor.player){ tutor.player.close(); tutor.player = null; }
+    tutor.ws = null;
+    tutor.setupDone = false;
+    tutor.interactionStatus = null;
+    tutor.micMuted = false;
+    tEl.mic.textContent = '🎤 麥克風靜音';
+    endBubble();
+    setTutorStatus('未連線');
+    setLiveControls(false);
+  }
+
+  function sendTutorText(text){
+    text = text.trim();
+    if (!text) return;
+    if (sendTutor({ clientContent:{ turns:[{ role:'user', parts:[{ text:text }] }], turnComplete:true } })){
+      endBubble();
+      appendBubble('user', text);
+      endBubble();
+    }
+  }
+
+  function openTutorScenario(id){
+    if (!tutor.ws && TUTOR_SCENARIOS[id]){
+      tEl.scenario.value = id;
+      lsSet(TUTOR_LS.scenario, id);
+    }
+    activateTab('tutor');
+    window.scrollTo({ top:0, behavior:'smooth' });
+    if (tutor.ws) showToast('上課中，要切換情境請先結束再重新開始。');
+    else if (!tEl.key.value.trim()) tEl.key.focus();
+  }
+
+  function initTutor(){
+    ['key','keyToggle','remember','scenario','voice','model','thinking','connect','disconnect',
+     'mic','speaker','status','level','error','cards','chips','chat','text','send'].forEach(function(id){
+      tEl[id] = document.getElementById('tutor-' + id.replace(/[A-Z]/g, function(c){ return '-' + c.toLowerCase(); }));
+    });
+
+    Object.keys(TUTOR_SCENARIOS).forEach(function(id){
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = TUTOR_SCENARIOS[id].label;
+      tEl.scenario.appendChild(opt);
+    });
+    TUTOR_CHIPS.forEach(function(text){
+      var chip = button('chip', text, function(){ sendTutorText(text); });
+      chip.disabled = true;
+      tEl.chips.appendChild(chip);
+    });
+
+    var remember = lsGet(TUTOR_LS.remember) === 'true';
+    tEl.remember.checked = remember;
+    if (remember) tEl.key.value = lsGet(TUTOR_LS.apiKey) || '';
+    var savedModel = lsGet(TUTOR_LS.model);
+    if (savedModel && tEl.model.querySelector('option[value="' + savedModel + '"]')) tEl.model.value = savedModel;
+    var savedVoice = lsGet(TUTOR_LS.voice);
+    if (savedVoice && tEl.voice.querySelector('option[value="' + savedVoice + '"]')) tEl.voice.value = savedVoice;
+    var savedThinking = lsGet(TUTOR_LS.thinking);
+    if (savedThinking && tEl.thinking.querySelector('option[value="' + savedThinking + '"]')) tEl.thinking.value = savedThinking;
+    var savedScenario = lsGet(TUTOR_LS.scenario);
+    if (savedScenario && TUTOR_SCENARIOS[savedScenario]) tEl.scenario.value = savedScenario;
+
+    tEl.keyToggle.addEventListener('click', function(){
+      var hidden = tEl.key.type === 'password';
+      tEl.key.type = hidden ? 'text' : 'password';
+      tEl.keyToggle.textContent = hidden ? '隱藏' : '顯示';
+    });
+    tEl.remember.addEventListener('change', function(){
+      lsSet(TUTOR_LS.remember, String(tEl.remember.checked));
+      if (tEl.remember.checked && tEl.key.value.trim()) lsSet(TUTOR_LS.apiKey, tEl.key.value.trim());
+      if (!tEl.remember.checked) lsRemove(TUTOR_LS.apiKey);
+    });
+    tEl.key.addEventListener('input', function(){
+      if (tEl.remember.checked) lsSet(TUTOR_LS.apiKey, tEl.key.value.trim());
+    });
+    tEl.model.addEventListener('change', function(){
+      lsSet(TUTOR_LS.model, tEl.model.value);
+      tEl.thinking.disabled = !isExtendedModel();
+    });
+    tEl.voice.addEventListener('change', function(){ lsSet(TUTOR_LS.voice, tEl.voice.value); });
+    tEl.thinking.addEventListener('change', function(){ lsSet(TUTOR_LS.thinking, tEl.thinking.value); });
+    tEl.scenario.addEventListener('change', function(){ lsSet(TUTOR_LS.scenario, tEl.scenario.value); });
+
+    tEl.connect.addEventListener('click', tutorConnect);
+    tEl.disconnect.addEventListener('click', tutorDisconnect);
+    tEl.mic.addEventListener('click', function(){
+      tutor.micMuted = !tutor.micMuted;
+      // Tell automatic VAD the stream paused so pending audio is flushed.
+      if (tutor.micMuted) sendTutor({ realtimeInput:{ audioStreamEnd:true } });
+      tEl.mic.textContent = tutor.micMuted ? '🎤 取消靜音' : '🎤 麥克風靜音';
+      if (tutor.micMuted) tEl.level.style.width = '0%';
+      refreshListeningStatus();
+    });
+    tEl.speaker.addEventListener('click', function(){
+      tutor.speakerMuted = !tutor.speakerMuted;
+      if (tutor.player) tutor.player.setMuted(tutor.speakerMuted);
+      tEl.speaker.textContent = tutor.speakerMuted ? '🔈 取消靜音' : '🔈 喇叭靜音';
+    });
+    tEl.send.addEventListener('click', function(){
+      sendTutorText(tEl.text.value);
+      tEl.text.value = '';
+    });
+    tEl.text.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' && !e.isComposing){ e.preventDefault(); tEl.send.click(); }
+    });
+    window.addEventListener('pagehide', function(){ if (tutor.ws) tutorDisconnect(); });
+
+    setLiveControls(false);
+    setTutorStatus('未連線');
+  }
+
   /* ---------- Init ---------- */
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -713,6 +2504,8 @@
     buildPanels();
     initTabs();
     initTheme();
+    initGame();
+    initTutor();
   });
 })();
 </script>
