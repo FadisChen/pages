@@ -7,14 +7,13 @@ const AVATAR_GESTURES = Object.freeze([
   "bow",
   "shrug",
   "hand_on_chest",
-  "beckon",
   "salute",
 ]);
 
 const AVATAR_GESTURE_TOOL = Object.freeze({
   name: "play_avatar_gesture",
   behavior: "NON_BLOCKING",
-  description: "依照自己即將說出的內容選擇一個自然動作：肯定用 nod，否定用 shake_head，招呼或道別用 wave，解釋介紹用 present，疑問思考用 tilt_head，道謝或道歉用 bow，不確定用 shrug，感謝或關心用 hand_on_chest，請對方靠近或繼續用 beckon，收到指示或正式確認用 salute。每個回覆最多一次，沒有適合情境就不呼叫。",
+  description: "依照自己即將說出的內容選擇一個自然動作：肯定用 nod，否定用 shake_head，招呼或道別用 wave，解釋介紹用 present，疑問思考用 tilt_head，道謝或道歉用 bow，不確定用 shrug，感謝或關心用 hand_on_chest，收到指示或正式確認用 salute。每個回覆最多一次，沒有適合情境就不呼叫。",
   parameters: {
     type: "OBJECT",
     properties: { gesture: { type: "STRING", enum: AVATAR_GESTURES } },
@@ -39,7 +38,6 @@ const DURATIONS = {
   bow: 1.9,
   shrug: 1.6,
   hand_on_chest: 2.2,
-  beckon: 2.4,
   salute: 1.9,
 };
 
@@ -76,21 +74,6 @@ function sampleGesture(name, time) {
       rightLowerArm: [0, 1.94 * weight, 0],
       rightHand: [.83 * weight, -.11 * weight, -.88 * weight],
     };
-    case "beckon": {
-      const curl = .5 - .5 * Math.cos(Math.max(0, time - .4) * Math.PI * 3);
-      const pose = {
-        rightUpperArm: [.2 * weight, 0, -.09 * weight],
-        rightLowerArm: [0, (2.1 + .08 * curl) * weight, 0],
-        rightHand: [1.82 * weight, -.06 * weight, .19 * weight],
-      };
-      // Palm up; curl the fingers toward the body instead of waving at the face.
-      for (const finger of ["Index", "Middle", "Ring", "Little"]) {
-        pose[`right${finger}Proximal`] = [0, 0, -(.1 + .85 * curl) * weight];
-        pose[`right${finger}Intermediate`] = [0, 0, -(.1 + .95 * curl) * weight];
-        pose[`right${finger}Distal`] = [0, 0, -(.05 + .5 * curl) * weight];
-      }
-      return pose;
-    }
     case "salute": {
       // Bend before lifting; lower the upper arm before extending the elbow.
       const lift = smooth((time - .1) / .4) * smooth((duration - time) / .45);

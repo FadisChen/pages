@@ -79,7 +79,7 @@ YearEndParty/
 
 ## 目前的限制
 
-- 情緒表情（`set_avatar_emotion`）與人物動作（`play_avatar_gesture`）已接上；動作包含 `nod`、`shake_head`、`wave`、`present`、`tilt_head`、`bow`、`shrug`、`hand_on_chest`、`beckon`、`salute`。抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
+- 情緒表情（`set_avatar_emotion`）與人物動作（`play_avatar_gesture`）已接上；動作包含 `nod`、`shake_head`、`wave`、`present`、`tilt_head`、`bow`、`shrug`、`hand_on_chest`、`salute`。抽獎、音效、AI 建議換環節等擴充 tool 還沒做。
 - API Key 是開發測試模式（存在瀏覽器 localStorage），沒有做 ephemeral token，正式對外使用前需要處理。
 - 沒有在真實的兩台裝置／真實會場網路下測試過 WebRTC 配對，上場前務必實測。
 

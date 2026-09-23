@@ -35,8 +35,8 @@ async (page) => {
       sample('idle', 0);
       const chest = pos('chest');
       const width = pos('rightUpperArm').distanceTo(pos('leftUpperArm'));
-      for (const gesture of ['bow', 'shrug', 'hand_on_chest', 'beckon', 'salute']) {
-        sample(gesture, gesture === 'beckon' ? .4 : .8);
+      for (const gesture of ['bow', 'shrug', 'hand_on_chest', 'salute']) {
+        sample(gesture, .8);
         const hand = pos('rightHand');
         const normal = palm('right');
         const label = model + ' / ' + gesture;
@@ -50,10 +50,6 @@ async (page) => {
           check(Math.abs(hand.x - chest.x) < width * .4, label + ': hand must reach torso center');
           check(hand.z > chest.z + width * .45, label + ': hand must remain in front');
           check(normal.z < -.7, label + ': palm must face chest');
-        }
-        if (gesture === 'beckon') {
-          check(hand.x < chest.x - width * .4 && hand.y < pos('head').y - width * .4, label + ': hand must stay beside chest');
-          check(normal.y > .7, label + ': palm must face up');
         }
         if (gesture === 'salute') {
           const finger = pos('rightMiddleDistal');
