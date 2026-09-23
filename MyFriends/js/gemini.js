@@ -245,6 +245,11 @@ export class LiveSession {
     this.reconnectTimer = null;
     this.runId = 0;
     this.toolJobs = new Map();
+    this.responsePending = false;
+    this.playbackActive = false;
+    this.interactionStatus = "";
+    this.goAway = false;
+    this.goAwayTimer = null;
   }
 
   start() {
@@ -259,8 +264,17 @@ export class LiveSession {
     this.stopped = true;
     this.runId += 1;
     clearTimeout(this.reconnectTimer);
+    clearTimeout(this.goAwayTimer);
+    this.goAwayTimer = null;
+    this.goAway = false;
+    this.responsePending = false;
+    this.playbackActive = false;
+    this.interactionStatus = "";
     this.cancelToolCalls([...this.toolJobs.keys()]);
-    if (this.ready) this.send({ realtimeInput: { audioStreamEnd: true } });
+    if (this.ready) {
+      try { this.send({ realtimeInput: { audioStreamEnd: true } }); }
+      catch (error) { this.callbacks.onDebug?.(`音訊結束訊號未送出：${error.message}`); }
+    }
     this.socket?.close(1000, "user hangup");
     this.socket = null;
     this.ready = false;
@@ -288,8 +302,9 @@ export class LiveSession {
     this.callbacks.onStatus?.(reconnecting ? "reconnecting" : "connecting");
     const socket = new WebSocket(`${WS_BASE}?key=${encodeURIComponent(this.config.apiKey)}`);
     this.socket = socket;
-    socket.onopen = () => socket.send(JSON.stringify(this.setupMessage()));
-    socket.onmessage = (event) => this.handleRawMessage(socket, event.data);
+    socket.onopen = () => { if (socket === this.socket && !this.stopped) socket.send(JSON.stringify(this.setupMessage())); };
+    let messages = Promise.resolve();
+    socket.onmessage = (event) => { messages = messages.then(() => this.handleRawMessage(socket, event.data)); };
     socket.onerror = () => this.callbacks.onDebug?.("WebSocket 發生錯誤");
     socket.onclose = (event) => this.handleClose(socket, event);
   }
@@ -339,7 +354,7 @@ export class LiveSession {
   }
 
   async handleRawMessage(socket, raw) {
-    if (socket !== this.socket) return;
+    if (socket !== this.socket || this.stopped) return;
     try {
       const text = typeof raw === "string" ? raw : await raw.text();
       this.handleMessage(socket, JSON.parse(text));
@@ -349,37 +364,73 @@ export class LiveSession {
   }
 
   handleMessage(socket, message) {
+    if (socket !== this.socket || this.stopped) return;
     if (message.setupComplete) {
       this.ready = true;
       this.failures = 0;
       this.flushAudioBuffer();
-      this.callbacks.onStatus?.("listening");
     }
     const update = message.sessionResumptionUpdate;
     if (update?.resumable && update.newHandle) this.resumptionHandle = update.newHandle;
 
     const content = message.serverContent;
+    const interactionStatus = content?.interactionStatus || message.interactionStatus;
+    if (interactionStatus) {
+      this.interactionStatus = interactionStatus;
+      this.responsePending = interactionStatus !== "IDLE";
+    }
     if (content) {
-      for (const part of content.modelTurn?.parts || []) {
-        if (part.inlineData?.data) this.callbacks.onAudio?.(base64ToBytes(part.inlineData.data));
+      if (!content.interrupted) for (const part of content.modelTurn?.parts || []) {
+        if (part.inlineData?.data) {
+          this.responsePending = true;
+          this.callbacks.onAudio?.(base64ToBytes(part.inlineData.data));
+        }
       }
-      if (content.modelTurn?.parts?.some((part) => part.inlineData?.data)) this.callbacks.onStatus?.("speaking");
       const inputText = toTraditionalChinese(content.inputTranscription?.text).trim();
       const outputText = content.outputTranscription?.text?.trim();
       if (inputText) this.callbacks.onUserTranscript?.(inputText);
       if (outputText) this.callbacks.onModelTranscript?.(outputText);
       if (content.interrupted) {
+        this.responsePending = false;
         this.callbacks.onInterrupted?.();
-        this.callbacks.onStatus?.("listening");
       }
       if (content.turnComplete) {
+        this.responsePending = this.interactionStatus === "IN_PROGRESS";
         this.callbacks.onTurnComplete?.();
-        this.callbacks.onStatus?.("listening");
       }
     }
     if (message.toolCall?.functionCalls?.length) this.handleToolCalls(socket, message.toolCall.functionCalls);
     if (message.toolCallCancellation?.ids?.length) this.cancelToolCalls(message.toolCallCancellation.ids);
-    if (message.goAway) socket.close(1000, "go away");
+    if (message.goAway) {
+      this.goAway = true;
+      clearTimeout(this.goAwayTimer);
+      const remainingMs = Number.parseFloat(message.goAway.timeLeft) * 1000;
+      if (Number.isFinite(remainingMs)) this.goAwayTimer = setTimeout(() => {
+        if (socket === this.socket && !this.stopped) this.closeForGoAway();
+      }, Math.max(0, remainingMs - 250));
+    }
+    this.refreshStatus();
+  }
+
+  setPlaybackActive(active) {
+    this.playbackActive = active;
+    this.refreshStatus();
+  }
+
+  refreshStatus() {
+    if (this.stopped || !this.ready) return;
+    const busy = this.responsePending || this.toolJobs.size > 0 || this.interactionStatus === "IN_PROGRESS";
+    this.callbacks.onStatus?.(this.playbackActive ? "speaking" : busy ? "thinking" : "listening");
+    if (this.goAway && !busy && !this.playbackActive) this.closeForGoAway();
+  }
+
+  closeForGoAway() {
+    clearTimeout(this.goAwayTimer);
+    this.goAwayTimer = null;
+    this.goAway = false;
+    this.ready = false;
+    this.cancelToolCalls([...this.toolJobs.keys()]);
+    this.socket?.close(1000, "go away");
   }
 
   handleToolCalls(socket, calls) {
@@ -391,24 +442,24 @@ export class LiveSession {
     const runId = this.runId;
     this.toolJobs.get(call.id)?.abort();
     this.toolJobs.set(call.id, controller);
+    this.refreshStatus();
     try {
       const executor = this.config.toolExecutor || executeLiveTool;
-      const result = await executor(call, this.config.toolContext, controller.signal);
+      let response;
+      try { response = { result: await executor(call, this.config.toolContext, controller.signal) }; }
+      catch (error) { response = { error: `工具執行失敗：${error.message}` }; }
       if (this.stopped || runId !== this.runId || socket !== this.socket || controller.signal.aborted) return;
-      this.sendToolResponse(socket, call, result);
-    } catch (error) {
-      if (controller.signal.aborted || this.stopped || runId !== this.runId || socket !== this.socket) return;
-      this.sendToolResponse(socket, call, `工具執行失敗：${error.message}`);
+      this.sendToolResponse(socket, call, response);
     } finally {
       if (this.toolJobs.get(call.id) === controller) this.toolJobs.delete(call.id);
+      this.refreshStatus();
     }
   }
 
-  sendToolResponse(socket, call, result) {
-    if (socket.readyState !== WS_OPEN) return;
-    const response = { result };
-    if (this.modelOption.asyncToolCalling) response.scheduling = "WHEN_IDLE";
-    socket.send(JSON.stringify({
+  sendToolResponse(socket, call, response) {
+    try {
+      if (socket !== this.socket || this.stopped || !this.ready || socket.readyState !== WS_OPEN) throw new Error("連線未就緒或已關閉。");
+      socket.send(JSON.stringify({
       toolResponse: {
         functionResponses: [{
           id: call.id,
@@ -416,7 +467,14 @@ export class LiveSession {
           response,
         }],
       },
-    }));
+      }));
+      this.responsePending = true;
+    } catch (error) {
+      this.ready = false;
+      this.stop(false);
+      this.callbacks.onStatus?.("failed");
+      this.callbacks.onError?.(new Error(`工具結果未送出（${call.name}, ${call.id}）：${error.message}`));
+    }
   }
 
   cancelToolCalls(ids) {
@@ -430,9 +488,17 @@ export class LiveSession {
     if (socket !== this.socket || this.stopped) return;
     this.ready = false;
     this.socket = null;
+    clearTimeout(this.goAwayTimer);
+    this.goAwayTimer = null;
+    this.goAway = false;
+    this.responsePending = false;
+    this.playbackActive = false;
+    this.interactionStatus = "";
     this.cancelToolCalls([...this.toolJobs.keys()]);
+    this.callbacks.onConnectionLost?.();
     this.failures += 1;
     if (this.failures >= 3) {
+      this.stop(false);
       this.callbacks.onStatus?.("failed");
       this.callbacks.onError?.(new Error(`連線已中斷（${event.code || "無狀態碼"}）。請檢查網路、模型與 API key。`));
       return;

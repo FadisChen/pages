@@ -191,7 +191,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       bus.on("avatar.state", ({ state }) => { this.state = state; });
-      bus.on("avatar.gesture", ({ gesture, id }) => { if (this.loaded) this.gestures.queue(gesture, id); });
+      bus.on("avatar.gesture", (request) => { request.accepted = Boolean(this.loaded && this.gestures.queue(request.gesture, request.id)); });
       bus.on("avatar.gesture-reset", () => this.gestures.reset());
       bus.on("avatar.gesture-cancel", ({ ids }) => this.gestures.cancel(ids));
       bus.on("avatar.gesture-turn-complete", () => this.gestures.finishTurn());
@@ -645,6 +645,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
       this.bus.on("gemini.user-transcript", (text) => { this.stateMachine.toThinking(); this.turnComplete = false; this.peerLink.send({ type: "transcript", role: "user", text }); });
       this.bus.on("gemini.model-transcript", (text) => { this.peerLink.send({ type: "transcript", role: "model", text }); });
       this.bus.on("gemini.audio", ({ bytes, sampleRate }) => { this.audioPlayer.enqueue(bytes, sampleRate); });
+      this.bus.on("gemini.response-pending", () => { this.turnComplete = false; });
       this.bus.on("gemini.audio-turn", () => { this.stateMachine.toSpeaking(); this.turnComplete = false; });
       this.bus.on("gemini.interrupted", () => { this.audioPlayer.stop(); this.lipSync.reset(); this.resetEmotion(); this.stateMachine.transition(STATES.INTERRUPTED); this.stateMachine.toListening(); });
       this.bus.on("gemini.turn-complete", () => { this.turnComplete = true; this.peerLink.send({ type: "turn-complete" }); });
@@ -916,7 +917,7 @@ import { DEFAULT_SHOW_CONFIG, loadShowConfig, resolveSegment } from "./show-conf
       this.ui.outputLevelValue.textContent = `${Math.round(output * 100)}%`;
       this.ui.outputLevelBar.style.width = `${Math.round(output * 100)}%`;
       if (this.sessionStartedAt) { const seconds = Math.floor((now - this.sessionStartedAt) / 1000); this.ui.sessionClock.textContent = formatClock(seconds); } else this.ui.sessionClock.textContent = "00:00";
-      if (this.callActive && this.turnComplete && !this.audioPlayer.isPlaying() && state === STATES.SPEAKING) { this.stateMachine.toListening(); this.resetEmotion(); }
+      if (this.callActive && this.turnComplete && !this.gemini.responsePending && !this.gemini.inputActive && !this.audioPlayer.isPlaying() && (state === STATES.SPEAKING || state === STATES.THINKING)) { this.stateMachine.toListening(); this.resetEmotion(); }
     }
     resetEmotion() { this.bus.emit("avatar.emotion", { emotion: "neutral" }); this.bus.emit("avatar.gesture-reset", {}); }
   }

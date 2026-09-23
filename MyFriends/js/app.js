@@ -372,7 +372,7 @@ function renderSettings() {
           <div class="form-field"><label for="apiKey">Gemini API key</label><div class="secret-wrap"><input class="input" id="apiKey" type="password" autocomplete="off" value="${attr(getApiKey())}" placeholder="AIza…"><button class="secret-toggle" type="button" data-action="toggle-secret" data-target="apiKey">顯示</button></div></div>
           <div class="switch-row"><div class="switch-copy"><strong>在這個瀏覽器記住金鑰</strong><small>關閉時只保留到此分頁／瀏覽器工作階段結束</small></div><label class="switch"><input id="rememberApiKey" type="checkbox" ${settings.rememberApiKey ? "checked" : ""}><span></span></label></div>
           <div class="setting-divider"></div>
-          <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.8 支援預設的 NON_BLOCKING 非同步工具呼叫；2.5 仍保留為可選模型，工具結果會在模型空閒時回報。</p></div>
+          <div class="form-field"><label for="liveModel">Live 模型 <small>語音通話使用</small></label><select class="select" id="liveModel">${LIVE_MODEL_OPTIONS.map((option) => `<option value="${attr(option.id)}" ${option.id === settings.liveModel ? "selected" : ""}>${html(option.label)}</option>`).join("")}</select><p class="field-hint">3.8 與 2.5 均支援 NON_BLOCKING 非同步工具呼叫，查詢期間可以繼續對話。</p></div>
           <div class="form-field">
             <label class="thinking-label" for="settingsThinkingLevel"><span>思考強度 <small>套用到所有角色</small></span><output id="thinkingValue" for="settingsThinkingLevel">${html(thinking.label)}</output></label>
             <input class="thinking-range" id="settingsThinkingLevel" type="range" min="0" max="${LIVE_THINKING_OPTIONS.length - 1}" step="1" value="${thinkingIndex}" aria-valuetext="${attr(thinking.label)}" ${supportsThinking ? "" : "disabled"}>
@@ -559,7 +559,7 @@ function createCallState(character) {
 
 async function startCall() {
   const call = activeCall;
-  if (!call || call.started || call.ending) return;
+  if (!call || call.started || call.ending || call.cleaningUp) return;
   const apiKey = getApiKey();
   if (!apiKey) {
     toast("開始對話前，請先設定 Gemini API key。", true);
@@ -570,7 +570,10 @@ async function startCall() {
   call.status = "permission";
   updateCallUi();
   try {
-    call.audio = new BrowserAudioEngine({ onAudioChunk: (bytes) => call.session?.sendAudio(bytes) });
+    call.audio = new BrowserAudioEngine({
+      onAudioChunk: (bytes) => call.session?.sendAudio(bytes),
+      onPlaybackChange: (active) => call.session?.setPlaybackActive(active),
+    });
     await call.audio.start();
     const memories = memoriesFor(call.character.id).map((item) => item.content);
     call.session = new LiveSession({
@@ -591,6 +594,7 @@ async function startCall() {
     }, {
       onStatus: (status) => {
         call.status = status;
+        if (status === "failed") void stopFailedCall(call);
         updateCallUi();
         if (status === "listening" && !call.startCuePlayed) {
           call.sessionOpened = true;
@@ -602,6 +606,7 @@ async function startCall() {
       onUserTranscript: (text) => { call.collector.onUser(text); updateTranscript(); },
       onModelTranscript: (text) => { call.collector.onModel(text); updateTranscript(); },
       onInterrupted: () => { call.audio?.flushPlayback(); call.collector.onInterrupted(); updateTranscript(); },
+      onConnectionLost: () => { call.audio?.flushPlayback(); call.collector.onInterrupted(); updateTranscript(); },
       onTurnComplete: () => { call.collector.onTurnComplete(); updateTranscript(); },
       onError: (error) => toast(error.message, true),
     });
@@ -613,6 +618,19 @@ async function startCall() {
     call.audio = null;
     updateCallUi();
     toast(`無法開始通話：${error.message}`, true);
+  }
+}
+
+async function stopFailedCall(call) {
+  if (call.cleaningUp) return;
+  call.cleaningUp = true;
+  try { await call.audio?.stop(); }
+  catch (error) { toast(`音訊清理失敗：${error.message}`, true); }
+  finally {
+    call.audio = null;
+    call.started = false;
+    call.cleaningUp = false;
+    if (activeCall === call) updateCallUi();
   }
 }
 
@@ -701,6 +719,7 @@ function updateCallUi() {
     reconnecting: "重新連線中…",
     listening: "正在聽你說",
     speaking: `${call.character.name} 說話中`,
+    thinking: "正在思考或查詢…",
     failed: "連線失敗",
     stopped: call.memoryStatus || "通話已結束",
   };
@@ -709,6 +728,8 @@ function updateCallUi() {
   person.classList.toggle("is-live", call.status === "speaking" || call.status === "listening");
   if (call.status === "listening") prompt.textContent = "正在聽你說，隨時可以自然插話";
   else if (call.status === "speaking") prompt.textContent = "你可以在任何時候開口打斷";
+  else if (call.status === "thinking") prompt.textContent = "正在處理你的問題，你仍可繼續說話";
+  else if (call.status === "failed") prompt.textContent = "連線已停止，請重新開始對話";
   else if (call.ended) prompt.textContent = call.memoryStatus || "通話已結束";
   if (call.ended) {
     button.textContent = "返回朋友列表";
@@ -719,12 +740,12 @@ function updateCallUi() {
     button.textContent = "■ 結束對話";
     button.className = "call-button is-end";
     button.dataset.action = "end-call";
-    button.disabled = call.ending;
+    button.disabled = call.ending || call.cleaningUp;
   } else {
     button.textContent = call.status === "permission" ? "等待授權…" : "● 開始對話";
     button.className = "call-button";
     button.dataset.action = "start-call";
-    button.disabled = call.status === "permission";
+    button.disabled = call.status === "permission" || call.cleaningUp;
   }
 }
 

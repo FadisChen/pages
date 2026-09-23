@@ -38,6 +38,7 @@ function fixture(name) {
     mic: { stop: async () => {}, end() {} }, updateCallButton() {},
     peerLink: { send() {} }, showError() {}, showToast() {}, setConnectionStatus() {},
   });
+  bus.on("avatar.gesture", request => { request.accepted = true; });
   const client = new GeminiLiveClient(bus);
   const socket = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)), close() {} };
   Object.assign(client, { socket, ready: true, stopped: false, config: { voice: "Aoede" } });
@@ -63,6 +64,8 @@ test("Gemini Live 3.8 setup omits thinking config and enables async tools", () =
   const setup = client.setupMessage().setup;
   assert.equal(setup.model, "models/gemini-3.8-live");
   assert.equal(setup.generationConfig.thinkingConfig, undefined);
+  assert.equal(setup.proactivity, undefined);
+  assert.equal(setup.realtimeInputConfig.automaticActivityDetection.disabled, true);
   assert.deepEqual(setup.tools[0].functionDeclarations.map(tool => ({ name: tool.name, behavior: tool.behavior })), [
     { name: "set_avatar_emotion", behavior: "NON_BLOCKING" },
     { name: "play_avatar_gesture", behavior: "NON_BLOCKING" },
@@ -70,17 +73,73 @@ test("Gemini Live 3.8 setup omits thinking config and enables async tools", () =
 });
 
 for (const page of ["app.js", "stage.js"]) {
+  test(`${page}: emotion limits span separate messages and reset after completion`, () => {
+    const f = fixture(page), applied = [];
+    f.app.bus.on("gemini.avatar-emotion", value => applied.push(value));
+    f.client.handleMessage(f.socket, { toolCall });
+    f.client.handleMessage(f.socket, { toolCall: { functionCalls: [{ ...toolCall.functionCalls[0], id: "emotion-2" }] } });
+    assert.equal(applied.length, 1);
+    assert.ok(f.sent.at(-1).toolResponse.functionResponses[0].response.error);
+    f.client.handleMessage(f.socket, { serverContent: { ...audio, turnComplete: true } });
+    f.client.handleMessage(f.socket, { toolCall });
+    assert.equal(applied.length, 2);
+  });
+
+  test(`${page}: rejected gestures report errors and allow a later retry`, () => {
+    const f = fixture(page);
+    const { VRMAvatarController } = loadPage(page, {
+      THREE: { Euler: class {}, Quaternion: class {}, Vector3: class {} },
+      ResizeObserver: class { observe() {} },
+    });
+    VRMAvatarController.prototype.setupScene = () => {};
+    VRMAvatarController.prototype.loadModel = () => {};
+    const controller = new VRMAvatarController({}, null, f.app.bus);
+    const player = controller.gestures;
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("wave") });
+    assert.ok(f.sent.at(-1).toolResponse.functionResponses[0].response.error);
+    controller.loaded = true;
+    player.queue("bow", "previous");
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("wave") });
+    assert.ok(f.sent.at(-1).toolResponse.functionResponses[0].response.error);
+    player.reset(true);
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("wave") });
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].scheduling, undefined);
+  });
+
+  test(`${page}: silent completion leaves thinking but pending tools and playback do not`, () => {
+    const f = fixture(page);
+    let state = "thinking", playing = false;
+    f.app.stateMachine.getState = () => state;
+    f.app.stateMachine.toListening = () => { state = "listening"; };
+    f.app.audioPlayer.isPlaying = () => playing;
+    f.app.avatar = { outputLevel: 0 };
+    const element = { dataset: {}, style: {}, querySelectorAll: () => [] };
+    f.app.ui = new Proxy({}, { get: () => element });
+    f.client.handleMessage(f.socket, { toolCall: gestureCall("wave") });
+    f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+    f.app.updateUI(0);
+    assert.equal(state, "thinking");
+    f.client.handleMessage(f.socket, { serverContent: { turnComplete: true, interactionStatus: "IDLE" } });
+    playing = true;
+    f.app.updateUI(0);
+    assert.equal(state, "thinking");
+    playing = false;
+    f.app.updateUI(0);
+    assert.equal(state, "listening");
+  });
+
   test(`${page}: gesture tool is registered, emitted once, and does not stop speech`, () => {
     const f = fixture(page);
     const events = [];
-    f.app.bus.on("avatar.gesture", event => events.push(event));
+    f.app.bus.on("avatar.gesture", ({ gesture, id }) => events.push({ gesture, id }));
     const setupTools = f.client.setupMessage().setup.tools[0].functionDeclarations.map(tool => tool.name);
     assert.deepEqual(setupTools, ["set_avatar_emotion", "play_avatar_gesture"]);
     f.client.handleMessage(f.socket, { serverContent: audio, toolCall: gestureCall("wave") });
     assert.deepEqual(events, [{ gesture: "wave", id: "gesture-wave" }]);
     assert.equal(f.stops(), 0);
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.result, "queued");
-    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, "WHEN_IDLE");
+    assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.scheduling, undefined);
     f.client.handleMessage(f.socket, { toolCall: gestureCall("nod") });
     assert.equal(f.sent.at(-1).toolResponse.functionResponses[0].response.error, "At most one Avatar gesture is allowed per response.");
     f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
@@ -112,7 +171,7 @@ for (const page of ["app.js", "stage.js"]) {
     const f = fixture(page);
     const events = [];
     const player = new gestures.AvatarGesturePlayer();
-    f.app.bus.on("avatar.gesture", event => events.push(event));
+    f.app.bus.on("avatar.gesture", ({ gesture, id }) => events.push({ gesture, id }));
     f.app.bus.on("avatar.gesture", event => player.queue(event.gesture, event.id));
     f.app.bus.on("avatar.gesture-cancel", ({ ids }) => player.cancel(ids));
     f.client.handleMessage(f.socket, { serverContent: { interrupted: true }, toolCall: gestureCall("wave") });
@@ -231,6 +290,45 @@ test("GoAway waits for both turn completion and actual playback drain", () => {
   assert.equal(closes, 0);
   f.app.bus.emit("audio.drained", {});
   assert.equal(closes, 1);
+});
+
+for (const toolBeforeComplete of [true, false]) {
+  test(`GoAway waits for tool follow-up speech (tool first: ${toolBeforeComplete})`, () => {
+    const f = fixture("stage.js");
+    let closes = 0;
+    f.socket.close = () => closes++;
+    const tool = { toolCall }, complete = { serverContent: { turnComplete: true } };
+    for (const message of toolBeforeComplete ? [tool, complete] : [complete, tool]) f.client.handleMessage(f.socket, message);
+    f.client.handleMessage(f.socket, { goAway: { timeLeft: "30s" } });
+    assert.equal(closes, 0);
+    f.client.handleMessage(f.socket, { serverContent: { ...audio, turnComplete: true } });
+    assert.equal(closes, 0);
+    f.app.bus.emit("audio.drained", {});
+    assert.equal(closes, 1);
+  });
+}
+
+test("interaction status survives omitted fields and blocks reconnect until IDLE", () => {
+  const f = fixture("stage.js");
+  let closes = 0;
+  f.socket.close = () => closes++;
+  f.client.handleMessage(f.socket, { interactionStatus: "IN_PROGRESS" });
+  f.client.handleMessage(f.socket, { serverContent: { turnComplete: true } });
+  f.client.handleMessage(f.socket, { goAway: { timeLeft: "30s" } });
+  assert.equal(closes, 0);
+  f.client.handleMessage(f.socket, { serverContent: { interactionStatus: "IDLE", turnComplete: true } });
+  assert.equal(closes, 1);
+  f.client.disconnect(false);
+  assert.equal(f.client.interactionStatus, "");
+});
+
+test("tool results are not sent to a replaced socket", () => {
+  const f = fixture("stage.js"), errors = [];
+  f.app.bus.on("gemini.error", error => errors.push(error.message));
+  f.client.socket = { readyState: 1, send() {} };
+  f.client.sendToolResponses(f.socket, [[toolCall.functionCalls[0], { ok: true }]]);
+  assert.equal(f.sent.length, 0);
+  assert.match(errors[0], /工具結果未送出/);
 });
 
 test("voice choice is pinned for the session and defaults to Aoede when empty", () => {
