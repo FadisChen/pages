@@ -1,0 +1,150 @@
+﻿/* 共用電子書閱讀器：封面與扉頁為「經典精裝」，內文為「手寫筆記」 */
+:root{
+  --desk:#E9ECE8; --bar:#FFFFFF; --text:#1D211F; --sub:#5C645F; --line:#D6DBD6; --hi:#1D211F; --hi-ink:#FFFFFF;
+  --ui:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  /* 書本布面：各書在 <body style> 覆寫 --cloth */
+  --cloth:#1C3A2E; --gold:#D9BF7A; --gold-line:#B99A55;
+  /* 內文頁 */
+  --paper:#FBFAF4; --dot:#D8D4E2; --ink:#2B2A33; --muted:#8F8A99; --accent:#E0553D; --ask:#34407E; --mark:#FFE27A;
+  --fb:"LXGW WenKai TC","Kaiti TC","BiauKai","DFKai-SB",serif;
+  --fd:"Noto Serif TC","Songti TC","PMingLiU",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){color-scheme:dark;--desk:#151816;--bar:#1C201E;--text:#E4E8E5;--sub:#98A29C;--line:#303734;--hi:#E4E8E5;--hi-ink:#151816}
+}
+:root[data-theme="dark"]{color-scheme:dark;--desk:#151816;--bar:#1C201E;--text:#E4E8E5;--sub:#98A29C;--line:#303734;--hi:#E4E8E5;--hi-ink:#151816}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body.reader{background:var(--desk);color:var(--text);font-family:var(--ui);font-size:14px;
+  display:grid;grid-template-rows:minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.stage{position:relative;display:flex;align-items:center;justify-content:center;padding:12px 16px;min-height:0}
+.book-host{display:flex;align-items:center;justify-content:center}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--sub);padding:16px;text-align:center}
+
+.bar{background:var(--bar);border-top:1px solid var(--line);display:flex;gap:6px;align-items:center;justify-content:center;
+  padding:8px 16px calc(8px + env(safe-area-inset-bottom,0px))}
+.bar button,.bar a{border:1px solid var(--line);background:transparent;border-radius:8px;padding:6px 10px;cursor:pointer;
+  min-width:40px;text-decoration:none;color:inherit;white-space:nowrap}
+.bar button:disabled{opacity:.35;cursor:default}
+.bar .ind{font-variant-numeric:tabular-nums;color:var(--sub);width:5.5em;flex:none;text-align:center}
+@media (max-width:420px){.bar{gap:4px;padding-left:8px;padding-right:8px}.bar button,.bar a{padding:6px 7px;min-width:34px}}
+
+/* 朗讀 */
+.bar{position:relative}
+.bar button.on{background:var(--hi);color:var(--hi-ink);border-color:var(--hi)}
+.tts{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);z-index:15;display:flex;gap:6px;align-items:center;
+  background:var(--bar);border:1px solid var(--line);border-radius:999px;padding:5px 8px;box-shadow:0 4px 14px rgba(0,0,0,.18);white-space:nowrap}
+.tts button{border-radius:999px}
+.tts select{font:inherit;color:inherit;background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:5px 6px;max-width:9em}
+.pbody .tts-on{background-color:rgba(52,64,126,.09);border-radius:3px}
+
+/* ================= 書頁 ================= */
+.book{--pw:400px;--ph:600px;--fs:17px;--pad:28px}
+.page{background-color:var(--paper);color:var(--ink);overflow:hidden;
+  background-image:radial-gradient(var(--dot) 1px,transparent 1.2px);background-size:22px 22px;background-position:11px 11px}
+.pin{position:absolute;inset:0;display:flex;flex-direction:column;padding:calc(var(--pad)*.8) var(--pad) calc(var(--pad)*.7)}
+.rh,.pf{flex:none;font-family:var(--fb);font-size:calc(var(--fs)*.68);color:var(--muted);letter-spacing:.12em}
+.rh{padding-bottom:calc(var(--fs)*.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf{padding-top:calc(var(--fs)*.7);text-align:center;font-variant-numeric:tabular-nums}
+.pbody{flex:1;min-height:0;overflow:hidden;font-family:var(--fb);font-size:var(--fs);line-height:1.9}
+.pbody > *{margin:0 0 .85em}
+
+/* 內文區塊 */
+.pbody .p{text-align:justify;text-indent:2em}
+.pbody .cont{text-indent:0}
+.pbody h1{font-size:1.45em;line-height:1.4;font-weight:700;margin:.2em 0 1em;text-wrap:balance}
+.pbody h1 span{background:linear-gradient(transparent 58%,var(--mark) 58%,var(--mark) 92%,transparent 92%);
+  box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.pbody h2{font-size:1.15em;line-height:1.5;font-weight:700;margin:1.1em 0 .7em}
+.pbody h2 span{background:linear-gradient(transparent 58%,var(--mark) 58%,var(--mark) 92%,transparent 92%);
+  box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.pbody h3{font-size:1.05em;line-height:1.5;color:var(--accent);font-weight:700;margin:.8em 0 .6em}
+.pbody .q{font-weight:700;color:var(--ask);text-indent:0;margin-top:1.1em}
+.pbody .a{text-indent:0;border-left:2px dashed #C9C3D6;padding-left:.9em;font-weight:700}
+.pbody .a.cont{border-left-color:#C9C3D6}
+.pbody .tw{text-indent:0;border-left:2px dashed #C9C3D6;padding-left:.9em}
+.pbody .tw:not(.cont)::before{content:"↓ ";color:var(--accent);font-weight:700}
+.pbody .li{text-indent:-1.3em;padding-left:1.3em;margin-bottom:.45em}
+.pbody .li:not(.cont)::before{content:"→ ";color:var(--accent)}
+.pbody .li.cont{text-indent:0}
+.pbody .note{font-size:.88em;color:#5A5566;text-indent:0;background:rgba(224,85,61,.06);padding:.5em .8em;border-radius:6px}
+.pbody .quote{margin-left:1.5em;margin-right:1em;color:#4A4656}
+.pbody .quote p{margin:0}
+.pbody .quote .by{text-align:right;color:var(--muted);font-size:.9em}
+.pbody .pull{text-align:center;font-weight:700;letter-spacing:.06em;margin:1.4em .5em;line-height:1.7}
+.pbody .pull span{background:linear-gradient(transparent 58%,var(--mark) 58%,var(--mark) 92%,transparent 92%);
+  box-decoration-break:clone;-webkit-box-decoration-break:clone}
+sup.ref{font-size:.6em;color:var(--muted);vertical-align:super;line-height:0;margin-left:.1em}
+.pbody .end{text-align:center;margin-top:1.6em;color:var(--muted)}
+.pbody .end a{display:inline-block;margin-top:.6em;color:var(--ink);border:1px solid var(--ink);border-radius:999px;
+  padding:.2em 1em;text-decoration:none;cursor:pointer}
+.pbody .end .off{border-style:dashed;color:var(--muted);border-color:var(--muted);cursor:default}
+
+/* 目錄 */
+.pbody .toch{font-family:var(--fd);font-size:1.5em;font-weight:900;letter-spacing:.3em;margin-bottom:.8em}
+.pbody .tocp{font-family:var(--fd);font-weight:700;color:var(--accent);letter-spacing:.15em;margin:1.2em 0 .3em;font-size:.9em}
+.pbody .tocc{font-weight:700;margin:.6em 0 .2em}
+.pbody .toci{display:flex;gap:.6em;align-items:baseline;margin:0 0 .15em;padding-left:1em;color:var(--ink);text-decoration:none;cursor:pointer;line-height:1.7}
+.pbody .toci:hover span:first-child{text-decoration:underline}
+.pbody .toci.off{color:var(--muted);cursor:default}
+.pbody .toci small{margin-left:auto;font-size:.72em;color:var(--muted);flex:none}
+
+/* 封面、背封、扉頁：經典精裝 */
+.cover,.back,.opener{background:var(--cloth);background-image:none;color:var(--gold)}
+.cover .pin,.back .pin,.opener .pin{justify-content:center;text-align:center}
+.cover .pin,.opener .pin{border:1px solid var(--gold-line);box-shadow:inset 0 0 0 5px var(--cloth),inset 0 0 0 6px var(--gold-line);margin:calc(var(--pad)*.6)}
+.cv-k{font-family:var(--fd);font-size:calc(var(--fs)*.62);letter-spacing:.22em}
+.cv-t{font-family:var(--fd);font-size:calc(var(--pw)*.13);line-height:1.15;margin:.35em 0 .25em;font-weight:900}
+.cv-s{font-family:var(--fd);font-size:calc(var(--fs)*1.1);letter-spacing:.2em}
+.cv-a{font-family:var(--fd);font-size:calc(var(--fs)*.8);margin-top:2.5em;letter-spacing:.15em}
+.bk{font-family:var(--fd);font-size:calc(var(--fs)*1.05);line-height:1.9;padding:0 1em}
+.op-k{font-family:var(--fd);font-size:calc(var(--fs)*.8);letter-spacing:.3em;opacity:.85}
+.op-t{font-family:var(--fd);font-size:calc(var(--fs)*2.3);font-weight:900;letter-spacing:.12em;line-height:1.25;margin:.3em 0 .6em}
+.op-e{font-family:var(--fd);font-size:calc(var(--fs)*1.02);line-height:1.8;max-width:15em;margin:0 auto;color:#E8DDBF}
+.op-e::before{content:"";display:block;width:3em;height:1px;background:var(--gold-line);margin:0 auto 1.2em}
+.blank .pin{display:none}
+
+/* 書架 */
+body.shelf{margin:0;min-height:100%;background:var(--desk);color:var(--text);font-family:var(--ui);padding:32px 16px}
+.shelf h1{font-family:var(--fd);font-weight:900;letter-spacing:.2em;text-align:center;margin:0 0 28px;font-size:22px}
+.shelf .row{display:flex;flex-wrap:wrap;gap:28px;justify-content:center}
+.shelf a.bk-c{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;
+  width:200px;max-width:100%;aspect-ratio:5/7;background:var(--c);color:#D9BF7A;border-radius:2px 6px 6px 2px;
+  box-shadow:inset 6px 0 8px -4px rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.25);padding:18px;position:relative}
+.shelf a.bk-c::after{content:"";position:absolute;inset:10px;border:1px solid #B99A55;pointer-events:none}
+.shelf .bk-c b{font-family:var(--fd);font-size:28px;font-weight:900;letter-spacing:.08em}
+.shelf .bk-c small{font-family:var(--fd);font-size:10px;letter-spacing:.18em;margin-bottom:10px}
+.shelf .bk-c i{font-style:normal;font-family:var(--fd);font-size:13px;letter-spacing:.2em;margin-top:8px}
+.shelf .bk-c em{font-style:normal;font-size:12px;margin-top:18px;opacity:.8}
+/* 畫重點 */
+.pbody{-webkit-user-select:text;user-select:text}
+.pbody ::selection{background:rgba(52,64,126,.22)}
+.pbody mark{background:rgba(255,214,64,.55);color:inherit;border-radius:2px;padding:0 1px;cursor:pointer;
+  box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.tip{position:fixed;z-index:20;border:0;border-radius:999px;background:#2B2A33;color:#FFF;padding:8px 16px;
+  font:500 14px/1 var(--ui);box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+
+/* 重點筆記面板 */
+dialog.notes{width:min(640px,calc(100% - 32px));max-height:calc(100% - 48px);padding:0;border:1px solid var(--line);
+  border-radius:12px;background:var(--bar);color:var(--text);display:none;flex-direction:column}
+dialog.notes[open]{display:flex}
+dialog.notes::backdrop{background:rgba(0,0,0,.4)}
+.notes header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.notes header h2{margin:0;font-size:16px}
+.notes header span{color:var(--sub);font-size:13px;margin-right:auto}
+.notes header button,.nd-meta button{border:1px solid var(--line);background:transparent;border-radius:8px;padding:5px 10px;cursor:pointer;color:inherit;font:inherit}
+.nd-list{overflow:auto;padding:4px 16px 16px}
+.nd-list h3{font-size:14px;color:var(--accent);margin:18px 0 8px}
+.nd-item{border-bottom:1px solid var(--line);padding:8px 0 10px}
+.nd-item blockquote{margin:0 0 6px;font-family:var(--fb);font-size:16px;line-height:1.7;border-left:3px solid #FFD640;padding-left:10px}
+.nd-meta{display:flex;gap:8px;align-items:center;color:var(--sub);font-size:12px}
+.nd-meta span{margin-right:auto}
+.nd-empty{color:var(--sub);padding:24px 0;text-align:center}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
