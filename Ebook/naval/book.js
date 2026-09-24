@@ -1,4 +1,4 @@
-﻿/* 納瓦爾寶典：書本資訊與目錄。已完成的節記在 ch/_done.js（由 finalize.py 產生） */
+﻿/* 納瓦爾寶典：書本資訊與目錄。已完成的節記在 ch/done.js（由 finalize.py 產生） */
 (function(){
 const P1={partNo:'第一部',part:'財富'},P2={partNo:'第二部',part:'幸福'},PB={part:'附錄'};
 const W={...P1,chapter:'打造財富'},J={...P1,chapter:'培養判斷力'};

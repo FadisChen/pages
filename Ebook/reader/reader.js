@@ -14,7 +14,7 @@ const $=s=>document.querySelector(s);
 const FS_STEPS=[.9,1,1.12,1.25];
 
 R.book=m=>{META=m};
-// ch/_done.js 呼叫：列出已完成的節（由 finalize.py 產生）
+// ch/done.js 呼叫：列出已完成的節（由 finalize.py 產生）
 R.done=ids=>ids.forEach(id=>{const e=META&&META.toc.find(x=>x.id===id);if(e)e.done=true});
 R.chapter=(id,blocks)=>{CH[id]=blocks;if(waiters[id])waiters[id]()};
 
