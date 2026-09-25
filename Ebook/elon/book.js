@@ -1,6 +1,8 @@
-﻿/* 馬斯克寶典：書本資訊與目錄。已完成的節記在 ch/_done.js（由 finalize.py 產生） */
+﻿/* 馬斯克寶典：書本資訊與目錄。已完成的節記在 ch/done.js（由 finalize.py 產生） */
 (function(){
 const toc=[
+  {id:'rights',title:'版權資訊',front:true},
+  {id:'dedication',title:'獻給後代',front:true},
   {id:'notes',title:'關於本書',front:true},
   {id:'foreword',title:'推薦序',front:true},
   {id:'eric',title:'艾瑞克的話：歡迎閱讀本書',front:true},
@@ -28,6 +30,21 @@ parts.forEach(([code,partNo,part,chapter,secs])=>{
   secs.forEach((title,i)=>{
     const e={id:code+String(i+1).padStart(2,'0'),partNo,part,chapter,title};
     if(i===0){e.chapOpen=true;if(part!==lastPart){e.partOpen=true;lastPart=part}}
+    if(code==='pp'&&i===0)e.epi='「我不介意自己的遺產是否準確，只要我離世時，覺得自己已為意識的未來做了正確的事。[2]」——伊隆・馬斯克；「你可以選擇不當個平凡人。你可以選擇不遵循父母教給你的那些成規。平凡人也能選擇成為非凡的人。[3]」——伊隆・馬斯克';
+    if(code==='tp'&&i===0)e.epi='我努力保持極度理性。只要推理站得住腳，又沒有違反物理定律，那就應該去做。這些事情在我看來沒那麼瘋狂。[80]';
+    if(code==='en'&&i===0)e.epi='我的時間有 80% 都花在工程上。[152]';
+    if(code==='bf'&&i===0)e.epi='只要我們全力以赴、沒有自滿，未來一定會很美好。[691]';
+    if(code==='ab'&&i===0)e.epi='人工智慧和機器人將帶來所謂的「豐裕時代」。其他人也用過這個詞，這就是我的預測：每個人都能享有豐裕。[734]';
+    if(code==='rk'&&i===0)e.epi='別擔心。我是說，要擔心。奇妙的是，只要你開始擔心，事情反而會沒事。這會成為自我挫敗的預言。[791]';
+    if(code==='wt'&&i===0)e.epi='如果遵循傳統思維，你的使命就不可能達成；這時就必須採取非常規思維。[187]';
+    if(code==='tm'&&i===0)e.epi='最重要的是吸引優秀人才。無論你要創辦公司或加入公司，都要找到一群你由衷敬重的傑出人才。[239]';
+    if(code==='og'&&i===0)e.epi='必須讓人們可以直接溝通，促成正確的事情。[282]';
+    if(code==='ur'&&i===0)e.epi='近乎瘋狂的急迫感，是我們的行事原則。[330]';
+    if(code==='mk'&&i===0)e.epi='製造業被低估了。它很難。[358]';
+    if(code==='mp'&&i===0)e.epi='現在正是讓生命擴展到多個行星的機會窗口。我們不能指望它長久敞開，必須趁窗口還開著時把握機會。[898]';
+    if(code==='fd'&&i===0)e.epi='我們剛開始 Zip2 時，抱負很小：只要能賺到足夠付房租的錢就好。[403]';
+    if(code==='ts'&&i===0)e.epi='光靠節約能源，無法走向美好未來；我們必須讓能源永續。[465]';
+    if(code==='sx'&&i===0)e.epi='打造大眾市場的電動車是必然會發生的事，即使沒有我也一樣。但成為太空文明並非必然。[577]；我一直很樂觀。如果不樂觀，我就不會嘗試這些瘋狂的事。我想自己大概是病態地樂觀吧。[578]';
     toc.push(e);
   });
 });
@@ -41,7 +58,7 @@ Reader.book({
   en:'THE BOOK OF ELON',
   sub:'目標與成功指南',
   author:'艾瑞克・喬根森　編著',
-  back:'伊隆・馬斯克最有用的想法，<br>用他自己的話來說。',
+  back:'伊隆・馬斯克最有用的想法，用他自己的話來說。',
   toc
 });
 })();
