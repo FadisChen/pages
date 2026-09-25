@@ -11,15 +11,45 @@
 <script src="reader/gate.js"></script>
 </head>
 <body class="shelf">
-<h1>書架</h1>
-<div class="row">
-  <a class="bk-c" href="naval/index.html" style="--c:#1C3A2E">
-    <small>THE ALMANACK OF NAVAL RAVIKANT</small><b>納瓦爾寶典</b><i>財富與幸福指南</i>
-  </a>
-  <a class="bk-c" href="elon/index.html" style="--c:#16243F">
-    <small>THE BOOK OF ELON</small><b>馬斯克寶典</b><i>目標與成功指南</i>
-  </a>
-  <!-- 書架：新書插在這行之前 -->
-</div>
+<main class="shelf-main">
+  <header class="shelf-head">
+    <p class="shelf-kicker">私人藏書</p>
+    <h1>我的書架</h1>
+    <p>選一本書，翻開下一頁。</p>
+  </header>
+  <section class="row" aria-label="藏書">
+    <a class="bk-c" href="naval/index.html" data-book="naval" style="--c:#1C3A2E">
+      <small>THE ALMANACK OF NAVAL RAVIKANT</small><b>納瓦爾寶典</b><i>財富與幸福指南</i>
+      <span class="bk-status">開始閱讀</span>
+    </a>
+    <a class="bk-c" href="elon/index.html" data-book="elon" style="--c:#16243F">
+      <small>THE BOOK OF ELON</small><b>馬斯克寶典</b><i>目標與成功指南</i>
+      <span class="bk-status">開始閱讀</span>
+    </a>
+    <!-- 書架：新書插在這行之前 -->
+  </section>
+  <p class="shelf-settings"><button id="gemini-key-open" type="button" aria-label="Gemini 設定" title="Gemini 設定">⚙️</button><span id="gemini-key-state"></span></p>
+</main>
+<dialog class="key-dialog" id="gemini-key-dialog" aria-labelledby="gemini-key-title">
+  <form id="gemini-key-form">
+    <h2 id="gemini-key-title">Gemini API key</h2>
+    <p>儲存在這個瀏覽器中，即時語音對談使用。</p>
+    <label for="gemini-key-input">API key</label>
+    <div class="key-input-row"><input id="gemini-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="輸入新的 API key"><button id="gemini-key-remove" type="button" aria-label="移除已儲存的 API key" title="移除已儲存的 API key">🗑️</button></div>
+    <label for="gemini-voice">對談聲音</label>
+    <select id="gemini-voice">
+      <option value="Puck">Puck・活潑</option>
+      <option value="Kore">Kore・沉穩</option>
+      <option value="Charon">Charon・知性</option>
+      <option value="Aoede">Aoede・輕快</option>
+      <option value="Fenrir">Fenrir・熱情</option>
+      <option value="Leda">Leda・年輕</option>
+      <option value="Achernar">Achernar・柔和</option>
+      <option value="Sulafat">Sulafat・溫暖</option>
+    </select>
+    <div class="key-actions"><button id="gemini-key-cancel" type="button">取消</button><button type="submit">儲存</button></div>
+  </form>
+</dialog>
+<script src="reader/shelf.js"></script>
 </body>
 </html>

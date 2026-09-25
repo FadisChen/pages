@@ -7,11 +7,10 @@
 (function(){
 'use strict';
 const R=window.Reader={};
-let META=null,flip=null,pages=[],view=null,anchor=0,lastDims='',fsMul=1,building=false,pending=false;
+let META=null,flip=null,pages=[],view=null,anchor=0,lastDims='',building=false,pending=false;
 let pageEls=[],builtHome=true,navDir=null,bridging=false,ttsNav=false;
 const CH={},waiters={};
 const $=s=>document.querySelector(s);
-const FS_STEPS=[.9,1,1.12,1.25];
 
 R.book=m=>{META=m};
 // ch/done.js 呼叫：列出已完成的節（由 finalize.py 產生）
@@ -77,14 +76,14 @@ function blockEl(b,toks){
     case 'toch':case 'tocp':case 'tocc':
       el=document.createElement('div');el.className=b.t;el.textContent=b.text;break;
     case 'toci':
-      el=document.createElement('a');el.className='toci'+(b.x.done?'':' off');
-      if(b.x.done)el.dataset.go=b.x.id;
+      el=document.createElement(b.x.done?'a':'div');el.className='toci'+(b.x.done?'':' off');
+      if(b.x.done){el.href='#';el.dataset.go=b.x.id}
       el.innerHTML=`<span>${esc(b.text)}</span>`+(b.x.done?'':'<small>尚未翻譯</small>');break;
     case 'end':{
       el=document.createElement('div');el.className='end';
       const n=b.x;
       el.innerHTML='— 本節完 —<br>'+(!n?'<span>全書完</span>':
-        n.done?`<a data-go="${esc(n.id)}">下一節：${esc(n.title)} ›</a>`:`<span class="off">下一節「${esc(n.title)}」尚未翻譯</span>`);
+        n.done?`<a href="#" data-go="${esc(n.id)}">下一節：${esc(n.title)} ›</a>`:`<span class="off">下一節「${esc(n.title)}」尚未翻譯</span>`);
       break;}
     default:
       el=textBox('p',b,toks);el.classList.add(b.t);
@@ -99,7 +98,7 @@ function dims(){
   const W=Math.floor(r.width-32),H=Math.floor(r.height-24);
   const spread=W>=900&&W>H*1.15;
   const pw=Math.floor(spread?Math.min(W/2,H*.72):Math.min(W,H*.78)),ph=H;
-  const fs=Math.round(Math.max(16,Math.min(19.5,pw/26))*fsMul*2)/2;
+  const fs=Math.round(Math.max(16,Math.min(19.5,pw/26))*2)/2;
   const pad=Math.round(Math.max(20,Math.min(56,pw*.085)));
   return {pw,ph,fs,pad,spread};
 }
@@ -225,7 +224,10 @@ function currentAnchor(){
   const p=pages[Math.max(0,Math.min(pages.length-1,i))];
   return p?p.first:anchor;
 }
-function saveState(){store.set(key(),{view:view.home?'home':view.id,block:currentAnchor()})}
+function saveState(){
+  if(view.home)return;
+  store.set(key(),{view:view.id,block:currentAnchor(),title:META.toc.find(e=>e.id===view.id).title});
+}
 
 // 橋接頁：換章時把舊章目前看得到的頁面接到新書前/後，翻過去就有翻頁動畫
 function cloneBridge(el){
@@ -308,6 +310,7 @@ async function build(){
 
 /* ---------- 導覽 ---------- */
 function open(v,a,dir){
+  if(view&&view.id!==v.id&&window.GeminiLive)GeminiLive.stop();
   if(ttsNav)ttsNav=false;else ttsStop();   // 使用者自己換章就停止朗讀
   view=v;anchor=a||0;navDir=dir||null;build();
 }
@@ -337,6 +340,7 @@ function updateBar(){
   $('#prev').disabled=view.home&&i<=0;
   $('#next').disabled=atEnd()&&(view.home?doneIndex(-1,1)<0:doneIndex(META.toc.findIndex(e=>e.id===view.id),1)<0);
   $('#tts-btn').disabled=view.home||!synth;
+  $('#live-btn').disabled=!!view.home;
 }
 
 /* 單頁模式下，StPageFlip 需把頁角拖過頁面左緣才算翻頁；拖過頁寬一半放開就補一個到左緣的移動 */
@@ -614,6 +618,14 @@ function ttsStop(){
 // 換語速或語音：從這句重念
 function ttsRestart(){if(TTS.playing){TTS.gen++;synth.cancel();ttsSpeak()}}
 
+R.liveContext=async()=>{
+  if(view.home)throw new Error('請先開啟一個章節');
+  const id=view.id;
+  await loadChapter(id);
+  const chapter=META.toc.find(e=>e.id===id);
+  return {title:META.title+'・'+chapter.title,text:CH[id].map(b=>b[1]).filter(Boolean).join('\n')};
+};
+
 R.start=()=>{
   document.title=META.title;
   document.body.classList.add('reader');
@@ -625,9 +637,9 @@ R.start=()=>{
   <button id="prev" aria-label="上一頁">‹</button>
   <span class="ind" id="ind">–</span>
   <button id="next" aria-label="下一頁">›</button>
-  <button id="font" title="字級">Aa</button>
   <button id="notes-btn" title="重點筆記">重點</button>
   <button id="tts-btn" title="朗讀">朗讀</button>
+  <button id="live-btn" type="button" aria-pressed="false" title="和本節內容即時語音對談">對談</button>
   <div class="tts" id="tts" hidden>
     <button id="tts-play" aria-label="暫停">❚❚</button>
     <button id="tts-rate" title="語速">1x</button>
@@ -641,7 +653,7 @@ R.start=()=>{
     <button id="nd-copy">複製全部</button><button id="nd-close" aria-label="關閉">✕</button></header>
   <div class="nd-list" id="nd-list"></div>
 </dialog>`;
-  fsMul=FS_STEPS[store.get('reader:fs',1)]||1;
+  if(window.GeminiLive)GeminiLive.init(R);
   $('#notes-btn').onclick=()=>{hideTip();renderNotes();$('#notes').showModal()};
   $('#nd-close').onclick=()=>$('#notes').close();
   $('#notes').addEventListener('click',e=>{if(e.target.id==='notes')e.target.close()});
@@ -678,10 +690,6 @@ R.start=()=>{
   }
   $('#home').onclick=()=>open({home:true},'toc');
   $('#prev').onclick=prev;$('#next').onclick=next;
-  $('#font').onclick=()=>{
-    const k=(FS_STEPS.indexOf(fsMul)+1)%FS_STEPS.length;fsMul=FS_STEPS[k];store.set('reader:fs',k);
-    anchor=currentAnchor();build();
-  };
   document.addEventListener('keydown',e=>{
     if($('#notes').open||e.target.tagName==='SELECT')return;
     if(e.key==='ArrowLeft')prev();if(e.key==='ArrowRight')next();
@@ -699,6 +707,6 @@ R.start=()=>{
   },250)}).observe($('#stage'));
   const s=store.get(key(),null);
   const ok=s&&s.view!=='home'&&META.toc.some(e=>e.id===s.view&&e.done);
-  open(ok?{id:s.view}:{home:true},s?s.block:0);
+  open(ok?{id:s.view}:{home:true},ok?s.block:0);
 };
 })();

@@ -33,7 +33,12 @@ button{font:inherit;color:inherit}
   min-width:40px;text-decoration:none;color:inherit;white-space:nowrap}
 .bar button:disabled{opacity:.35;cursor:default}
 .bar .ind{font-variant-numeric:tabular-nums;color:var(--sub);width:5.5em;flex:none;text-align:center}
-@media (max-width:420px){.bar{gap:4px;padding-left:8px;padding-right:8px}.bar button,.bar a{padding:6px 7px;min-width:34px}}
+@media (max-width:540px){
+  .bar{flex-wrap:wrap;gap:3px;padding-left:6px;padding-right:6px}
+  .bar button,.bar a{min-width:28px;padding:6px 2px}
+  .bar .ind{width:auto;min-width:3.8em}
+}
+@media (max-width:360px){.bar{font-size:12px}}
 
 /* 朗讀 */
 .bar{position:relative}
@@ -111,17 +116,46 @@ sup.ref{font-size:.6em;color:var(--muted);vertical-align:super;line-height:0;mar
 .blank .pin{display:none}
 
 /* 書架 */
-body.shelf{margin:0;min-height:100%;background:var(--desk);color:var(--text);font-family:var(--ui);padding:32px 16px}
-.shelf h1{font-family:var(--fd);font-weight:900;letter-spacing:.2em;text-align:center;margin:0 0 28px;font-size:22px}
-.shelf .row{display:flex;flex-wrap:wrap;gap:28px;justify-content:center}
+body.shelf{margin:0;min-height:100%;background:var(--desk);color:var(--text);font-family:var(--ui);padding:clamp(32px,7vh,72px) 16px 48px}
+.shelf-main{max-width:840px;margin:0 auto}
+.shelf-head{text-align:center;margin-bottom:clamp(32px,6vh,56px)}
+.shelf-kicker{color:var(--sub);font-size:12px;letter-spacing:.32em;margin:0 0 10px}
+.shelf h1{font-family:var(--fd);font-weight:900;letter-spacing:.16em;margin:0;font-size:clamp(28px,5vw,40px)}
+.shelf-head>p:last-child{color:var(--sub);margin:12px 0 0;line-height:1.6}
+.shelf .row{display:flex;flex-wrap:wrap;gap:clamp(16px,5vw,40px);justify-content:center;align-items:flex-start;padding:0 0 28px;border-bottom:2px solid var(--line)}
 .shelf a.bk-c{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;text-decoration:none;
   width:200px;max-width:100%;aspect-ratio:5/7;background:var(--c);color:#D9BF7A;border-radius:2px 6px 6px 2px;
-  box-shadow:inset 6px 0 8px -4px rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.25);padding:18px;position:relative}
+  box-shadow:inset 6px 0 8px -4px rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.25);padding:18px;position:relative;
+  transition:transform .2s ease,box-shadow .2s ease}
+.shelf a.bk-c:hover,.shelf a.bk-c:focus-visible{transform:translateY(-6px);box-shadow:inset 6px 0 8px -4px rgba(0,0,0,.45),0 16px 28px rgba(0,0,0,.28)}
 .shelf a.bk-c::after{content:"";position:absolute;inset:10px;border:1px solid #B99A55;pointer-events:none}
 .shelf .bk-c b{font-family:var(--fd);font-size:28px;font-weight:900;letter-spacing:.08em}
 .shelf .bk-c small{font-family:var(--fd);font-size:10px;letter-spacing:.18em;margin-bottom:10px}
 .shelf .bk-c i{font-style:normal;font-family:var(--fd);font-size:13px;letter-spacing:.2em;margin-top:8px}
 .shelf .bk-c em{font-style:normal;font-size:12px;margin-top:18px;opacity:.8}
+.shelf .bk-status{position:absolute;bottom:25px;left:20px;right:20px;font-size:12px;line-height:1.4;color:#E8DDBF;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.shelf-settings{display:flex;justify-content:center;align-items:center;gap:12px;margin:22px 0 0;color:var(--sub);font-size:13px}
+.shelf-settings button,.key-dialog button{border:1px solid var(--line);border-radius:8px;background:var(--bar);color:var(--text);padding:8px 12px;cursor:pointer}
+.shelf-settings button{font-size:24px;line-height:1;padding:8px 10px}
+.key-dialog{width:min(520px,calc(100% - 24px));max-height:calc(100% - 32px);border:1px solid var(--line);border-radius:12px;background:var(--bar);color:var(--text);padding:20px;font-family:var(--ui)}
+.key-dialog::backdrop{background:rgba(0,0,0,.52)}
+.key-dialog h2{margin:0 0 8px;font-size:18px}
+.key-dialog p{line-height:1.5;color:var(--sub)}
+.key-dialog label{display:block;margin:20px 0 6px}
+.key-input-row{display:flex;gap:8px;align-items:stretch}
+.key-dialog input,.key-dialog select{min-width:0;width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--desk);color:var(--text);font:inherit}
+.key-input-row input{flex:1}
+.key-input-row button{flex:none;width:44px;font-size:19px;padding:6px}
+.key-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.key-actions button:last-child{background:var(--hi);color:var(--hi-ink);border-color:var(--hi)}
+@media (max-width:420px){
+  .shelf .row{gap:12px}
+  .shelf a.bk-c{width:calc((100vw - 44px)/2);padding:14px}
+  .shelf .bk-c b{font-size:clamp(19px,6.4vw,26px)}
+  .shelf .bk-c small{font-size:8px}
+  .shelf .bk-c i{font-size:11px}
+  .shelf .bk-status{left:16px;right:16px;bottom:19px;font-size:10px}
+}
 /* 畫重點 */
 .pbody{-webkit-user-select:text;user-select:text}
 .pbody ::selection{background:rgba(52,64,126,.22)}
@@ -147,4 +181,4 @@ dialog.notes::backdrop{background:rgba(0,0,0,.4)}
 .nd-meta span{margin-right:auto}
 .nd-empty{color:var(--sub);padding:24px 0;text-align:center}
 
-@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}.shelf a.bk-c:hover,.shelf a.bk-c:focus-visible{transform:none}}
