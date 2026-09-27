@@ -1155,6 +1155,23 @@
   var PINYIN_MODEL = 'gemini-3.5-flash-lite';
   var PINYIN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/' + PINYIN_MODEL + ':generateContent';
   var pinyinReq = 0;      // bumps on every new request so stale responses are ignored
+  var STORAGE_PINYIN_KEY = 'kt-pinyin-recent-v1';
+  var PINYIN_RECENT_LIMIT = 60;
+  // The prompt is randomized on every round; an identical prompt makes the model repeat the same questions.
+  var PINYIN_CONSONANTS = 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎㄲㄸㅃㅆㅉ'.split('');
+  var PINYIN_VOWELS = 'ㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣㅐㅒㅔㅖㅘㅙㅚㅝㅞㅟㅢ'.split('');
+  var PINYIN_WORD_TOPICS = {
+    all:['食物','飲料','地名','交通','購物','住宿','景點','天氣','家人','顏色','身體','時間','動作','形容詞'],
+    hangul:['食物','飲料','地名','交通','購物','景點','天氣','家人','顏色','身體','時間','動物'],
+    greetings:['問候','道謝','道歉','稱呼','回應','自我介紹'],
+    numbers:['漢字數字','固有數字','金錢','量詞','時間','價格'],
+    restaurant:['韓式料理','小吃','飲料','餐具','口味','點餐用語'],
+    transport:['交通工具','車站','方向','地名','票券','移動動作'],
+    shopping:['衣物','化妝品','紀念品','顏色','尺寸','付款'],
+    hotel:['房間設備','服務','設施','入住退房','盥洗用品'],
+    sightseeing:['首爾景點','地標','自然景觀','方向','拍照','設施'],
+    emergency:['醫療','身體','藥品','警察','遺失物','求救']
+  };
 
   var gameStore = loadGameStore();
   var POOL = [];
@@ -1668,23 +1685,47 @@
     return String(s || '').toLowerCase().replace(/[^a-z]/g, '');
   }
 
+  function loadPinyinRecent(){
+    try {
+      var d = JSON.parse(localStorage.getItem(STORAGE_PINYIN_KEY) || '[]');
+      return Array.isArray(d) ? d.filter(function(x){ return typeof x === 'string'; }) : [];
+    } catch (e) { return []; }
+  }
+  function rememberPinyin(items){
+    var recent = items.map(function(q){ return q.question; }).concat(loadPinyinRecent());
+    recent = recent.filter(function(q, i){ return recent.indexOf(q) === i; }).slice(0, PINYIN_RECENT_LIMIT);
+    try { localStorage.setItem(STORAGE_PINYIN_KEY, JSON.stringify(recent)); } catch (e) {}
+  }
+
   function buildPinyinPrompt(cat){
     var theme = cat === 'all' || cat === 'hangul'
       ? '韓國旅遊常用詞'
       : '「' + catLabel(cat).replace(/^[^一-鿿]+/, '') + '」情境的旅遊常用詞';
-    return [
+    var jamo = shuffle(PINYIN_CONSONANTS).slice(0, 2).concat(shuffle(PINYIN_VOWELS).slice(0, 1));
+    jamo = shuffle(jamo);
+    var initials = shuffle(PINYIN_CONSONANTS).slice(0, 4);
+    var medials = shuffle(PINYIN_VOWELS).slice(0, 4);
+    var topics = shuffle(PINYIN_WORD_TOPICS[cat] || PINYIN_WORD_TOPICS.all).slice(0, 3);
+    var recentWords = loadPinyinRecent().filter(function(q){ return q.length >= 2; }).slice(0, 30);
+    var lines = [
       '你是韓文羅馬拼音（Revised Romanization of Korean，文化觀光部 2000 年制）出題老師，學生是剛學韓文的台灣旅客。',
-      '請出 ' + ROUND_SIZE + ' 題不重複的拼音題，每題只出示一個單位，難度由易到難：',
-      '- 前 3 題：單一韓文字母（子音或母音，例如 ㄱ、ㅓ、ㅢ、ㄲ）',
-      '- 中間 4 題：單一韓文音節（例如 가、밥、꽃、웨）',
-      '- 最後 3 題：2～4 個音節的' + theme + '（例如 김치、지하철、감사），不要有空格',
+      '請出 ' + ROUND_SIZE + ' 題不重複的拼音題，每題只出示一個單位，依下列順序：',
+      '- 第 1～3 題：單一韓文字母，題目依序固定為 ' + jamo.join('、'),
+      '- 第 4～7 題：單一韓文音節，第 n 題的初聲依序用 ' + initials.join('、') + '，中聲依序用 ' + medials.join('、') + '；其中 1～2 題請加上終聲（收尾音），盡量選真實存在的常見字',
+      '- 第 8～10 題：2～4 個音節的' + theme + '，分別取自這些主題：' + topics.join('、') + '，不要有空格，挑較少見但實用的詞'
+    ];
+    if (recentWords.length){
+      lines.push('- 學生最近已練過這些詞，請避開：' + recentWords.join('、'));
+    }
+    lines.push('（隨機碼 ' + Math.random().toString(36).slice(2, 8) + '，每次請出不同的題目）');
+    return lines.concat([
       '欄位規則：',
       '- question：題目本身（韓文字母或韓文字）',
       '- answer：標準羅馬拼音，小寫英文字母；單詞請依實際發音的音變規則拼寫（例如 신라 → silla）',
       '- accepted：其他也算正確的拼法（小寫，可為空陣列）。子音字母請同時接受初聲與終聲拼法（例如 ㄱ 的 answer 為 g，accepted 含 k）；ㄹ 接受 r 和 l；ㅇ 的 answer 為 ng',
       '- speak：用來播放發音的韓文；字母請給代表音節（子音配 ㅏ，例如 ㄱ → 가；母音加 ㅇ，例如 ㅓ → 어），音節或單詞則原樣',
       '- zh：繁體中文說明，字母寫「子音／母音」與發音提示，單字寫中文意思，15 字以內'
-    ].join('\n');
+    ]).join('\n');
   }
 
   function fetchPinyinQuestions(key, cat){
@@ -1778,6 +1819,7 @@
     fetchPinyinQuestions(key, gameCat).then(function(items){
       if (reqId !== pinyinReq) return;
       if (!items.length) throw new Error('沒有拿到題目');
+      rememberPinyin(items);
       round = {
         kind:'pinyin',
         mode:'pinyin',
