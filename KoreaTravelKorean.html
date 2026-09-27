@@ -840,32 +840,61 @@
 
   var HANGUL = {
     consonants:[
-      { tag:'ㄱ', zh:'示範音節', ko:'가', ro:'ga' },
-      { tag:'ㄴ', zh:'示範音節', ko:'나', ro:'na' },
-      { tag:'ㄷ', zh:'示範音節', ko:'다', ro:'da' },
-      { tag:'ㄹ', zh:'示範音節', ko:'라', ro:'ra' },
-      { tag:'ㅁ', zh:'示範音節', ko:'마', ro:'ma' },
-      { tag:'ㅂ', zh:'示範音節', ko:'바', ro:'ba' },
-      { tag:'ㅅ', zh:'示範音節', ko:'사', ro:'sa' },
-      { tag:'ㅇ', zh:'示範音節（無聲母）', ko:'아', ro:'a' },
-      { tag:'ㅈ', zh:'示範音節', ko:'자', ro:'ja' },
-      { tag:'ㅊ', zh:'示範音節', ko:'차', ro:'cha' },
-      { tag:'ㅋ', zh:'示範音節', ko:'카', ro:'ka' },
-      { tag:'ㅌ', zh:'示範音節', ko:'타', ro:'ta' },
-      { tag:'ㅍ', zh:'示範音節', ko:'파', ro:'pa' },
-      { tag:'ㅎ', zh:'示範音節', ko:'하', ro:'ha' }
+      { tag:'ㄱ', zh:'기역・平音，似ㄍ/ㄎ（g/k）', ko:'가', ro:'ga' },
+      { tag:'ㄴ', zh:'니은・似ㄋ（n）', ko:'나', ro:'na' },
+      { tag:'ㄷ', zh:'디귿・平音，似ㄉ/ㄊ（d/t）', ko:'다', ro:'da' },
+      { tag:'ㄹ', zh:'리을・輕彈舌，似ㄌ（r/l）', ko:'라', ro:'ra' },
+      { tag:'ㅁ', zh:'미음・雙唇閉合，似ㄇ（m）', ko:'마', ro:'ma' },
+      { tag:'ㅂ', zh:'비읍・平音，似ㄅ/ㄆ（b/p）', ko:'바', ro:'ba' },
+      { tag:'ㅅ', zh:'시옷・似ㄙ（s）', ko:'사', ro:'sa' },
+      { tag:'ㅇ', zh:'이응・字首不發音，收尾念 ng', ko:'아', ro:'a' },
+      { tag:'ㅈ', zh:'지읒・平音，似ㄐ/ㄗ（j）', ko:'자', ro:'ja' },
+      { tag:'ㅊ', zh:'치읓・送氣音，似ㄑ/ㄘ（ch）', ko:'차', ro:'cha' },
+      { tag:'ㅋ', zh:'키읔・送氣音，似ㄎ（k）', ko:'카', ro:'ka' },
+      { tag:'ㅌ', zh:'티읕・送氣音，似ㄊ（t）', ko:'타', ro:'ta' },
+      { tag:'ㅍ', zh:'피읖・送氣音，似ㄆ（p）', ko:'파', ro:'pa' },
+      { tag:'ㅎ', zh:'히읗・似ㄏ（h）', ko:'하', ro:'ha' }
+    ],
+    doubleConsonants:[
+      { tag:'ㄲ', zh:'쌍기역・緊音，似ㄍ但更用力（kk）', ko:'까', ro:'kka' },
+      { tag:'ㄸ', zh:'쌍디귿・緊音，似ㄉ但更用力（tt）', ko:'따', ro:'tta' },
+      { tag:'ㅃ', zh:'쌍비읍・緊音，似ㄅ但更用力（pp）', ko:'빠', ro:'ppa' },
+      { tag:'ㅆ', zh:'쌍시옷・緊音，似ㄙ但更用力（ss）', ko:'싸', ro:'ssa' },
+      { tag:'ㅉ', zh:'쌍지읒・緊音，似ㄗ但更用力（jj）', ko:'짜', ro:'jja' }
     ],
     vowels:[
-      { tag:'ㅏ', zh:'示範音節', ko:'아', ro:'a' },
-      { tag:'ㅑ', zh:'示範音節', ko:'야', ro:'ya' },
-      { tag:'ㅓ', zh:'示範音節', ko:'어', ro:'eo' },
-      { tag:'ㅕ', zh:'示範音節', ko:'여', ro:'yeo' },
-      { tag:'ㅗ', zh:'示範音節', ko:'오', ro:'o' },
-      { tag:'ㅛ', zh:'示範音節', ko:'요', ro:'yo' },
-      { tag:'ㅜ', zh:'示範音節', ko:'우', ro:'u' },
-      { tag:'ㅠ', zh:'示範音節', ko:'유', ro:'yu' },
-      { tag:'ㅡ', zh:'示範音節', ko:'으', ro:'eu' },
-      { tag:'ㅣ', zh:'示範音節', ko:'이', ro:'i' }
+      { tag:'ㅏ', zh:'嘴巴張大，似「啊」', ko:'아', ro:'a' },
+      { tag:'ㅑ', zh:'嘴巴張大，似「呀」', ko:'야', ro:'ya' },
+      { tag:'ㅓ', zh:'嘴唇放鬆、舌頭靠後，似「喔」', ko:'어', ro:'eo' },
+      { tag:'ㅕ', zh:'ㅣ＋ㅓ，似「唷」', ko:'여', ro:'yeo' },
+      { tag:'ㅗ', zh:'嘴唇圓而突出，似「歐」', ko:'오', ro:'o' },
+      { tag:'ㅛ', zh:'ㅣ＋ㅗ，似「優」', ko:'요', ro:'yo' },
+      { tag:'ㅜ', zh:'嘴唇嘟起，似「嗚」', ko:'우', ro:'u' },
+      { tag:'ㅠ', zh:'ㅣ＋ㅜ，似英文 you', ko:'유', ro:'yu' },
+      { tag:'ㅡ', zh:'嘴角向兩側拉平，似「ㄜ」', ko:'으', ro:'eu' },
+      { tag:'ㅣ', zh:'似「衣」', ko:'이', ro:'i' }
+    ],
+    compoundVowels:[
+      { tag:'ㅐ', zh:'ㅏ＋ㅣ，似「欸」（嘴張較大）', ko:'애', ro:'ae' },
+      { tag:'ㅒ', zh:'ㅑ＋ㅣ，似「耶」', ko:'얘', ro:'yae' },
+      { tag:'ㅔ', zh:'ㅓ＋ㅣ，似「欸」（現代與ㅐ幾乎同音）', ko:'에', ro:'e' },
+      { tag:'ㅖ', zh:'ㅕ＋ㅣ，似「耶」', ko:'예', ro:'ye' },
+      { tag:'ㅘ', zh:'ㅗ＋ㅏ，似「哇」', ko:'와', ro:'wa' },
+      { tag:'ㅙ', zh:'ㅗ＋ㅐ，似「威（we）」', ko:'왜', ro:'wae' },
+      { tag:'ㅚ', zh:'ㅗ＋ㅣ，現代多念 we', ko:'외', ro:'oe' },
+      { tag:'ㅝ', zh:'ㅜ＋ㅓ，似「窩」', ko:'워', ro:'wo' },
+      { tag:'ㅞ', zh:'ㅜ＋ㅔ，似「威（we）」', ko:'웨', ro:'we' },
+      { tag:'ㅟ', zh:'ㅜ＋ㅣ，似「威（wi）」', ko:'위', ro:'wi' },
+      { tag:'ㅢ', zh:'ㅡ＋ㅣ，快速連讀', ko:'의', ro:'ui' }
+    ],
+    finals:[
+      { tag:'ㄱ ㅋ ㄲ → k', zh:'收尾不送氣，舌根擋住', ko:'국', ro:'guk' },
+      { tag:'ㄴ → n',       zh:'舌尖抵上齒齦', ko:'눈', ro:'nun' },
+      { tag:'ㄷ ㅌ ㅅ ㅆ ㅈ ㅊ ㅎ → t', zh:'舌尖抵住不放', ko:'옷', ro:'ot' },
+      { tag:'ㄹ → l',       zh:'舌尖輕貼上顎', ko:'물', ro:'mul' },
+      { tag:'ㅁ → m',       zh:'雙唇閉合', ko:'김', ro:'gim' },
+      { tag:'ㅂ ㅍ → p',    zh:'雙唇閉合不送氣', ko:'밥', ro:'bap' },
+      { tag:'ㅇ → ng',      zh:'鼻音，似「ㄥ」', ko:'방', ro:'bang' }
     ],
     syllableExamples:[
       { tag:'ㄱ + ㅏ',      zh:'初聲＋中聲',       ko:'가', ro:'ga' },
@@ -1016,26 +1045,29 @@
       if (tab.id === 'hangul'){
         var intro = document.createElement('p');
         intro.className = 'panel-intro';
-        intro.textContent = '韓文字是把「子音＋母音（＋收尾子音）」拼成一個方塊字。例如 ㄱ＋ㅏ＝가（ga），ㅎ＋ㅏ＋ㄴ＝한（han）。點下面的卡片可以聽發音。';
+        intro.textContent = '韓文共 40 個字母：子音 19 個（基本 14＋雙子音 5）、母音 21 個（基本 10＋複合 11）。每個字由「初聲（子音）＋中聲（母音）＋終聲（收尾子音，可省略）」拼成一個方塊字，例如 ㄱ＋ㅏ＝가（ga），ㅎ＋ㅏ＋ㄴ＝한（han）。點下面的卡片可以聽發音。';
         panel.appendChild(intro);
 
-        var h1 = document.createElement('h2');
-        h1.className = 'subsection-title';
-        h1.textContent = '基本子音（14個）';
-        panel.appendChild(h1);
-        renderGrid(panel, HANGUL.consonants, 'hangul-grid');
-
-        var h2 = document.createElement('h2');
-        h2.className = 'subsection-title';
-        h2.textContent = '基本母音（10個）';
-        panel.appendChild(h2);
-        renderGrid(panel, HANGUL.vowels, 'hangul-grid');
-
-        var h3 = document.createElement('h2');
-        h3.className = 'subsection-title';
-        h3.textContent = '拆字拼音範例';
-        panel.appendChild(h3);
-        renderGrid(panel, HANGUL.syllableExamples, 'hangul-grid');
+        [
+          { title:'基本子音（14個）', note:'說明開頭為子音名稱（如 기역），大字為配上 ㅏ 的示範音節。平音 ㄱㄷㅂㅈ 在字首偏清音（k/t/p/ch），夾在兩個母音之間會變濁音（g/d/b/j）；送氣音 ㅋㅌㅍㅊ 發音時要吐出明顯氣流。', items:HANGUL.consonants },
+          { title:'雙子音／緊音（5個）', note:'由兩個相同子音組成，發音時喉嚨緊繃、不送氣，聲音短促有力。可比較 가（平音）、카（送氣音）、까（緊音）。', items:HANGUL.doubleConsonants },
+          { title:'基本母音（10個）', note:'母音以「天（・）、地（ㅡ）、人（ㅣ）」組合而成；多一筆短畫就多一個 y 音，例如 ㅏ→ㅑ、ㅗ→ㅛ。母音單獨成字時前面要加不發音的 ㅇ。', items:HANGUL.vowels },
+          { title:'複合母音（11個）', note:'由基本母音組合而成。ㅐ/ㅔ、ㅒ/ㅖ、ㅙ/ㅚ/ㅞ 在現代首爾話中發音幾乎相同，靠拼寫區分。', items:HANGUL.compoundVowels },
+          { title:'收尾音（終聲）7 個代表音', note:'放在字底下的子音叫收尾音（받침）。不論寫成哪個子音，收尾只會念成 7 種音之一；若後面接母音開頭的字，收尾音會連音到下一個字。', items:HANGUL.finals },
+          { title:'拆字拼音範例', note:'', items:HANGUL.syllableExamples }
+        ].forEach(function(sec){
+          var h = document.createElement('h2');
+          h.className = 'subsection-title';
+          h.textContent = sec.title;
+          panel.appendChild(h);
+          if (sec.note){
+            var note = document.createElement('p');
+            note.className = 'panel-intro';
+            note.textContent = sec.note;
+            panel.appendChild(note);
+          }
+          renderGrid(panel, sec.items, 'hangul-grid');
+        });
       } else {
         renderGrid(panel, PHRASES[tab.id]);
       }
