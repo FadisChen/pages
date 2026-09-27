@@ -485,6 +485,10 @@
   .option-btn.is-correct{border-color:var(--accent);background:var(--accent-soft);}
   .option-btn.is-wrong{border-color:var(--coral);background:var(--coral-soft);animation:shake .3s;}
   @keyframes shake{25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+  .pinyin-form{display:flex;gap:8px;margin-top:14px;}
+  .pinyin-form input{flex:1 1 auto;min-width:0;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:1.1rem;text-align:center;}
+  .pinyin-answer{text-align:center;margin-top:10px;font-size:.9rem;color:var(--ink-soft);}
+  .pinyin-answer b{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:1.1rem;color:var(--ink);}
   .quiz-feedback{text-align:center;min-height:1.6em;margin-top:12px;font-weight:700;}
   .quiz-feedback.ok{color:var(--accent-ink);}
   .quiz-feedback.bad{color:var(--coral);}
@@ -1143,10 +1147,14 @@
     read:   { title:'👀 看字辨義', desc:'只看韓文（不給拼音），選出中文意思', kind:'quiz' },
     zh2ko:  { title:'🗣️ 中翻韓', desc:'看中文，選出正確的韓文說法', kind:'quiz' },
     rush:   { title:'⏱️ 60 秒衝刺', desc:'混合題型，限時內答越多越好，沒有生命限制', kind:'quiz' },
+    pinyin: { title:'✍️ 拼音挑戰', desc:'AI 出題：看韓文字母或韓文字，輸入英文拼音（需 Gemini API Key）', kind:'pinyin' },
     match:  { title:'🃏 翻牌配對', desc:'翻開卡片，把韓文和中文配成一對', kind:'match' },
     review: { title:'📕 錯題複習', desc:'專攻答錯過的句子，答對就從錯題本移除', kind:'quiz' }
   };
   var QUIZ_SUBTYPES = ['listen','read','zh2ko'];
+  var PINYIN_MODEL = 'gemini-3.5-flash-lite';
+  var PINYIN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/' + PINYIN_MODEL + ':generateContent';
+  var pinyinReq = 0;      // bumps on every new request so stale responses are ignored
 
   var gameStore = loadGameStore();
   var POOL = [];
@@ -1369,8 +1377,14 @@
   }
 
   function startMode(id){
-    if (GAME_MODES[id].kind === 'match') startMatch();
+    var kind = GAME_MODES[id].kind;
+    if (kind === 'match') startMatch();
+    else if (kind === 'pinyin') startPinyin();
     else startQuiz(id);
+  }
+
+  function isScoredRound(){
+    return !!round && (round.kind === 'quiz' || round.kind === 'pinyin');
   }
 
   /* ----- Quiz ----- */
@@ -1515,7 +1529,7 @@
 
   function updateQuizHud(){
     var hud = document.getElementById('quiz-hud');
-    if (!hud || !round || round.kind !== 'quiz') return;
+    if (!hud || !isScoredRound()) return;
     var left = round.hearts !== null
       ? '❤️'.repeat(round.hearts) + '🤍'.repeat(MAX_HEARTS - round.hearts)
       : '⏱️ ' + Math.max(0, round.timeLeft) + ' 秒';
@@ -1592,7 +1606,7 @@
   }
 
   function finishQuiz(){
-    if (!round || round.kind !== 'quiz') return;
+    if (!isScoredRound()) return;
     var r = round;
     stopRound();
 
@@ -1634,13 +1648,284 @@
     badges.forEach(function(b){ card.appendChild(el('div', 'result-badge', b)); });
 
     var row = el('div', 'btn-row');
-    row.appendChild(button('btn btn-primary', '🔁 再玩一次', function(){ startQuiz(r.mode); }));
+    row.appendChild(button('btn btn-primary', '🔁 再玩一次', function(){ startMode(r.mode); }));
     row.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
     if (wrongItems().length){
       row.appendChild(button('btn', '🎓 請 AI 家教陪我練錯題', function(){ openTutorScenario('review'); }));
     }
     card.appendChild(row);
     gameRoot.appendChild(card);
+  }
+
+  /* ----- Pinyin challenge (Gemini text generation) ----- */
+
+  function pinyinApiKey(){
+    var typed = tEl.key ? tEl.key.value.trim() : '';
+    return typed || (lsGet(TUTOR_LS.apiKey) || '').trim();
+  }
+
+  function normalizeRoman(s){
+    return String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  }
+
+  function buildPinyinPrompt(cat){
+    var theme = cat === 'all' || cat === 'hangul'
+      ? '韓國旅遊常用詞'
+      : '「' + catLabel(cat).replace(/^[^一-鿿]+/, '') + '」情境的旅遊常用詞';
+    return [
+      '你是韓文羅馬拼音（Revised Romanization of Korean，文化觀光部 2000 年制）出題老師，學生是剛學韓文的台灣旅客。',
+      '請出 ' + ROUND_SIZE + ' 題不重複的拼音題，每題只出示一個單位，難度由易到難：',
+      '- 前 3 題：單一韓文字母（子音或母音，例如 ㄱ、ㅓ、ㅢ、ㄲ）',
+      '- 中間 4 題：單一韓文音節（例如 가、밥、꽃、웨）',
+      '- 最後 3 題：2～4 個音節的' + theme + '（例如 김치、지하철、감사），不要有空格',
+      '欄位規則：',
+      '- question：題目本身（韓文字母或韓文字）',
+      '- answer：標準羅馬拼音，小寫英文字母；單詞請依實際發音的音變規則拼寫（例如 신라 → silla）',
+      '- accepted：其他也算正確的拼法（小寫，可為空陣列）。子音字母請同時接受初聲與終聲拼法（例如 ㄱ 的 answer 為 g，accepted 含 k）；ㄹ 接受 r 和 l；ㅇ 的 answer 為 ng',
+      '- speak：用來播放發音的韓文；字母請給代表音節（子音配 ㅏ，例如 ㄱ → 가；母音加 ㅇ，例如 ㅓ → 어），音節或單詞則原樣',
+      '- zh：繁體中文說明，字母寫「子音／母音」與發音提示，單字寫中文意思，15 字以內'
+    ].join('\n');
+  }
+
+  function fetchPinyinQuestions(key, cat){
+    var body = {
+      contents:[{ role:'user', parts:[{ text:buildPinyinPrompt(cat) }] }],
+      generationConfig:{
+        temperature:1,
+        responseMimeType:'application/json',
+        responseSchema:{
+          type:'ARRAY',
+          items:{
+            type:'OBJECT',
+            properties:{
+              question:{ type:'STRING' },
+              answer:{ type:'STRING' },
+              accepted:{ type:'ARRAY', items:{ type:'STRING' } },
+              speak:{ type:'STRING' },
+              zh:{ type:'STRING' }
+            },
+            required:['question','answer','speak','zh']
+          }
+        }
+      }
+    };
+    return fetch(PINYIN_API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-goog-api-key':key },
+      body:JSON.stringify(body)
+    }).then(function(res){
+      return res.json().catch(function(){ return {}; }).then(function(data){
+        if (!res.ok){
+          var msg = data && data.error && data.error.message;
+          throw new Error('HTTP ' + res.status + (msg ? '：' + msg : ''));
+        }
+        var parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+        var text = (parts || []).map(function(p){ return p.text || ''; }).join('');
+        var list = JSON.parse(text);
+        if (!Array.isArray(list)) throw new Error('回傳格式不正確');
+        var seen = {};
+        return list.map(function(q){
+          var answer = normalizeRoman(q.answer);
+          var accepted = [answer].concat((q.accepted || []).map(normalizeRoman)).filter(Boolean);
+          return {
+            question:String(q.question || '').trim(),
+            answer:answer,
+            accepted:accepted,
+            display:String(q.answer || '').trim().toLowerCase(),
+            speak:String(q.speak || q.question || '').trim(),
+            zh:String(q.zh || '').trim()
+          };
+        }).filter(function(q){
+          if (!q.question || !q.answer || seen[q.question]) return false;
+          seen[q.question] = true;
+          return true;
+        });
+      });
+    });
+  }
+
+  function startPinyin(){
+    var key = pinyinApiKey();
+    stopRound();
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'quiz-kind', GAME_MODES.pinyin.title + '｜' + catLabel(gameCat)));
+
+    if (!key){
+      card.appendChild(el('p', null, '拼音挑戰由 ' + PINYIN_MODEL + ' 即時出題，需要先在「🎓 AI 家教」分頁填入你的 Gemini API Key。'));
+      var row = el('div', 'btn-row');
+      row.appendChild(button('btn btn-primary', '🔑 前往填寫金鑰', function(){
+        renderHub();
+        activateTab('tutor');
+        window.scrollTo({ top:0, behavior:'smooth' });
+        tEl.key.focus();
+      }));
+      row.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
+      card.appendChild(row);
+      gameRoot.appendChild(card);
+      return;
+    }
+
+    var reqId = ++pinyinReq;
+    var status = el('p', 'quiz-feedback', '🤖 AI 出題中……');
+    status.setAttribute('role', 'status');
+    card.appendChild(status);
+    var row2 = el('div', 'btn-row');
+    row2.appendChild(button('btn', '取消', function(){ pinyinReq++; renderHub(); }));
+    card.appendChild(row2);
+    gameRoot.appendChild(card);
+
+    fetchPinyinQuestions(key, gameCat).then(function(items){
+      if (reqId !== pinyinReq) return;
+      if (!items.length) throw new Error('沒有拿到題目');
+      round = {
+        kind:'pinyin',
+        mode:'pinyin',
+        cat:gameCat,
+        items:items,
+        idx:0,
+        asked:0,
+        correct:0,
+        score:0,
+        combo:0,
+        maxCombo:0,
+        hearts:MAX_HEARTS,
+        timeLeft:null,
+        locked:false,
+        q:null
+      };
+      nextPinyin();
+    }).catch(function(err){
+      if (reqId !== pinyinReq) return;
+      status.className = 'quiz-feedback bad';
+      status.textContent = '出題失敗：' + (err && err.message ? err.message : err);
+      row2.textContent = '';
+      row2.appendChild(button('btn btn-primary', '🔁 重試', startPinyin));
+      row2.appendChild(button('btn', '🏠 回遊戲大廳', renderHub));
+    });
+  }
+
+  function nextPinyin(){
+    if (!round || round.kind !== 'pinyin') return;
+    if (round.idx >= round.items.length || round.hearts === 0){
+      finishQuiz();
+      return;
+    }
+    round.q = round.items[round.idx++];
+    round.locked = false;
+    renderPinyin();
+  }
+
+  function renderPinyin(){
+    var q = round.q;
+    gameRoot.textContent = '';
+    var card = el('div', 'card');
+
+    var hud = el('div', 'quiz-hud');
+    hud.id = 'quiz-hud';
+    card.appendChild(hud);
+    var prog = el('div', 'quiz-progress');
+    var progFill = el('div');
+    progFill.id = 'quiz-progress';
+    prog.appendChild(progFill);
+    card.appendChild(prog);
+
+    var prompt = el('div', 'quiz-prompt');
+    prompt.appendChild(el('div', 'quiz-kind', '✍️ 輸入這個韓文的英文拼音'));
+    var big = el('div', 'quiz-big-ko', q.question);
+    big.lang = 'ko';
+    prompt.appendChild(big);
+    var reveal = el('div', 'quiz-reveal');
+    reveal.id = 'quiz-reveal';
+    prompt.appendChild(reveal);
+    card.appendChild(prompt);
+
+    var form = el('form', 'pinyin-form');
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'pinyin-input';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('autocapitalize', 'off');
+    input.setAttribute('aria-label', '輸入英文拼音');
+    input.placeholder = '例如 ga、eo、gimchi';
+    form.appendChild(input);
+    var submit = button('btn btn-primary', '確定');
+    submit.type = 'submit';
+    form.appendChild(submit);
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      if (round && round.kind === 'pinyin' && round.locked){ skipPinyinWait(); return; }
+      checkPinyin(input.value);
+    });
+    card.appendChild(form);
+
+    var fb = el('div', 'quiz-feedback');
+    fb.id = 'quiz-feedback';
+    fb.setAttribute('role', 'status');
+    card.appendChild(fb);
+    var ans = el('div', 'pinyin-answer');
+    ans.id = 'pinyin-answer';
+    card.appendChild(ans);
+
+    var foot = el('div', 'btn-row');
+    foot.appendChild(button('btn', '🔊 聽發音', function(){ speak(q.speak); }));
+    foot.appendChild(button('btn', '🏳️ 結束這局', function(){ finishQuiz(); }));
+    card.appendChild(foot);
+
+    gameRoot.appendChild(card);
+    updateQuizHud();
+    input.focus();
+  }
+
+  function skipPinyinWait(){
+    if (round.advance) clearTimeout(round.advance);
+    round.advance = null;
+    nextPinyin();
+  }
+
+  function checkPinyin(raw){
+    if (!round || round.kind !== 'pinyin' || round.locked) return;
+    var typed = normalizeRoman(raw);
+    if (!typed){ showToast('請先輸入英文拼音'); return; }
+    round.locked = true;
+    round.asked++;
+    var q = round.q;
+    var ok = q.accepted.indexOf(typed) >= 0;
+
+    var input = document.getElementById('pinyin-input');
+    if (input) input.readOnly = true;
+    var fb = document.getElementById('quiz-feedback');
+    var reveal = document.getElementById('quiz-reveal');
+    var ans = document.getElementById('pinyin-answer');
+    if (reveal) reveal.textContent = q.zh;
+
+    if (ok){
+      round.correct++;
+      round.combo++;
+      round.maxCombo = Math.max(round.maxCombo, round.combo);
+      var gained = 100 + Math.min(round.combo - 1, 10) * 10;
+      round.score += gained;
+      fb.className = 'quiz-feedback ok';
+      fb.textContent = ['答對了！', '太厲害了！', '完美！', '잘했어요！'][Math.floor(Math.random() * 4)] + ' +' + gained;
+      var others = q.accepted.filter(function(a){ return a !== typed; });
+      if (others.length) ans.textContent = '也可以寫成：' + others.join('、');
+      sfx(true);
+    } else {
+      round.combo = 0;
+      round.hearts--;
+      fb.className = 'quiz-feedback bad';
+      fb.textContent = '差一點！你輸入的是「' + String(raw).trim() + '」';
+      ans.appendChild(document.createTextNode('正確答案：'));
+      ans.appendChild(el('b', null, q.display || q.answer));
+      var alts = q.accepted.filter(function(a){ return a !== q.answer; });
+      if (alts.length) ans.appendChild(document.createTextNode('（也可寫成 ' + alts.join('、') + '）'));
+      sfx(false);
+    }
+    updateQuizHud();
+    speak(q.speak);
+    // Wrong answers stay on screen longer so the solution can be read; Enter skips ahead.
+    round.advance = setTimeout(nextPinyin, ok ? 1200 : 3500);
   }
 
   /* ----- Memory match ----- */
