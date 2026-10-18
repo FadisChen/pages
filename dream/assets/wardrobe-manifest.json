@@ -1,0 +1,1282 @@
+[
+  {
+    "outfit": "daily",
+    "stage": 0,
+    "path": "assets/outfits/daily-0.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      0,
+      0,
+      217,
+      364
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "daily",
+    "stage": 1,
+    "path": "assets/outfits/daily-1.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      0,
+      364,
+      217,
+      737
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "daily",
+    "stage": 2,
+    "path": "assets/outfits/daily-2.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      0,
+      737,
+      217,
+      1103
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "daily",
+    "stage": 3,
+    "path": "assets/outfits/daily-3.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      0,
+      1103,
+      217,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "academy",
+    "stage": 0,
+    "path": "assets/outfits/academy-0.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      217,
+      0,
+      434,
+      364
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "academy",
+    "stage": 1,
+    "path": "assets/outfits/academy-1.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      217,
+      364,
+      434,
+      737
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "academy",
+    "stage": 2,
+    "path": "assets/outfits/academy-2.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      217,
+      737,
+      434,
+      1103
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "academy",
+    "stage": 3,
+    "path": "assets/outfits/academy-3.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      217,
+      1103,
+      434,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "travel",
+    "stage": 0,
+    "path": "assets/outfits/travel-0.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      434,
+      0,
+      652,
+      364
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "travel",
+    "stage": 1,
+    "path": "assets/outfits/travel-1.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      434,
+      364,
+      652,
+      737
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "travel",
+    "stage": 2,
+    "path": "assets/outfits/travel-2.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      434,
+      737,
+      652,
+      1103
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "travel",
+    "stage": 3,
+    "path": "assets/outfits/travel-3.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      434,
+      1103,
+      652,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "swim",
+    "stage": 0,
+    "path": "assets/outfits/swim-0.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      652,
+      0,
+      869,
+      364
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "swim",
+    "stage": 1,
+    "path": "assets/outfits/swim-1.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      652,
+      364,
+      869,
+      737
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "swim",
+    "stage": 2,
+    "path": "assets/outfits/swim-2.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      652,
+      737,
+      869,
+      1103
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "swim",
+    "stage": 3,
+    "path": "assets/outfits/swim-3.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      652,
+      1103,
+      869,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "gala",
+    "stage": 0,
+    "path": "assets/outfits/gala-0.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      869,
+      0,
+      1086,
+      364
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "gala",
+    "stage": 1,
+    "path": "assets/outfits/gala-1.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      869,
+      364,
+      1086,
+      737
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "gala",
+    "stage": 2,
+    "path": "assets/outfits/gala-2.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      869,
+      737,
+      1086,
+      1103
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "gala",
+    "stage": 3,
+    "path": "assets/outfits/gala-3.webp",
+    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "crop": [
+      869,
+      1103,
+      1086,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "demon",
+    "stage": 0,
+    "path": "assets/outfits/demon-0.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      0,
+      0,
+      217,
+      348
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "demon",
+    "stage": 1,
+    "path": "assets/outfits/demon-1.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      0,
+      348,
+      217,
+      698
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "demon",
+    "stage": 2,
+    "path": "assets/outfits/demon-2.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      0,
+      698,
+      217,
+      1086
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "demon",
+    "stage": 3,
+    "path": "assets/outfits/demon-3.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      0,
+      1086,
+      217,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "maid",
+    "stage": 0,
+    "path": "assets/outfits/maid-0.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      217,
+      0,
+      434,
+      348
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "maid",
+    "stage": 1,
+    "path": "assets/outfits/maid-1.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      217,
+      348,
+      434,
+      698
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "maid",
+    "stage": 2,
+    "path": "assets/outfits/maid-2.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      217,
+      698,
+      434,
+      1086
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "maid",
+    "stage": 3,
+    "path": "assets/outfits/maid-3.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      217,
+      1086,
+      434,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "knight",
+    "stage": 0,
+    "path": "assets/outfits/knight-0.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      434,
+      0,
+      652,
+      348
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "knight",
+    "stage": 1,
+    "path": "assets/outfits/knight-1.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      434,
+      348,
+      652,
+      698
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "knight",
+    "stage": 2,
+    "path": "assets/outfits/knight-2.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      434,
+      698,
+      652,
+      1086
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "knight",
+    "stage": 3,
+    "path": "assets/outfits/knight-3.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      434,
+      1086,
+      652,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "mage",
+    "stage": 0,
+    "path": "assets/outfits/mage-0.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      652,
+      0,
+      869,
+      348
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "mage",
+    "stage": 1,
+    "path": "assets/outfits/mage-1.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      652,
+      348,
+      869,
+      698
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "mage",
+    "stage": 2,
+    "path": "assets/outfits/mage-2.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      652,
+      698,
+      869,
+      1086
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "mage",
+    "stage": 3,
+    "path": "assets/outfits/mage-3.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      652,
+      1086,
+      869,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "chef",
+    "stage": 0,
+    "path": "assets/outfits/chef-0.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      869,
+      0,
+      1086,
+      348
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "chef",
+    "stage": 1,
+    "path": "assets/outfits/chef-1.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      869,
+      348,
+      1086,
+      698
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "chef",
+    "stage": 2,
+    "path": "assets/outfits/chef-2.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      869,
+      698,
+      1086,
+      1086
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "chef",
+    "stage": 3,
+    "path": "assets/outfits/chef-3.webp",
+    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "crop": [
+      869,
+      1086,
+      1086,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "healer",
+    "stage": 0,
+    "path": "assets/outfits/healer-0.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      0,
+      0,
+      217,
+      356
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "healer",
+    "stage": 1,
+    "path": "assets/outfits/healer-1.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      0,
+      356,
+      217,
+      716
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "healer",
+    "stage": 2,
+    "path": "assets/outfits/healer-2.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      0,
+      716,
+      217,
+      1091
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "healer",
+    "stage": 3,
+    "path": "assets/outfits/healer-3.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      0,
+      1091,
+      217,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "ranger",
+    "stage": 0,
+    "path": "assets/outfits/ranger-0.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      217,
+      0,
+      434,
+      356
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "ranger",
+    "stage": 1,
+    "path": "assets/outfits/ranger-1.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      217,
+      356,
+      434,
+      716
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "ranger",
+    "stage": 2,
+    "path": "assets/outfits/ranger-2.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      217,
+      716,
+      434,
+      1091
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "ranger",
+    "stage": 3,
+    "path": "assets/outfits/ranger-3.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      217,
+      1091,
+      434,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "farmer",
+    "stage": 0,
+    "path": "assets/outfits/farmer-0.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      434,
+      0,
+      652,
+      356
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "farmer",
+    "stage": 1,
+    "path": "assets/outfits/farmer-1.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      434,
+      356,
+      652,
+      716
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "farmer",
+    "stage": 2,
+    "path": "assets/outfits/farmer-2.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      434,
+      716,
+      652,
+      1091
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "farmer",
+    "stage": 3,
+    "path": "assets/outfits/farmer-3.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      434,
+      1091,
+      652,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "sailor",
+    "stage": 0,
+    "path": "assets/outfits/sailor-0.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      652,
+      0,
+      869,
+      356
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "sailor",
+    "stage": 1,
+    "path": "assets/outfits/sailor-1.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      652,
+      356,
+      869,
+      716
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "sailor",
+    "stage": 2,
+    "path": "assets/outfits/sailor-2.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      652,
+      716,
+      869,
+      1091
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "sailor",
+    "stage": 3,
+    "path": "assets/outfits/sailor-3.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      652,
+      1091,
+      869,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "artist",
+    "stage": 0,
+    "path": "assets/outfits/artist-0.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      869,
+      0,
+      1086,
+      356
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "artist",
+    "stage": 1,
+    "path": "assets/outfits/artist-1.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      869,
+      356,
+      1086,
+      716
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "artist",
+    "stage": 2,
+    "path": "assets/outfits/artist-2.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      869,
+      716,
+      1086,
+      1091
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "artist",
+    "stage": 3,
+    "path": "assets/outfits/artist-3.webp",
+    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "crop": [
+      869,
+      1091,
+      1086,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "scholar",
+    "stage": 0,
+    "path": "assets/outfits/scholar-0.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      0,
+      0,
+      217,
+      378
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "scholar",
+    "stage": 1,
+    "path": "assets/outfits/scholar-1.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      0,
+      378,
+      217,
+      741
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "scholar",
+    "stage": 2,
+    "path": "assets/outfits/scholar-2.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      0,
+      741,
+      217,
+      1101
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "scholar",
+    "stage": 3,
+    "path": "assets/outfits/scholar-3.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      0,
+      1101,
+      217,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "dancer",
+    "stage": 0,
+    "path": "assets/outfits/dancer-0.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      217,
+      0,
+      434,
+      378
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "dancer",
+    "stage": 1,
+    "path": "assets/outfits/dancer-1.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      217,
+      378,
+      434,
+      741
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "dancer",
+    "stage": 2,
+    "path": "assets/outfits/dancer-2.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      217,
+      741,
+      434,
+      1101
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "dancer",
+    "stage": 3,
+    "path": "assets/outfits/dancer-3.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      217,
+      1101,
+      434,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "winter",
+    "stage": 0,
+    "path": "assets/outfits/winter-0.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      434,
+      0,
+      652,
+      378
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "winter",
+    "stage": 1,
+    "path": "assets/outfits/winter-1.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      434,
+      378,
+      652,
+      741
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "winter",
+    "stage": 2,
+    "path": "assets/outfits/winter-2.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      434,
+      741,
+      652,
+      1101
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "winter",
+    "stage": 3,
+    "path": "assets/outfits/winter-3.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      434,
+      1101,
+      652,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "summer",
+    "stage": 0,
+    "path": "assets/outfits/summer-0.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      652,
+      0,
+      869,
+      378
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "summer",
+    "stage": 1,
+    "path": "assets/outfits/summer-1.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      652,
+      378,
+      869,
+      741
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "summer",
+    "stage": 2,
+    "path": "assets/outfits/summer-2.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      652,
+      741,
+      869,
+      1101
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "summer",
+    "stage": 3,
+    "path": "assets/outfits/summer-3.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      652,
+      1101,
+      869,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "festival",
+    "stage": 0,
+    "path": "assets/outfits/festival-0.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      869,
+      0,
+      1086,
+      378
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "festival",
+    "stage": 1,
+    "path": "assets/outfits/festival-1.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      869,
+      378,
+      1086,
+      741
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "festival",
+    "stage": 2,
+    "path": "assets/outfits/festival-2.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      869,
+      741,
+      1086,
+      1101
+    ],
+    "size": [
+      256,
+      448
+    ]
+  },
+  {
+    "outfit": "festival",
+    "stage": 3,
+    "path": "assets/outfits/festival-3.webp",
+    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "crop": [
+      869,
+      1101,
+      1086,
+      1448
+    ],
+    "size": [
+      256,
+      448
+    ]
+  }
+]
