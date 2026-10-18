@@ -3,1280 +3,1440 @@
     "outfit": "daily",
     "stage": 0,
     "path": "assets/outfits/daily-0.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
       0,
       0,
-      217,
-      364
+      307,
+      463
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "f3748a9077"
   },
   {
     "outfit": "daily",
     "stage": 1,
     "path": "assets/outfits/daily-1.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
       0,
-      364,
-      217,
-      737
+      463,
+      307,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "daily",
-    "stage": 2,
-    "path": "assets/outfits/daily-2.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      0,
-      737,
-      217,
-      1103
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "daily",
-    "stage": 3,
-    "path": "assets/outfits/daily-3.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      0,
-      1103,
-      217,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "0dbbadf120"
   },
   {
     "outfit": "academy",
     "stage": 0,
     "path": "assets/outfits/academy-0.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      217,
+      307,
       0,
-      434,
-      364
+      614,
+      463
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "b77f4cf763"
   },
   {
     "outfit": "academy",
     "stage": 1,
     "path": "assets/outfits/academy-1.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      217,
-      364,
-      434,
-      737
+      307,
+      463,
+      614,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "academy",
-    "stage": 2,
-    "path": "assets/outfits/academy-2.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      217,
-      737,
-      434,
-      1103
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "academy",
-    "stage": 3,
-    "path": "assets/outfits/academy-3.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      217,
-      1103,
-      434,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "50d252b410"
   },
   {
     "outfit": "travel",
     "stage": 0,
     "path": "assets/outfits/travel-0.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      434,
+      614,
       0,
-      652,
-      364
+      922,
+      463
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "5463ed04b4"
   },
   {
     "outfit": "travel",
     "stage": 1,
     "path": "assets/outfits/travel-1.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      434,
-      364,
-      652,
-      737
+      614,
+      463,
+      922,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "travel",
-    "stage": 2,
-    "path": "assets/outfits/travel-2.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      434,
-      737,
-      652,
-      1103
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "travel",
-    "stage": 3,
-    "path": "assets/outfits/travel-3.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      434,
-      1103,
-      652,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "46b2a32a64"
   },
   {
     "outfit": "swim",
     "stage": 0,
     "path": "assets/outfits/swim-0.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      652,
+      922,
       0,
-      869,
-      364
+      1229,
+      463
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "004843a921"
   },
   {
     "outfit": "swim",
     "stage": 1,
     "path": "assets/outfits/swim-1.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      652,
-      364,
-      869,
-      737
+      922,
+      463,
+      1229,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "swim",
-    "stage": 2,
-    "path": "assets/outfits/swim-2.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      652,
-      737,
-      869,
-      1103
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "swim",
-    "stage": 3,
-    "path": "assets/outfits/swim-3.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
-    "crop": [
-      652,
-      1103,
-      869,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "c304d1cc0f"
   },
   {
     "outfit": "gala",
     "stage": 0,
     "path": "assets/outfits/gala-0.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      869,
+      1229,
       0,
-      1086,
-      364
+      1536,
+      463
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "954fdd5ad9"
   },
   {
     "outfit": "gala",
     "stage": 1,
     "path": "assets/outfits/gala-1.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-7f60645f-8ee2-406d-b868-63af0d79f09f.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      364,
-      1086,
-      737
+      1229,
+      463,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "13b4cad193"
+  },
+  {
+    "outfit": "daily",
+    "stage": 2,
+    "path": "assets/outfits/daily-2.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      0,
+      307,
+      480
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "e9e476e9ec"
+  },
+  {
+    "outfit": "daily",
+    "stage": 3,
+    "path": "assets/outfits/daily-3.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      480,
+      307,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "c8725ac217"
+  },
+  {
+    "outfit": "academy",
+    "stage": 2,
+    "path": "assets/outfits/academy-2.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      0,
+      614,
+      480
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "190ba5f61f"
+  },
+  {
+    "outfit": "academy",
+    "stage": 3,
+    "path": "assets/outfits/academy-3.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      480,
+      614,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "18a8bf8f23"
+  },
+  {
+    "outfit": "travel",
+    "stage": 2,
+    "path": "assets/outfits/travel-2.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      0,
+      922,
+      480
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "046b5877da"
+  },
+  {
+    "outfit": "travel",
+    "stage": 3,
+    "path": "assets/outfits/travel-3.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      480,
+      922,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "1b7887a02b"
+  },
+  {
+    "outfit": "swim",
+    "stage": 2,
+    "path": "assets/outfits/swim-2.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      0,
+      1229,
+      480
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "6a38516a6f"
+  },
+  {
+    "outfit": "swim",
+    "stage": 3,
+    "path": "assets/outfits/swim-3.webp",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      480,
+      1229,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "3425d01e99"
   },
   {
     "outfit": "gala",
     "stage": 2,
     "path": "assets/outfits/gala-2.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      737,
-      1086,
-      1103
+      1229,
+      0,
+      1536,
+      480
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "0300555cae"
   },
   {
     "outfit": "gala",
     "stage": 3,
     "path": "assets/outfits/gala-3.webp",
-    "source": "exec-07e2fc4c-fd01-4b19-98b5-cf5789a605ab.png",
+    "source": "exec-0b1d77f3-1961-408d-bef9-ddf1dd7bd276.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      1103,
-      1086,
-      1448
+      1229,
+      480,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "58d287d84b"
   },
   {
     "outfit": "demon",
     "stage": 0,
     "path": "assets/outfits/demon-0.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
       0,
       0,
-      217,
-      348
+      307,
+      455
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "50a03d7bac"
   },
   {
     "outfit": "demon",
     "stage": 1,
     "path": "assets/outfits/demon-1.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
       0,
-      348,
-      217,
-      698
+      455,
+      307,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "demon",
-    "stage": 2,
-    "path": "assets/outfits/demon-2.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      0,
-      698,
-      217,
-      1086
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "demon",
-    "stage": 3,
-    "path": "assets/outfits/demon-3.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      0,
-      1086,
-      217,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "4d12561d3f"
   },
   {
     "outfit": "maid",
     "stage": 0,
     "path": "assets/outfits/maid-0.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      217,
+      307,
       0,
-      434,
-      348
+      614,
+      455
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "f71179de35"
   },
   {
     "outfit": "maid",
     "stage": 1,
     "path": "assets/outfits/maid-1.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      217,
-      348,
-      434,
-      698
+      307,
+      455,
+      614,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "maid",
-    "stage": 2,
-    "path": "assets/outfits/maid-2.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      217,
-      698,
-      434,
-      1086
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "maid",
-    "stage": 3,
-    "path": "assets/outfits/maid-3.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      217,
-      1086,
-      434,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "0c55ec3fe9"
   },
   {
     "outfit": "knight",
     "stage": 0,
     "path": "assets/outfits/knight-0.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      434,
+      614,
       0,
-      652,
-      348
+      922,
+      455
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "85bf1b6f49"
   },
   {
     "outfit": "knight",
     "stage": 1,
     "path": "assets/outfits/knight-1.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      434,
-      348,
-      652,
-      698
+      614,
+      455,
+      922,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "knight",
-    "stage": 2,
-    "path": "assets/outfits/knight-2.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      434,
-      698,
-      652,
-      1086
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "knight",
-    "stage": 3,
-    "path": "assets/outfits/knight-3.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      434,
-      1086,
-      652,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "2b2be9bfb9"
   },
   {
     "outfit": "mage",
     "stage": 0,
     "path": "assets/outfits/mage-0.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      652,
+      922,
       0,
-      869,
-      348
+      1229,
+      455
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "e1fa260d4c"
   },
   {
     "outfit": "mage",
     "stage": 1,
     "path": "assets/outfits/mage-1.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      652,
-      348,
-      869,
-      698
+      922,
+      455,
+      1229,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "mage",
-    "stage": 2,
-    "path": "assets/outfits/mage-2.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      652,
-      698,
-      869,
-      1086
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "mage",
-    "stage": 3,
-    "path": "assets/outfits/mage-3.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
-    "crop": [
-      652,
-      1086,
-      869,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "5d5a513a0c"
   },
   {
     "outfit": "chef",
     "stage": 0,
     "path": "assets/outfits/chef-0.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      869,
+      1229,
       0,
-      1086,
-      348
+      1536,
+      455
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "5a4efca5ea"
   },
   {
     "outfit": "chef",
     "stage": 1,
     "path": "assets/outfits/chef-1.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-be0fdafc-aef1-4103-ae95-0c1da2e73e54.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      348,
-      1086,
-      698
+      1229,
+      455,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "05bb678b41"
+  },
+  {
+    "outfit": "demon",
+    "stage": 2,
+    "path": "assets/outfits/demon-2.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      0,
+      307,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "8f578edf48"
+  },
+  {
+    "outfit": "demon",
+    "stage": 3,
+    "path": "assets/outfits/demon-3.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      496,
+      307,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "bfb60be8b7"
+  },
+  {
+    "outfit": "maid",
+    "stage": 2,
+    "path": "assets/outfits/maid-2.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      0,
+      614,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "c7233013ed"
+  },
+  {
+    "outfit": "maid",
+    "stage": 3,
+    "path": "assets/outfits/maid-3.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      496,
+      614,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "c9589420f0"
+  },
+  {
+    "outfit": "knight",
+    "stage": 2,
+    "path": "assets/outfits/knight-2.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      0,
+      922,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "6e10b04e46"
+  },
+  {
+    "outfit": "knight",
+    "stage": 3,
+    "path": "assets/outfits/knight-3.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      496,
+      922,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "8bfbe85279"
+  },
+  {
+    "outfit": "mage",
+    "stage": 2,
+    "path": "assets/outfits/mage-2.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      0,
+      1229,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "f69624c67c"
+  },
+  {
+    "outfit": "mage",
+    "stage": 3,
+    "path": "assets/outfits/mage-3.webp",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      496,
+      1229,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "e565038b09"
   },
   {
     "outfit": "chef",
     "stage": 2,
     "path": "assets/outfits/chef-2.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      698,
-      1086,
-      1086
+      1229,
+      0,
+      1536,
+      496
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "7fe0837295"
   },
   {
     "outfit": "chef",
     "stage": 3,
     "path": "assets/outfits/chef-3.webp",
-    "source": "exec-9029f275-6821-4424-b696-3aea20ad141c.png",
+    "source": "exec-6ec6850b-fceb-4a9d-b20b-34a06306f549.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      1086,
-      1086,
-      1448
+      1229,
+      496,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "f5a23417db"
   },
   {
     "outfit": "healer",
     "stage": 0,
     "path": "assets/outfits/healer-0.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
       0,
       0,
-      217,
-      356
+      307,
+      469
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "5bc6fdc984"
   },
   {
     "outfit": "healer",
     "stage": 1,
     "path": "assets/outfits/healer-1.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
       0,
-      356,
-      217,
-      716
+      469,
+      307,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "healer",
-    "stage": 2,
-    "path": "assets/outfits/healer-2.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      0,
-      716,
-      217,
-      1091
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "healer",
-    "stage": 3,
-    "path": "assets/outfits/healer-3.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      0,
-      1091,
-      217,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "9afa9c4283"
   },
   {
     "outfit": "ranger",
     "stage": 0,
     "path": "assets/outfits/ranger-0.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      217,
+      307,
       0,
-      434,
-      356
+      614,
+      469
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "2e8adf360c"
   },
   {
     "outfit": "ranger",
     "stage": 1,
     "path": "assets/outfits/ranger-1.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      217,
-      356,
-      434,
-      716
+      307,
+      469,
+      614,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "ranger",
-    "stage": 2,
-    "path": "assets/outfits/ranger-2.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      217,
-      716,
-      434,
-      1091
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "ranger",
-    "stage": 3,
-    "path": "assets/outfits/ranger-3.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      217,
-      1091,
-      434,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "7813b3f1ee"
   },
   {
     "outfit": "farmer",
     "stage": 0,
     "path": "assets/outfits/farmer-0.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      434,
+      614,
       0,
-      652,
-      356
+      922,
+      469
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "ca35dbdc7e"
   },
   {
     "outfit": "farmer",
     "stage": 1,
     "path": "assets/outfits/farmer-1.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      434,
-      356,
-      652,
-      716
+      614,
+      469,
+      922,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "farmer",
-    "stage": 2,
-    "path": "assets/outfits/farmer-2.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      434,
-      716,
-      652,
-      1091
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "farmer",
-    "stage": 3,
-    "path": "assets/outfits/farmer-3.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      434,
-      1091,
-      652,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "db46065b2a"
   },
   {
     "outfit": "sailor",
     "stage": 0,
     "path": "assets/outfits/sailor-0.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      652,
+      922,
       0,
-      869,
-      356
+      1229,
+      469
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "cc475ef271"
   },
   {
     "outfit": "sailor",
     "stage": 1,
     "path": "assets/outfits/sailor-1.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      652,
-      356,
-      869,
-      716
+      922,
+      469,
+      1229,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "sailor",
-    "stage": 2,
-    "path": "assets/outfits/sailor-2.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      652,
-      716,
-      869,
-      1091
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "sailor",
-    "stage": 3,
-    "path": "assets/outfits/sailor-3.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
-    "crop": [
-      652,
-      1091,
-      869,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "f8345ba084"
   },
   {
     "outfit": "artist",
     "stage": 0,
     "path": "assets/outfits/artist-0.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      869,
+      1229,
       0,
-      1086,
-      356
+      1536,
+      469
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "4953f6e5d2"
   },
   {
     "outfit": "artist",
     "stage": 1,
     "path": "assets/outfits/artist-1.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-a43572c6-7498-4841-b6ed-3cb26ab6afab.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      356,
-      1086,
-      716
+      1229,
+      469,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "4127e7d4e8"
+  },
+  {
+    "outfit": "healer",
+    "stage": 2,
+    "path": "assets/outfits/healer-2.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      0,
+      307,
+      501
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "a4ef10f790"
+  },
+  {
+    "outfit": "healer",
+    "stage": 3,
+    "path": "assets/outfits/healer-3.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      501,
+      307,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "e4acd0775f"
+  },
+  {
+    "outfit": "ranger",
+    "stage": 2,
+    "path": "assets/outfits/ranger-2.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      0,
+      614,
+      501
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "b1510c21b9"
+  },
+  {
+    "outfit": "ranger",
+    "stage": 3,
+    "path": "assets/outfits/ranger-3.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      501,
+      614,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "70d6907f37"
+  },
+  {
+    "outfit": "farmer",
+    "stage": 2,
+    "path": "assets/outfits/farmer-2.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      0,
+      922,
+      501
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "c87c3e33ac"
+  },
+  {
+    "outfit": "farmer",
+    "stage": 3,
+    "path": "assets/outfits/farmer-3.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      501,
+      922,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "f0cdfca9be"
+  },
+  {
+    "outfit": "sailor",
+    "stage": 2,
+    "path": "assets/outfits/sailor-2.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      0,
+      1229,
+      501
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "619fbd9926"
+  },
+  {
+    "outfit": "sailor",
+    "stage": 3,
+    "path": "assets/outfits/sailor-3.webp",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      501,
+      1229,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "1264f9c7b2"
   },
   {
     "outfit": "artist",
     "stage": 2,
     "path": "assets/outfits/artist-2.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      716,
-      1086,
-      1091
+      1229,
+      0,
+      1536,
+      501
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "4402c27480"
   },
   {
     "outfit": "artist",
     "stage": 3,
     "path": "assets/outfits/artist-3.webp",
-    "source": "exec-4f785579-50d3-4a7b-aaa8-d260e1c0265d.png",
+    "source": "exec-4cd0528c-703b-4472-8bc7-366c48282991.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      1091,
-      1086,
-      1448
+      1229,
+      501,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "38e5dd3f58"
   },
   {
     "outfit": "scholar",
     "stage": 0,
     "path": "assets/outfits/scholar-0.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
       0,
       0,
-      217,
-      378
+      307,
+      476
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "3bf8fb1de7"
   },
   {
     "outfit": "scholar",
     "stage": 1,
     "path": "assets/outfits/scholar-1.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
       0,
-      378,
-      217,
-      741
+      476,
+      307,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "scholar",
-    "stage": 2,
-    "path": "assets/outfits/scholar-2.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      0,
-      741,
-      217,
-      1101
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "scholar",
-    "stage": 3,
-    "path": "assets/outfits/scholar-3.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      0,
-      1101,
-      217,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "ebb4df0fad"
   },
   {
     "outfit": "dancer",
     "stage": 0,
     "path": "assets/outfits/dancer-0.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      217,
+      307,
       0,
-      434,
-      378
+      614,
+      476
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "b303c35944"
   },
   {
     "outfit": "dancer",
     "stage": 1,
     "path": "assets/outfits/dancer-1.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      217,
-      378,
-      434,
-      741
+      307,
+      476,
+      614,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "dancer",
-    "stage": 2,
-    "path": "assets/outfits/dancer-2.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      217,
-      741,
-      434,
-      1101
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "dancer",
-    "stage": 3,
-    "path": "assets/outfits/dancer-3.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      217,
-      1101,
-      434,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "92358d1472"
   },
   {
     "outfit": "winter",
     "stage": 0,
     "path": "assets/outfits/winter-0.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      434,
+      614,
       0,
-      652,
-      378
+      922,
+      476
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "59cda9fd73"
   },
   {
     "outfit": "winter",
     "stage": 1,
     "path": "assets/outfits/winter-1.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      434,
-      378,
-      652,
-      741
+      614,
+      476,
+      922,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "winter",
-    "stage": 2,
-    "path": "assets/outfits/winter-2.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      434,
-      741,
-      652,
-      1101
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "winter",
-    "stage": 3,
-    "path": "assets/outfits/winter-3.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      434,
-      1101,
-      652,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "141a6392bd"
   },
   {
     "outfit": "summer",
     "stage": 0,
     "path": "assets/outfits/summer-0.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      652,
+      922,
       0,
-      869,
-      378
+      1229,
+      476
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "9a42632c88"
   },
   {
     "outfit": "summer",
     "stage": 1,
     "path": "assets/outfits/summer-1.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      652,
-      378,
-      869,
-      741
+      922,
+      476,
+      1229,
+      1024
     ],
     "size": [
       256,
       448
-    ]
-  },
-  {
-    "outfit": "summer",
-    "stage": 2,
-    "path": "assets/outfits/summer-2.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      652,
-      741,
-      869,
-      1101
     ],
-    "size": [
-      256,
-      448
-    ]
-  },
-  {
-    "outfit": "summer",
-    "stage": 3,
-    "path": "assets/outfits/summer-3.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
-    "crop": [
-      652,
-      1101,
-      869,
-      1448
-    ],
-    "size": [
-      256,
-      448
-    ]
+    "version": "8a98149fa9"
   },
   {
     "outfit": "festival",
     "stage": 0,
     "path": "assets/outfits/festival-0.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      869,
+      1229,
       0,
-      1086,
-      378
+      1536,
+      476
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "d7c3739bc3"
   },
   {
     "outfit": "festival",
     "stage": 1,
     "path": "assets/outfits/festival-1.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-904e8503-b848-4605-9fa6-99bcbf0abcab.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      378,
-      1086,
-      741
+      1229,
+      476,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "5738f4008f"
+  },
+  {
+    "outfit": "scholar",
+    "stage": 2,
+    "path": "assets/outfits/scholar-2.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      0,
+      307,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "13681fb690"
+  },
+  {
+    "outfit": "scholar",
+    "stage": 3,
+    "path": "assets/outfits/scholar-3.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      0,
+      496,
+      307,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "21ff61ce23"
+  },
+  {
+    "outfit": "dancer",
+    "stage": 2,
+    "path": "assets/outfits/dancer-2.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      0,
+      614,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "4c449e1adb"
+  },
+  {
+    "outfit": "dancer",
+    "stage": 3,
+    "path": "assets/outfits/dancer-3.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      307,
+      496,
+      614,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "b52e484a88"
+  },
+  {
+    "outfit": "winter",
+    "stage": 2,
+    "path": "assets/outfits/winter-2.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      0,
+      922,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "b520c7fcf9"
+  },
+  {
+    "outfit": "winter",
+    "stage": 3,
+    "path": "assets/outfits/winter-3.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      614,
+      496,
+      922,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "fc78b96181"
+  },
+  {
+    "outfit": "summer",
+    "stage": 2,
+    "path": "assets/outfits/summer-2.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      0,
+      1229,
+      496
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "f9a1a80a82"
+  },
+  {
+    "outfit": "summer",
+    "stage": 3,
+    "path": "assets/outfits/summer-3.webp",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
+    "crop": [
+      922,
+      496,
+      1229,
+      1024
+    ],
+    "size": [
+      256,
+      448
+    ],
+    "version": "2d6556b1a9"
   },
   {
     "outfit": "festival",
     "stage": 2,
     "path": "assets/outfits/festival-2.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      741,
-      1086,
-      1101
+      1229,
+      0,
+      1536,
+      496
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "743b836477"
   },
   {
     "outfit": "festival",
     "stage": 3,
     "path": "assets/outfits/festival-3.webp",
-    "source": "exec-1262fa39-9d80-4d5d-9933-4c7b5f35e817.png",
+    "source": "exec-963d49c4-7996-473c-8f54-80b1e0e4d36b.png",
+    "atlasRows": 2,
     "crop": [
-      869,
-      1101,
-      1086,
-      1448
+      1229,
+      496,
+      1536,
+      1024
     ],
     "size": [
       256,
       448
-    ]
+    ],
+    "version": "038b5d6723"
   }
 ]

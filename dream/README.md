@@ -4,6 +4,7 @@
 
 - [PRD與參考作品研究](PRD.md)
 - [圖片來源與生成提示詞](ASSETS.md)
+- [新版20套服裝一覽](assets/wardrobe-catalog.webp)（v0.2亮色日系奇幻風格）
 - 遊戲入口：`index.html`
 
 ## 啟動
