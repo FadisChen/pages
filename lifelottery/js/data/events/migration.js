@@ -197,9 +197,8 @@ export default [
       {
         label: '搬到城市，重新開始',
         effects: (s, h) => {
-          s.urban = true;
-          const cities = h.country().cities;
-          if (cities && cities.length) s.city = h.pick(cities);
+          h.setUrban(true);
+          h.setCity();
           if (!h.employed()) h.startJob(h.eduYears() >= 9 ? 'factory' : 'laborer');
           h.change('social', -3); h.change('wealth', +2); h.change('knowledge', +2); h.change('happiness', +1);
         },

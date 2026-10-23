@@ -67,8 +67,9 @@ export function getSummary(s) {
     era: s.settings.era,
     homeCountry: { code: home.code, name: home.name },
     countryName: BY_CODE[s.countryCode].name,
-    urbanBirth: s.urban,
-    birthCity: s.city,
+    // where the person was BORN (they may have moved since: h.setCity / h.migrate change s.city and s.urban)
+    urbanBirth: s.flags._birthUrban ?? s.urban,
+    birthCity: s.flags._birthCity ?? s.city,
     wealthQ: s.family.wealthQ,
     wealthShort: WEALTH_SHORT[s.family.wealthQ - 1],
     cause,

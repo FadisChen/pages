@@ -1002,7 +1002,7 @@ export default [
     choices: [
       {
         label: '下工後去上課',
-        effects: { knowledge: +4, health: -3, happiness: +1 },
+        effects: (s, h) => { h.enroll('primary', { quiet: true }); h.change('knowledge', +4); h.change('health', -3); h.change('happiness', +1); },
         set: ['c_night_school'],
         result: '你拖著痠痛的腿走進教室，在最後一排坐下。第一次完整寫出自己的名字時，鉛筆芯斷了，你卻笑得說不出話。',
         schedule: [{ id: 'childhood_night_school_cert', inYears: [2, 3] }],
@@ -1017,7 +1017,7 @@ export default [
       {
         label: '去求老闆縮短工時',
         effects: (s, h) => {
-          if (h.chance(0.5)) { h.change('knowledge', +4); h.change('wealth', -1); h.set('c_night_school'); }
+          if (h.chance(0.5)) { h.enroll('primary', { quiet: true }); h.change('knowledge', +4); h.change('wealth', -1); h.set('c_night_school'); }
           else { h.change('happiness', -2); h.change('social', -1); }
         },
         result: (s, h) => (h.has('c_night_school')

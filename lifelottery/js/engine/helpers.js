@@ -7,13 +7,14 @@
 // systems can never disagree about how, for example, a marriage is recorded.
 
 import { BY_CODE } from '../data/countries.js';
-import { eraView } from '../data/eras.js';
+import { eraView, incomeGroupAt } from '../data/eras.js';
 import { CAUSES } from '../data/causes.js';
 import { describeCause } from './mortality.js';
 import { rand, between, randInt, chance, pick, clamp } from './rng.js';
 import {
   STAT_KEYS, EDU_LEVELS, JOBS, ctxOf, annualIncome, applyDelta, pushLog, addHighlight, incomeAtLeast, byIncome, aliveKids,
-  startJob, loseJob, retire, setPartner, marry, divorce, addChild, addCondition, removeCondition, migrate, leaveSchool,
+  startJob, loseJob, retire, setPartner, newPartner, endRelationship, marry, divorce, addChild, addCondition, removeCondition,
+  migrate, leaveSchool, enroll, inTertiary, setUrban, setCity,
 } from './systems.js';
 
 /** Record a death on the state (also used for the natural-mortality death in life.js). */
@@ -25,6 +26,14 @@ export function recordDeath(s, causeId) {
   s.death = { age: s.age, year: s.year, causeId: id, causeText: text };
   delete s.flags._choice;
   pushLog(s, 'death', `${s.name.given}離開了`, `${s.name.full}在 ${s.year} 年離開，享年 ${s.age} 歲。${text}`);
+}
+
+/** Deterministic number in [0, 1) from a string (FNV-1a plus a final avalanche so similar strings differ). */
+export function hash01(str) {
+  let x = 2166136261;
+  for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
+  x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
 }
 
 export class Helpers {
@@ -58,15 +67,28 @@ export class Helpers {
   /** Era-adjusted statistics of the current country for the current calendar year. */
   stats() { return ctxOf(this.s).view; }
   countryName() { return this.country().name; }
-  /** World-bank income group of the current country: 'L' | 'LM' | 'UM' | 'H'. */
+  /** World-bank income group of the current country TODAY: 'L' | 'LM' | 'UM' | 'H' (see incomeAt for the era-adjusted one). */
   income() { return this.country().income; }
+  /**
+   * Income group of the current country in the current calendar year, from the era GDP per head: South Korea
+   * in 1975 is 'LM' (it is 'H' today), most countries are one group higher in 2060 than now. Use this for
+   * descriptions of living conditions; use income() for "what kind of country is this today".
+   */
+  incomeAt() { return incomeGroupAt(this.country(), this.s.year); }
   incomeAtLeast(g) { return incomeAtLeast(this.income(), g); }
   region() { return this.country().region; }
   isRegion(...r) { return r.includes(this.country().region); }
-  /** Pick a value by income group, falling back to the nearest group: h.byIncome({ L: '…', H: '…' }). */
-  byIncome(map) { return byIncome(this.income(), map); }
+  /**
+   * Pick a value by the era-adjusted income group (incomeAt), falling back to the nearest defined group:
+   * h.byIncome({ L: '…', H: '…' }).
+   */
+  byIncome(map) { return byIncome(this.incomeAt(), map); }
   city() { return this.s.city; }
   urban() { return this.s.urban; }
+  /** Move to (true) or away from (false) the city within the current country. */
+  setUrban(isUrban) { setUrban(this.s, isUrban); }
+  /** Set the city of residence: a name, or (no argument) a random city of the current country. */
+  setCity(name) { setCity(this.s, name); }
   isMigrant() { return this.s.countryCode !== this.s.homeCountryCode; }
   hasLivedIn(code) { return !!this.s.flags._countries && this.s.flags._countries.includes(code); }
 
@@ -82,6 +104,8 @@ export class Helpers {
   isRich() { return this.s.stats.wealth >= 70; }
   isPoor() { return this.s.stats.wealth <= 30; }
   inSchool() { return this.s.edu.inSchool; }
+  /** Studying at university level or beyond right now. */
+  inTertiary() { return inTertiary(this.s); }
   /** Highest education level attended: 'none'|'primary'|'secondary'|'tertiary'|'graduate'. */
   eduLevel() { return this.s.edu.level; }
   eduAtLeast(level) { return EDU_LEVELS.indexOf(this.s.edu.level) >= EDU_LEVELS.indexOf(level); }
@@ -121,6 +145,30 @@ export class Helpers {
   /** Years since the event was last seen, or Infinity. */
   yearsSince(eventId) { const a = this.s.seen[eventId]; return a === undefined ? Infinity : this.s.age - a; }
   seenEvent(eventId) { return this.s.seen[eventId] !== undefined; }
+  /**
+   * The most recent log entry whose title or kind equals `titleOrKind` (a string, or an array of strings), no
+   * more than `years` years ago (default: any time); null if there is none. Replaces scanning `s.log` in events.
+   */
+  recentLog(titleOrKind, years = Infinity) {
+    const keys = Array.isArray(titleOrKind) ? titleOrKind : [titleOrKind];
+    const log = this.s.log;
+    for (let i = log.length - 1; i >= 0; i--) {
+      const e = log[i];
+      if (this.s.age - e.age > years) break;
+      if (keys.includes(e.title) || keys.includes(e.kind)) return e;
+    }
+    return null;
+  }
+  /**
+   * Deterministic per-life coin flip: true with probability `p`, always the same answer for the same life and
+   * `key`. It does not consume the random generator, so it is safe in `cond` (and for "was this person
+   * affected by the 2004 tsunami", which several events must agree on). Use a distinct key per question.
+   */
+  stable(key, p = 0.5) {
+    if (!(p > 0)) return false;
+    if (p >= 1) return true;
+    return hash01(`${this.s.seed}|${this.s.birthYear}|${this.s.name.full}|${key}`) < p;
+  }
 
   // ---- state changes ----
   set(flag, v = true) { this.s.flags[flag] = v; }
@@ -141,18 +189,42 @@ export class Helpers {
   retire() { retire(this.s); }
   /** Leave school without a log entry from the system (the event provides its own text). */
   dropOut() { if (this.s.edu.inSchool) leaveSchool(this.s, null); }
-  /** Set the partner: { name?, gender?, age?, status? }. Missing fields get sensible defaults. */
+  /**
+   * Put a person who is not in school back into education (night school, second chance, adult degree).
+   * `level`: 'primary' | 'secondary' | 'tertiary' | 'graduate' (default: the next level above their current
+   * one). Returns false if they are already studying or already have that level. The yearly system carries them
+   * through (about two school years per calendar year below university), may let them drop out, and logs the
+   * diploma at the end; the public flag `adult_diploma` (= year) is set on completion, `adult_dropout` on dropping
+   * out. With `{ quiet: true }` the event narrates the outcome itself: no random dropout and no system log (end the
+   * enrolment from the event with dropOut()).
+   */
+  enroll(level, opts) { return enroll(this.s, level, opts); }
+  /** Same as enroll() with the default (next) level. */
+  reenroll(opts) { return enroll(this.s, undefined, opts); }
+  /**
+   * Set the partner: { name?, gender?, age?, status? }. Missing fields get sensible defaults; a missing name is
+   * drawn from the culture-appropriate name pool (see newPartner).
+   */
   setPartner(p = {}) {
     const s = this.s;
-    const gender = p.gender || (s.gender === 'F' ? 'M' : 'F');
-    setPartner(s, {
-      name: p.name || (gender === 'F' ? '她' : '他'),
-      gender,
-      age: p.age ?? s.age + (gender === 'M' ? 2 : -2),
-      status: p.status || 'dating',
-      since: s.year,
-    });
+    if (p.name) {
+      const gender = p.gender || (s.gender === 'F' ? 'M' : 'F');
+      setPartner(s, { name: p.name, gender, age: p.age ?? s.age + (gender === 'M' ? 2 : -2), status: p.status || 'dating', since: s.year });
+    } else newPartner(s, { gender: p.gender, age: p.age, status: p.status, replace: true });
   }
+  /**
+   * Create a partner ({ gender?, status: 'dating' | 'married' = 'dating', age? }) with a culture-appropriate name
+   * (the person's own name group; migrants and multi-group countries sometimes cross groups) and an age near
+   * their own. Returns the partner record. If the person already has an active partner, that partner is returned
+   * unchanged: end the relationship first (endRelationship / divorce).
+   */
+  newPartner(opts = {}) { return newPartner(this.s, opts); }
+  /**
+   * End a dating relationship (a marriage is ended with divorce()). Clears the partner, resets the private
+   * dating / marriage plan flags and starts a cooldown (default 2-4 years, or `years`) so the yearly systems do
+   * not immediately start another relationship. Returns true if there was a relationship to end.
+   */
+  endRelationship(years) { return endRelationship(this.s, years); }
   /** Marry the current partner (creating one if there is none). */
   marry() { marry(this.s); }
   divorce() { return divorce(this.s); }

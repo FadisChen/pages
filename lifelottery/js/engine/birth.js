@@ -2,8 +2,8 @@
 // plus the helpers the UI uses to describe the draw ("100 babies" statistic, country vs world).
 
 import { COUNTRIES, BY_CODE } from '../data/countries.js';
-import { eraView, drawWeight, worldView, resolveEra, birthYearFor, ERA_LABELS } from '../data/eras.js';
-import { poolKeyFor, makeName, getPool, composeName } from '../data/names.js';
+import { eraView, drawWeight, worldView, resolveEra, birthYearFor, eraSpan, ERA_LABELS } from '../data/eras.js';
+import { drawGroup, makeName, getPool, composeName, motherFamilyToken } from '../data/names.js';
 import { lifeTable } from './mortality.js';
 import { rand, randInt, poisson, normal, clamp, weightedIndex } from './rng.js';
 
@@ -60,7 +60,7 @@ function survivalBetween(table, a, b) {
   return s;
 }
 
-function makeParents(rng, country, view, birthYear, wealthQ, siblings, poolKey, famToken) {
+function makeParents(rng, country, view, birthYear, wealthQ, siblings, groupKey, name) {
   const tfr = view.tfr;
   const mu = 24.5 + 3.5 * clamp((2.4 - tfr) / 1.5, -1, 1.5) + Math.min(siblings, 4) * 1.2;
   const motherAge = Math.round(clamp(normal(rng, mu, 4.8), 16, 46));
@@ -68,15 +68,25 @@ function makeParents(rng, country, view, birthYear, wealthQ, siblings, poolKey, 
   const mT = lifeTable(country, 'F', birthYear), fT = lifeTable(country, 'M', birthYear);
   const motherAlive = rand(rng) < survivalBetween(mT, 18, motherAge) * 0.995;
   const fatherAlive = rand(rng) < survivalBetween(fT, 18, fatherAge) * 0.99;
-  const pool = getPool(poolKey);
-  const mGiven = pool.F[Math.floor(rand(rng) * pool.F.length)];
-  const fGiven = pool.M[Math.floor(rand(rng) * pool.M.length)];
-  // Surnames: Chinese / Korean mothers keep their own; elsewhere the mother carries the family name.
-  const ownSurname = poolKey === 'zh' || poolKey === 'ko';
-  const mFam = ownSurname ? pool.S[Math.floor(rand(rng) * pool.S.length)] : famToken;
+  const r = () => rand(rng);
+  const pool = getPool(groupKey);
+  let father, mother;
+  if (pool.mode === 'syll') {
+    // Two-word personal names without a shared family name (Burmese, Bhutanese ...).
+    father = makeName(groupKey, 'M', r);
+    mother = makeName(groupKey, 'F', r);
+  } else {
+    // The father carries the family's name token (for patronymic cultures the player's family token
+    // IS the father's given name); the mother keeps her own name where that is the custom.
+    const fGiven = pool.mode === 'patro' && name.familyToken ? name.familyToken : pool.M[Math.floor(r() * pool.M.length)];
+    const fFam = pool.mode === 'patro' ? pool.M[Math.floor(r() * pool.M.length)] : name.familyToken;
+    const mGiven = pool.F[Math.floor(r() * pool.F.length)];
+    father = composeName(groupKey, 'M', fGiven, fFam);
+    mother = composeName(groupKey, 'F', mGiven, motherFamilyToken(groupKey, name.familyToken, r));
+  }
   return {
-    mother: { alive: motherAlive, age: motherAge, name: composeName(poolKey, 'F', mGiven, mFam).full },
-    father: { alive: fatherAlive, age: fatherAge, name: composeName(poolKey, 'M', fGiven, famToken).full },
+    mother: { alive: motherAlive, age: motherAge, name: mother.full },
+    father: { alive: fatherAlive, age: fatherAge, name: father.full },
   };
 }
 
@@ -87,8 +97,10 @@ function makeParents(rng, country, view, birthYear, wealthQ, siblings, poolKey, 
  */
 export function drawBirth(rng, settings, opts = {}) {
   const eraKey = resolveEra(settings.era, () => rand(rng));
-  const jitter = eraKey === 'present' ? 0 : randInt(rng, -3, 3);
-  const birthYear = birthYearFor(eraKey, jitter, opts.birthYear ?? settings.birthYear ?? null);
+  // Past: 1955-1990, future: 2040-2070 (uniform); the present era is the current year.
+  const span = eraSpan(eraKey);
+  const offset = span > 1 ? randInt(rng, 0, span - 1) : 0;
+  const birthYear = birthYearFor(eraKey, offset, opts.birthYear ?? settings.birthYear ?? null);
   const country = opts.countryCode ? BY_CODE[opts.countryCode] : drawCountry(rng, birthYear, settings.drawMode || 'births');
   const view = eraView(country, birthYear);
 
@@ -98,11 +110,12 @@ export function drawBirth(rng, settings, opts = {}) {
   const urban = opts.urban ?? rand(rng) < pUrban;
   const city = country.cities[Math.floor(rand(rng) * country.cities.length)];
 
-  const poolKey = poolKeyFor(country);
+  // Culture group: a country may hold several (Nigeria: Hausa / Yoruba / Igbo ...), drawn by population share.
+  const poolKey = drawGroup(country.code, () => rand(rng), country.region);
   const name = makeName(poolKey, gender, () => rand(rng));
   const siblingMean = Math.max(0.1, view.tfr * 1.15 * (1 + 0.1 * (3 - wealthQ)) - 1);
   const siblings = Math.min(poisson(rng, siblingMean), 11);
-  const parents = makeParents(rng, country, view, birthYear, wealthQ, siblings, poolKey, name.familyToken);
+  const parents = makeParents(rng, country, view, birthYear, wealthQ, siblings, poolKey, name);
 
   return { eraKey, birthYear, country, gender, wealthQ, urban, city, poolKey, name, siblings, parents };
 }
@@ -128,18 +141,21 @@ export function describeBirth(s) {
   const table = lifeTable(country, s.gender, s.birthYear);
   const schoolAvg = (view.school.F + view.school.M) / 2;
   const mode = s.settings.drawMode || 'births';
+  const birthCity = s.flags._birthCity ?? s.city, birthUrban = s.flags._birthUrban ?? s.urban; // the place of BIRTH, not today's
   return {
     name: s.name.full,
     year: s.birthYear,
     era: s.settings.era,
-    eraLabel: ERA_LABELS[s.settings.era],
+    eraName: ERA_LABELS[s.settings.era],
+    // reads as "…出生的 100 個嬰兒": the current era says 現在, past / future lives name their birth year
+    eraLabel: s.settings.era === 'present' ? ERA_LABELS.present : `${s.birthYear} 年`,
     countryCode: country.code,
     countryName: country.name,
     region: country.region,
     income: country.income,
-    city: s.city,
-    urban: s.urban,
-    placeText: s.urban ? `${s.city}` : `${s.city}附近的鄉村`,
+    city: birthCity,
+    urban: birthUrban,
+    placeText: birthUrban ? `${birthCity}` : `${birthCity}附近的鄉村`,
     gender: s.gender,
     genderLabel: GENDER_LABELS[s.gender],
     wealthQ: s.family.wealthQ,

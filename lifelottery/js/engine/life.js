@@ -82,7 +82,7 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
     conditions: [],
     smoker: false,
     riskMult: 1,
-    flags: { _pool: b.poolKey, _ft: b.name.familyToken },
+    flags: { _pool: b.poolKey, _ft: b.name.familyToken, _gt: b.name.givenToken, _birthCity: b.city, _birthUrban: b.urban },
     seen: {},
     pending: [],
     log: [],

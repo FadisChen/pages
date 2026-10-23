@@ -104,10 +104,68 @@ test('simulation: demographics are plausible (children per woman, marriage)', ()
     const kids = r.kidsSum / Math.max(1, r.kidsN);
     const evermarried = r.ever / r.n;
     rows.push(`${code}: children per woman (50+) ${kids.toFixed(2)} vs tfr ${v.tfr}; ever married ${(evermarried * 100).toFixed(0)}%`);
-    assert.ok(kids >= v.tfr * 0.6 && kids <= v.tfr * 1.5 + 0.2, `${code}: ${kids.toFixed(2)} children per woman vs tfr ${v.tfr}`);
+    assert.ok(Math.abs(kids / v.tfr - 1) <= 0.15, `${code}: ${kids.toFixed(2)} children per woman vs tfr ${v.tfr} (must be within 15%)`);
     assert.ok(evermarried > 0.5 && evermarried < 0.97, `${code}: ever married ${evermarried}`);
   }
   console.log('  ' + rows.join('\n  '));
+});
+
+test('simulation: children per woman track the TFR within 15% in low- and high-fertility countries', () => {
+  // Women who live to 50+, whole simulated lives. Covers the ultra-low (KOR, HKG), low (ITA, UKR, FRA), middle (BRA, IND)
+  // and high (PAK, COD, NER) fertility regimes on top of the TARGETS above.
+  const EXTRA = ['KOR', 'HKG', 'ITA', 'UKR', 'FRA', 'BRA', 'IND', 'PAK', 'COD', 'NER'];
+  const n = Math.max(600, Math.floor(N / 2));
+  const rows = [];
+  for (const code of EXTRA) {
+    let kids = 0, women = 0;
+    for (let i = 0; i < n; i++) {
+      const s = createLife({ era: 'present' }, `fert-${code}-${i}`, { countryCode: code, gender: 'F' });
+      let guard = 0;
+      while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
+      if (s.death.age >= 50) { kids += s.children.length; women++; }
+    }
+    const v = eraView(BY_CODE[code], year);
+    const mean = kids / women;
+    rows.push(`${code}: ${mean.toFixed(2)} children per woman vs tfr ${v.tfr} (${((mean / v.tfr - 1) * 100).toFixed(0)}%)`);
+    assert.ok(Math.abs(mean / v.tfr - 1) <= 0.15, `${code}: ${mean.toFixed(2)} children per woman vs tfr ${v.tfr}`);
+  }
+  console.log('  ' + rows.join('\n  '));
+});
+
+test('simulation: past and future lives also track the TFR of their reproductive years (+-15%)', () => {
+  const rows = [];
+  const n = Math.max(500, Math.floor(N / 3));
+  for (const era of ['past', 'future']) {
+    for (const code of ['USA', 'NGA', 'CHN', 'IND', 'KOR', 'DEU']) {
+      let kids = 0, women = 0, tfrSum = 0;
+      for (let i = 0; i < n; i++) {
+        const s = createLife({ era }, `fert-${era}-${code}-${i}`, { countryCode: code, gender: 'F' });
+        let guard = 0;
+        while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
+        if (s.death.age >= 50) { kids += s.children.length; women++; tfrSum += eraView(BY_CODE[code], s.birthYear + 27).tfr; }
+      }
+      const ratio = kids / tfrSum;
+      rows.push(`${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)} at age 27 (${((ratio - 1) * 100).toFixed(0)}%)`);
+      assert.ok(Math.abs(ratio - 1) <= 0.15, `${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)}`);
+    }
+  }
+  console.log('  ' + rows.join('\n  '));
+});
+
+test('simulation: birth years cover 1955-1990 (past) and 2040-2070 (future); the present era is this year', () => {
+  const span = (era, n) => {
+    const ys = [];
+    for (let i = 0; i < n; i++) ys.push(createLife({ era }, `by-${era}-${i}`).birthYear);
+    return ys;
+  };
+  const past = span('past', 600);
+  assert.ok(Math.min(...past) <= 1957 && Math.max(...past) >= 1988, `past birth years ${Math.min(...past)}-${Math.max(...past)}`);
+  assert.ok(Math.min(...past) >= 1955 && Math.max(...past) <= 1990);
+  assert.ok(past.filter((y) => y < 1970).length > 600 * 0.3, 'pre-1970 births must be common');
+  const future = span('future', 600);
+  assert.ok(Math.min(...future) <= 2042 && Math.max(...future) >= 2068);
+  assert.ok(Math.min(...future) >= 2040 && Math.max(...future) <= 2070);
+  assert.ok(span('present', 20).every((y) => y === year));
 });
 
 test(`simulation: choices per life (target ${CHOICES_RANGE.join('-')} once there are >= ${CONTENT_THRESHOLD} events)`, () => {

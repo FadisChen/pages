@@ -107,12 +107,13 @@ export default function mount(ctx, root) {
     }
   }
 
-  /** Floating +/- numbers above the stat bars. */
+  /** Floating +/- numbers below the stat bars. */
   function floatDeltas(before) {
     for (const k of STATS) {
       const d = Math.round(s.stats[k]) - Math.round(before[k]);
       if (!d) continue;
       const f = el('span', { class: `float-delta ${d > 0 ? 'up' : 'down'}`, 'aria-hidden': 'true' }, signed(d));
+      statEls[k].node.querySelectorAll('.float-delta').forEach((old) => old.remove()); // one at a time per bar
       statEls[k].node.append(f);
       setTimeout(() => f.remove(), 2200);
     }
@@ -165,10 +166,27 @@ export default function mount(ctx, root) {
     if (follow && lastNode) scrollTo(lastNode, opts.instant);
   }
 
-  function scrollTo(node, instant) {
+  /**
+   * Bring `node` into view between the sticky header and the control bar (their heights are published as
+   * --head-h / --ctl-h, which html's scroll-padding uses). A node that fits is aligned to the bottom edge of the
+   * free area, so its delta chips are fully visible; one that is taller than the free area is aligned to its top.
+   */
+  function scrollTo(node, instant, preferred = 'end') {
     const behavior = instant || reducedMotion() ? 'auto' : 'smooth';
-    node.scrollIntoView({ block: 'end', behavior });
+    syncChrome();
+    const free = window.innerHeight - header.offsetHeight - controls.offsetHeight - 20;
+    const tall = node.getBoundingClientRect().height > free;
+    node.scrollIntoView({ block: tall ? 'start' : preferred, behavior });
   }
+
+  /** Publish the sticky chrome's heights for scroll-padding (see css `html`). */
+  function syncChrome() {
+    const r = document.documentElement.style;
+    r.setProperty('--head-h', `${header.offsetHeight}px`);
+    r.setProperty('--ctl-h', `${controls.offsetHeight}px`);
+  }
+  const chromeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(syncChrome) : null;
+  if (chromeObserver) { chromeObserver.observe(header); chromeObserver.observe(controls); }
 
   /** The event entry that opened a pending choice is shown together with its outcome, not twice. */
   const isPendingEvent = (e, pc) => !!pc && e.kind === 'event' && e.title === pc.title && e.text === pc.text;
@@ -270,7 +288,7 @@ export default function mount(ctx, root) {
     if (auto) startCountdown();
     refreshControls();
     announce(`${T.choiceTitle}：${pc.title}`);
-    card.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    scrollTo(card, false, 'center');
     title.focus({ preventScroll: true });
   }
 
@@ -457,8 +475,13 @@ export default function mount(ctx, root) {
   if (!s.alive) onDeath();
   if (!pending) window.scrollTo(0, document.documentElement.scrollHeight);
 
+  syncChrome();
+
   return () => {
     clearInterval(clock);
+    if (chromeObserver) chromeObserver.disconnect();
+    document.documentElement.style.removeProperty('--head-h');
+    document.documentElement.style.removeProperty('--ctl-h');
     timers.forEach(clearTimeout);
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVisibility);

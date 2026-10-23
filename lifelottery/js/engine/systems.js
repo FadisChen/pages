@@ -9,12 +9,13 @@
 // helpers.js (and therefore events) use exactly the same code paths as the systems.
 
 import { BY_CODE } from '../data/countries.js';
-import { eraView } from '../data/eras.js';
+import { eraView, incomeGroupAt } from '../data/eras.js';
 import { CONDITIONS } from '../data/conditions.js';
 import { HIV_HIGH } from '../data/causes.js';
 import { baselineQ, expectedHealth } from './mortality.js';
 import { rand, chance, between, randInt, normal, clamp, weightedIndex, normInv, poisson } from './rng.js';
 import { randomName } from './birth.js';
+import { drawGroup, getPool, childFamilyToken } from '../data/names.js';
 
 export const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 export const EDU_LEVELS = ['none', 'primary', 'secondary', 'tertiary', 'graduate'];
@@ -35,6 +36,7 @@ export function ctxOf(s) {
       code: s.countryCode, year: s.year, country, home,
       view: eraView(country, s.year),
       birthView: eraView(home, s.birthYear),
+      income: incomeGroupAt(country, s.year), // era-adjusted income group (used for living-conditions text)
     };
     ctxCache.set(s, c);
   }
@@ -190,7 +192,7 @@ export function loseJob(s) {
 const NEVER_MARRY = { EAS: 0.15, SEA: 0.08, SAS: 0.02, CAS: 0.03, MENA: 0.06, SSA: 0.05, EUR: 0.2, NAM: 0.22, LAC: 0.15, OCE: 0.2 };
 const SPOUSE_AGE_GAP = { EAS: 2, SEA: 2.5, SAS: 5, CAS: 3, MENA: 5, SSA: 6, EUR: 2.5, NAM: 2, LAC: 3, OCE: 2 };
 
-function planMarriageAge(s, view, region) {
+function planMarriageAge(s, view, region, planView = view) {
   const era = s.settings.era;
   const never = NEVER_MARRY[region] * (era === 'past' ? 0.5 : era === 'future' ? 1.4 : 1);
   if (chance(s.rng, never)) return 999;
@@ -199,20 +201,41 @@ function planMarriageAge(s, view, region) {
     return 13 + i;
   }
   if (s.gender === 'M' && chance(s.rng, (view.childMarriage / 100) * 0.1)) return 16 + randInt(s.rng, 0, 1);
-  const mean = view.marryAge[s.gender];
+  const mean = planView.marryAge[s.gender];
   return Math.max(18, Math.round(normal(s.rng, mean, s.gender === 'F' ? 3.2 : 3.6)));
 }
 
-function planChildren(s, view, ctx) {
-  // Childlessness rises as fertility falls; the mean of the rest is scaled so that the population
-  // average (including never-partnered people) lands near the country's TFR.
-  const tfr = view.tfr;
-  const childless = tfr < 1 ? 0.35 : tfr < 1.4 ? 0.22 : tfr < 2 ? 0.14 : ctx.country.income === 'H' ? 0.08 : 0.04;
+/** Share of each region's population that never marries (before era scaling); also used by planChildren. */
+function neverMarryShare(s, region) {
+  const era = s.settings.era;
+  return NEVER_MARRY[region] * (era === 'past' ? 0.5 : era === 'future' ? 1.4 : 1);
+}
+
+/**
+ * Number of children this person will try to have. The mean is solved so that children per woman (the
+ * simulated completed fertility) lands on the country's TFR: women who plan never to marry have few
+ * children; for the rest the mean `want` is (tfr - those women's share of births) / (married share x
+ * efficiency), where `efficiency` (< 1) stands for late marriage, divorce, infertility and lost children
+ * that keep couples below their plan. Childlessness among the married rises as fertility falls.
+ */
+function planChildren(s, view, ctx, planView = view) {
+  // Small calibration against simulation (survivor bias, rounding of whole children): aim a little below the TFR
+  // when fertility is very low.
+  const tfr0 = planView.tfr;
+  const tfr = tfr0 * (0.97 + 0.03 * clamp((tfr0 - 2) / 2, 0, 1) - 0.1 * clamp((1.5 - tfr0) / 0.8, 0, 1));
+  if (s.flags._marryAt >= 999) return chance(s.rng, 0.3) ? 1 + (chance(s.rng, 0.2) ? 1 : 0) : 0;
+  const m = Math.min(0.5, neverMarryShare(s, ctx.country.region));
+  const eff = FERT_EFFICIENCY(planView);
+  const mu = Math.max(0.3, (tfr - m * 0.2) / ((1 - m) * eff));
+  const childless = tfr < 1 ? 0.3 : tfr < 1.4 ? 0.2 : tfr < 2 ? 0.13 : ctx.country.income === 'H' ? 0.08 : 0.04;
   if (chance(s.rng, childless)) return 0;
-  const mean = tfr / ((tfr < 1.4 ? 0.8 : 0.88) * (1 - childless));
+  const mean = mu / (1 - childless);
   // 1 + Poisson keeps the mean exact (a clamped normal would bias small families upward).
   return mean >= 1 ? 1 + poisson(s.rng, mean - 1) : chance(s.rng, mean) ? 1 : 0;
 }
+
+/** Fraction of planned children that are actually born and survive in the model (tuned by simulation, see tests). */
+const FERT_EFFICIENCY = (view) => clamp(0.92 - 0.03 * Math.max(0, view.marryAge.F - 26), 0.62, 0.92);
 
 /** Called once by createLife after the birth draw. Sets the private plan flags. */
 export function initSystems(s) {
@@ -221,9 +244,13 @@ export function initSystems(s) {
   const q = s.family.wealthQ;
   s.flags._pctl = clamp((q - 0.5) / 5 + normal(s.rng, 0, 0.05), 0.02, 0.98);
   s.flags._pctl0 = s.flags._pctl;
-  s.flags._marryAt = planMarriageAge(s, view, ctx.country.region);
+  // People born in the past or future marry and have children decades later, when fertility and marriage ages have
+  // changed: they plan from the statistics of their late twenties. The present era plans from today's numbers
+  // (so that simulated children per woman can be checked against today's TFR).
+  const planView = s.settings.era === 'present' ? view : eraView(ctx.home, s.birthYear + 27);
+  s.flags._marryAt = planMarriageAge(s, view, ctx.country.region, planView);
   s.flags._dateAt = s.flags._marryAt >= 999 ? 999 : s.flags._marryAt < 18 ? s.flags._marryAt : Math.max(15, Math.round(s.flags._marryAt - between(s.rng, 0.5, 3.2)));
-  s.flags._want = planChildren(s, view, ctx);
+  s.flags._want = planChildren(s, view, ctx, planView);
   s.flags._lfp = null; // labour-force participation decided when leaving school
   s.flags._countries = [s.countryCode];
   s.flags._jobs = [];
@@ -407,7 +434,7 @@ function schooling(s, ctx) {
     if (!s.flags._enroll) {
       if (!s.flags._noSchoolLogged) {
         s.flags._noSchoolLogged = true;
-        pushLog(s, 'milestone', '沒有上學', byIncome(inc, {
+        pushLog(s, 'milestone', '沒有上學', byIncome(ctx.income, {
           L: '同齡的孩子背著書包出門時，你留在家裡幫忙。學費、制服和路途，都不是你家負擔得起的事。',
           LM: '你到了該上學的年紀，卻沒有被送進教室。家裡需要人手，書本離你很遠。',
           UM: '你到了該上學的年紀，卻因為家裡的狀況沒能入學。',
@@ -421,7 +448,7 @@ function schooling(s, ctx) {
       edu.inSchool = true;
       edu.level = 'primary';
       s.work.status = 'student';
-      pushLog(s, 'milestone', '第一天上學', byIncome(inc, {
+      pushLog(s, 'milestone', '第一天上學', byIncome(ctx.income, {
         L: '你穿著洗得發白的制服，走了很長一段路到學校。教室擠滿了孩子，課本要好幾個人輪流看，但老師叫得出每個人的名字。',
         LM: '你揹著新書包走進教室，位子是按身高排的。老師在黑板上寫下你的名字，你第一次覺得自己是這個地方的一份子。',
         UM: '開學第一天，家人陪你走到校門口。你緊緊抓著書包帶子，直到看見同樣緊張的同學，才敢鬆開手。',
@@ -431,6 +458,9 @@ function schooling(s, ctx) {
     return;
   }
   if (!edu.inSchool) return;
+
+  // --- Adults who went back to school (night school, second chance) ---
+  if (s.flags._adultEd) { adultSchooling(s, ctx); return; }
 
   // --- A school year completed ---
   edu.years += 1;
@@ -456,7 +486,7 @@ function schooling(s, ctx) {
     return;
   }
   if (y === 12) {
-    pushLog(s, 'milestone', '高中畢業', byIncome(inc, {
+    pushLog(s, 'milestone', '高中畢業', byIncome(ctx.income, {
       L: '你完成了中學。在你生長的地方，這已經是很不容易的事。',
       LM: '你拿到了中學畢業證書，家裡擺了一桌飯。',
       UM: '畢業典禮上，你和同學們拋起帽子，然後各自走向不同的方向。',
@@ -488,9 +518,70 @@ function schooling(s, ctx) {
   }
 }
 
+const LEVEL_YEARS = { primary: 6, secondary: 12, tertiary: 16, graduate: 18 };
+const COMPLETION_TITLE = { 6: '補完小學', 12: '取得高中同等學力', 16: '大學畢業', 18: '取得研究所學位' };
+
+/**
+ * Put someone who is not in school back into education (night school, second chance, adult degrees).
+ * `level` is the level to work towards ('primary' | 'secondary' | 'tertiary' | 'graduate'); by default the
+ * next one up. Returns false if they are already studying or already have that level. Adults study about
+ * two school years per calendar year below university level and one above. Unless `opts.quiet`, they may
+ * drop out again (6 % a year) and the system logs the diploma when the level is reached. With `opts.quiet`
+ * the calling event narrates the outcome itself: there is no random dropout (the event ends the
+ * enrolment with dropOut()) and no system log entry. Either way the public flag `adult_diploma` (= year)
+ * is set on completion and `adult_dropout` (= year) on dropping out; both are cleared when enrolling.
+ */
+export function enroll(s, level, opts = {}) {
+  const e = s.edu;
+  if (e.inSchool) return false;
+  const target = level ? LEVEL_YEARS[level] : e.years < 12 ? 12 : e.years < 16 ? 16 : 18;
+  if (!target || e.years >= target) return false;
+  e.inSchool = true;
+  s.flags._adultEd = { target, since: s.year, quiet: !!opts.quiet };
+  s.flags._reenrolled = (s.flags._reenrolled || 0) + 1;
+  delete s.flags.adult_diploma;
+  delete s.flags.adult_dropout;
+  if (s.work.status === 'child' || s.work.status === 'none') s.work.status = 'student';
+  return true;
+}
+
+/** Currently studying at tertiary level (university or beyond). */
+export function inTertiary(s) {
+  return s.edu.inSchool && s.edu.years >= 12;
+}
+
+function adultSchooling(s, ctx) {
+  const edu = s.edu;
+  const { target, quiet } = s.flags._adultEd;
+  edu.years = Math.min(target, edu.years + (edu.years >= 12 ? 1 : 2));
+  edu.level = levelForYears(edu.years);
+  const q = SCHOOL_QUALITY[ctx.country.income];
+  s.stats.knowledge = clamp(s.stats.knowledge + (edu.years > 12 ? 4 : 4.5) * q + normal(s.rng, 0, 0.6), 0, 100);
+  if (s.flags.drop_school) {
+    s.flags.drop_school = false;
+    s.flags.adult_dropout = s.year;
+    leaveSchool(s, quiet ? null : '生活的重擔讓你不得不再次離開學校。');
+    return;
+  }
+  if (edu.years >= target) {
+    s.flags.adult_diploma = s.year;
+    if (!quiet) {
+      pushLog(s, 'milestone', COMPLETION_TITLE[target] || '完成學業', '你終於拿到了那張遲到多年的證書。收到它的那天，你把它平平整整地收進抽屜，沒有告訴太多人，但自己知道它的分量。', applyDelta(s, { happiness: 4, knowledge: 1 }));
+      addHighlight(s, `${COMPLETION_TITLE[target] || '完成學業'}（重返校園）。`);
+    }
+    leaveSchool(s, null);
+    return;
+  }
+  if (!quiet && chance(s.rng, 0.06)) {
+    s.flags.adult_dropout = s.year;
+    leaveSchool(s, '工作和家裡的事越來越多，你沒能把課程念完。');
+  }
+}
+
 /** Leave school (dropout when `why` is a string, graduation when null). */
 export function leaveSchool(s, why) {
   s.edu.inSchool = false;
+  delete s.flags._adultEd;
   s.edu.level = levelForYears(s.edu.years);
   if (s.work.status === 'student') s.work.status = s.age < 15 ? 'child' : 'none';
   if (why) {
@@ -537,7 +628,7 @@ function work(s, ctx) {
     if (s.flags._lfp) {
       const id = pickJob(s);
       startJob(s, id);
-      pushLog(s, 'milestone', '第一份工作', `你成為一名${JOBS[id].name}。${byIncome(inc, {
+      pushLog(s, 'milestone', '第一份工作', `你成為一名${JOBS[id].name}。${byIncome(ctx.income, {
         L: '收入不多，但終於有一份屬於自己的錢。',
         LM: '薪水不高，但你開始能自己做一些決定。',
         UM: '你第一次領到薪水，在回家的路上算了好幾遍。',
@@ -613,8 +704,7 @@ function work(s, ctx) {
 export function retire(s) {
   const ctx = ctxOf(s);
   s.work.status = 'retired';
-  const inc = ctx.country.income;
-  const pension = byIncome(inc, {
+  const pension = byIncome(ctx.income, {
     L: '沒有退休金，但你已經看不到田地的盡頭，只能靠孩子和積蓄過日子。',
     LM: '你的退休金很有限，勉強夠日常開銷，剩下的得靠家人和一點積蓄。',
     UM: '你領到一份不算豐厚的退休金，日子要算著過。',
@@ -738,21 +828,79 @@ function conditions(s, ctx) {
 // Love, marriage, children
 // ---------------------------------------------------------------------------------------------
 
-/** Create a partner record (not yet attached). */
-function makePartner(s, ctx, status) {
+/**
+ * Culture group of a new partner. Mostly the person's own group; migrants often partner with someone
+ * from the host country, and in multi-group countries (Nigeria, India, Switzerland ...) a minority
+ * of couples cross group lines.
+ */
+function partnerGroup(s) {
+  const own = s.flags._pool || 'en_us';
+  const home = s.countryCode === s.homeCountryCode;
+  const crossP = home ? 0.08 : 0.5;
+  if (!chance(s.rng, crossP)) return own;
+  return drawGroup(s.countryCode, () => rand(s.rng), BY_CODE[s.countryCode]?.region);
+}
+
+/**
+ * Create a partner record (not yet attached). `opts`: { gender?, age?, name? }. The name comes from the
+ * culture-appropriate pool; the name tokens are remembered (flags) so that children get the right
+ * family name.
+ */
+function makePartner(s, ctx, status, opts = {}) {
   const era = s.settings.era;
   const sameSexP = era === 'past' ? 0.012 : era === 'future' ? 0.05 : 0.035;
-  const gender = chance(s.rng, sameSexP) ? s.gender : s.gender === 'F' ? 'M' : 'F';
+  const gender = opts.gender || (chance(s.rng, sameSexP) ? s.gender : s.gender === 'F' ? 'M' : 'F');
   const gap = SPOUSE_AGE_GAP[ctx.country.region];
   let age;
-  if (gender === s.gender) age = Math.round(s.age + normal(s.rng, 0, 3));
-  else if (s.gender === 'F') age = Math.round(s.age + normal(s.rng, gap + (s.age < 18 ? 4 : 0), 2.5));
-  else age = Math.round(s.age - normal(s.rng, gap, 2.2));
-  age = Math.max(s.age < 18 && gender !== s.gender ? 17 : 16, age);
-  const poolKey = s.flags._pool || 'en';
-  const nm = randomName(s.rng, poolKey, gender);
+  if (opts.age !== undefined) age = Math.round(opts.age);
+  else {
+    if (gender === s.gender) age = Math.round(s.age + normal(s.rng, 0, 3));
+    else if (s.gender === 'F') age = Math.round(s.age + normal(s.rng, gap + (s.age < 18 ? 4 : 0), 2.5));
+    else age = Math.round(s.age - normal(s.rng, gap, 2.2));
+    age = Math.max(s.age < 18 && gender !== s.gender ? 17 : 16, age);
+  }
+  const group = partnerGroup(s);
+  const nm = randomName(s.rng, group, gender);
   s.flags._partnerFt = nm.familyToken;
-  return { name: nm.full, gender, age, status, since: s.year };
+  s.flags._partnerGt = nm.givenToken;
+  s.flags._partnerPool = group;
+  return { name: opts.name || nm.full, gender, age, status, since: s.year };
+}
+
+/**
+ * Give the person a new partner (dating or married) with a culture-appropriate name and an age near
+ * their own. If they already have an active partner nothing changes and that partner is returned
+ * (unless `opts.replace`).
+ */
+export function newPartner(s, opts = {}) {
+  const ctx = ctxOf(s);
+  if (!opts.replace && s.partner && (s.partner.status === 'dating' || s.partner.status === 'married')) return s.partner;
+  const status = opts.status === 'married' ? 'married' : 'dating';
+  s.partner = makePartner(s, ctx, 'dating', opts);
+  s.flags._coolUntil = 0;
+  if (status === 'married') marry(s);
+  return s.partner;
+}
+
+/**
+ * End a dating relationship (a marriage is ended with divorce()). Resets the private plan flags and
+ * imposes a cooldown (default 2-4 years) so that the yearly systems do not start a new relationship
+ * right away. Returns true if there was a relationship to end.
+ */
+export function endRelationship(s, years) {
+  const pt = s.partner;
+  if (!pt || (pt.status !== 'dating' && pt.status !== 'married')) return false;
+  if (pt.status === 'married') return divorce(s);
+  const f = s.flags;
+  const cool = years ?? randInt(s.rng, 2, 4);
+  s.partner = null;
+  f._coolUntil = s.age + cool;
+  if (f._marryAt < 999) {
+    // Still hoping to marry: the next relationship comes after the cooldown, and the wedding later still.
+    f._dateAt = Math.max(f._dateAt ?? 0, f._coolUntil);
+    f._marryAt = Math.max(f._marryAt, f._dateAt + randInt(s.rng, 1, 3));
+  }
+  return true;
 }
 
 export function setPartner(s, p) {
@@ -790,7 +938,7 @@ function planRemarriage(s, p) {
 }
 
 function childBirthText(s, c, first) {
-  const inc = ctxOf(s).country.income;
+  const inc = ctxOf(s).income;
   const parent = first ? '你成為了父母' : '家裡又添了一個孩子';
   const where = byIncome(inc, {
     L: '產婆在昏暗的屋子裡接生，所幸一切平安。',
@@ -806,8 +954,19 @@ export function addChild(s, opts = {}) {
   const ctx = ctxOf(s);
   const view = ctx.view;
   const gender = opts.gender || (chance(s.rng, view.srb / (100 + view.srb)) ? 'M' : 'F');
-  const ft = s.gender === 'M' ? s.flags._ft : s.flags._partnerFt;
-  const nm = randomName(s.rng, s.flags._pool || 'en', gender, ft || null);
+  // Children get names from the family's culture (the person's group, wherever they live now), taking the
+  // family-name token from the father: the person himself, or the (same-culture) partner. Patronymic
+  // cultures (Amharic, Malay ...) use the father's given name instead of a surname.
+  const pool = s.flags._pool || 'en_us';
+  const pt = s.partner;
+  let father;
+  if (s.gender === 'M') father = { givenToken: s.flags._gt, familyToken: s.flags._ft };
+  else if (pt && pt.gender === 'M' && s.flags._partnerPool === pool && s.flags._partnerGt) father = { givenToken: s.flags._partnerGt, familyToken: s.flags._partnerFt };
+  else father = getPool(pool).mode === 'patro' ? {} : { familyToken: s.flags._ft };
+  const famToken = childFamilyToken(pool, father);
+  let nm = randomName(s.rng, pool, gender, famToken);
+  // siblings do not share a name
+  for (let tries = 0; tries < 8 && s.children.some((c) => c.name === nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
   const child = { name: nm.full, gender, birthYear: s.year, alive: true };
   s.children.push(child);
   s.flags._birthThisYear = true;
@@ -838,8 +997,9 @@ function fertility(s, ctx) {
   else return;
 
   if (!couple && female) {
-    // Births outside a stable partnership
-    if (s.age >= 17 && s.age <= 36 && chance(s.rng, { L: 0.03, LM: 0.02, UM: 0.014, H: 0.01 }[ctx.country.income] * (ctx.country.region === 'MENA' || ctx.country.region === 'SAS' ? 0.1 : 1))) {
+    // Births outside a stable partnership (only up to the number of children she planned)
+    const wanted = s.flags._want ?? 0;
+    if (s.children.length < wanted && s.age >= 17 && s.age <= 38 && chance(s.rng, { L: 0.12, LM: 0.09, UM: 0.07, H: 0.06 }[ctx.country.income] * (ctx.country.region === 'MENA' || ctx.country.region === 'SAS' ? 0.1 : 1))) {
       birth(s, ctx, true);
     }
     return;
@@ -849,13 +1009,13 @@ function fertility(s, ctx) {
   const alive = aliveKids(s);
   const total = s.children.length;
   const want = s.flags._want;
-  if (total >= want) p *= 0.03;
+  if (total >= want) p *= 0.004; // unplanned births are rare
   else {
     p *= Math.min(1.8, 1 + 0.1 * (want - total));
     if (total === 0) p *= married ? 1.3 : 0.7;
   }
   if (!married) p *= ctx.country.region === 'MENA' || ctx.country.region === 'SAS' ? 0.1 : ctx.country.region === 'SSA' ? 0.9 : 0.7;
-  if (female && s.edu.inSchool) p *= 0.3;
+  if (female && s.edu.inSchool && !s.flags._adultEd) p *= 0.3;
   if (alive === 0 && total > 0 && total < want) p *= 1.2;
   if (chance(s.rng, p)) birth(s, ctx, false);
 }
@@ -876,13 +1036,14 @@ function love(s, ctx) {
   const age = s.age;
 
   // Postpone marriage while still studying for a degree
-  if (s.edu.inSchool && s.edu.years >= 12 && f._marryAt < 999 && age >= f._marryAt - 1) {
+  if (s.edu.inSchool && !f._adultEd && s.edu.years >= 12 && f._marryAt < 999 && age >= f._marryAt - 1) {
     f._marryAt = age + 1 + randInt(s.rng, 0, 2);
     f._dateAt = Math.min(f._dateAt, f._marryAt - 1);
   }
 
   const active = pt && (pt.status === 'dating' || pt.status === 'married');
   if (!active) {
+    if (age < (f._coolUntil ?? 0)) return; // cooling off after a break-up (see endRelationship)
     if (age >= f._dateAt && age < 75 && f._marryAt < 999) {
       const status = age >= f._marryAt ? 'married' : 'dating';
       s.partner = makePartner(s, ctx, 'dating');
@@ -917,7 +1078,7 @@ function love(s, ctx) {
 
 function loveText(s, ctx) {
   const pt = s.partner;
-  return byIncome(ctx.country.income, {
+  return byIncome(ctx.income, {
     L: `你認識了${pt.name}。你們常常在田埂邊、水井旁或市集的角落說上幾句話。`,
     LM: `你和${pt.name}開始走得很近。朋友們都看出來了，只有你們還裝作若無其事。`,
     UM: `你和${pt.name}開始約會。你們常在下班後去街邊吃宵夜，聊到店家要打烊。`,
@@ -933,7 +1094,7 @@ function doMarriage(s, ctx) {
     pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，家人就替你決定了婚事。你嫁（娶）給比你大不少的${pt.name}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
     addHighlight(s, '很年輕就結婚。');
   } else {
-    pushLog(s, 'milestone', '結婚', byIncome(ctx.country.income, {
+    pushLog(s, 'milestone', '結婚', byIncome(ctx.income, {
       L: `你和${pt.name}結了婚。沒有華麗的場面，鄰居都來幫忙，晚上大家一起吃了一頓飯。`,
       LM: `你和${pt.name}結婚了。親戚們從各地趕來，場地很簡單，但每個人都笑得很大聲。`,
       UM: `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯。`,
@@ -941,16 +1102,29 @@ function doMarriage(s, ctx) {
     }), applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
     addHighlight(s, `與${pt.name}結婚。`);
   }
-  if (s.flags._want === 0 && chance(s.rng, 0.5)) s.flags._want = 1;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Migration
 // ---------------------------------------------------------------------------------------------
 
+/** Move between countryside and city within the current country. */
+export function setUrban(s, urban) {
+  s.urban = !!urban;
+}
+
+/** Set the place of residence: `name` if given (any string), else a random city of the current country. */
+export function setCity(s, name) {
+  const cities = BY_CODE[s.countryCode].cities;
+  s.city = name || (cities && cities.length ? cities[Math.floor(rand(s.rng) * cities.length)] : s.city);
+}
+
 export function migrate(s, code) {
   if (!BY_CODE[code] || code === s.countryCode) return false;
   s.countryCode = code;
+  // Migrants live in a city of the new country (mostly urban).
+  setCity(s);
+  s.urban = chance(s.rng, 0.85);
   s.flags._countries = s.flags._countries || [s.homeCountryCode];
   if (!s.flags._countries.includes(code)) s.flags._countries.push(code);
   s.flags.migrated = true;

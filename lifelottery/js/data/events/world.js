@@ -27,13 +27,6 @@ const SEA_EXPOSURE = { BGD: 0.6, NLD: 0.5, MDV: 1, FJI: 0.7, SLB: 0.7, VNM: 0.4,
 const seaExposure = (code) => SEA_EXPOSURE[code] ?? (COASTAL_FUTURE.has(code) ? 0.25 : 0);
 
 // ---- helpers ----
-/** Deterministic "was this person affected" test for local events: stable for a given life, no rng use in cond. */
-function exposed(s, p) {
-  const str = `${s.seed}|${s.name.full}|${s.birthYear}`;
-  let x = 2166136261;
-  for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
-  return ((x >>> 0) % 10000) / 10000 < p;
-}
 const kid = (h) => h.age() < 14;
 const gdpOf = (h) => h.stats().gdp || 5000;
 /** Year a technology reaches ordinary households of the person's country; poorer families get it later. */
@@ -666,7 +659,7 @@ export default [
     ages: [0, 90],
     chance: 1,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => h.yearIn(2004, 2005) && TSUNAMI_2004[s.countryCode] !== undefined && exposed(s, TSUNAMI_2004[s.countryCode] * (h.urban() ? 1 : 1.8)),
+    cond: (s, h) => h.yearIn(2004, 2005) && TSUNAMI_2004[s.countryCode] !== undefined && h.stable('world_tsunami_2004', TSUNAMI_2004[s.countryCode] * (h.urban() ? 1 : 1.8)),
     text: (s, h) => '十二月的早晨，海水突然退得很遠，海灘上露出平常看不見的礁石和魚。有人好奇地走過去，隨後遠方傳來轟隆的聲音，一道牆似的海水正朝岸邊壓來。',
     choices: [
       {
@@ -1377,7 +1370,7 @@ export default [
     cooldown: 15,
     chance: 0.05,
     tags: ['world', 'future', 'climate', 'regional'],
-    cond: (s, h) => h.yearIn(2035, 2100) && exposed(s, seaExposure(s.countryCode)),
+    cond: (s, h) => h.yearIn(2035, 2100) && h.stable('world_sea_level', seaExposure(s.countryCode)),
     text: (s, h) => '海水一年比一年上得更高，每逢大潮，街道就積水到腳踝。社區開了好幾次會議，討論要築高堤防、改建高腳屋，還是離開這片住了幾代人的土地。',
     choices: [
       {

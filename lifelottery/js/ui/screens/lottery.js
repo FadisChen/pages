@@ -63,7 +63,7 @@ export default function mount(ctx, root) {
     [L.nameLabel, b.name],
   ];
   const card = el('article', { class: 'card birth-card', 'aria-labelledby': 'birth-country' },
-    el('p', { class: 'eyebrow', 'data-step': '1' }, `${L.born(b.year)}・${b.eraLabel}`),
+    el('p', { class: 'eyebrow', 'data-step': '1' }, `${L.born(b.year)}・${b.eraName}`),
     el('h2', { id: 'birth-country', class: 'birth-country', 'data-step': '1' }, b.countryName),
     el('dl', { class: 'facts' }, facts.map(([k, v], i) => el('div', { class: 'fact', 'data-step': String(2 + i) }, el('dt', null, k), el('dd', null, v)))),
     el('p', { class: 'birth-line', 'data-step': '6' }, L.bornIn(b.name, `${b.countryName}的${b.placeText}`)),

@@ -85,7 +85,7 @@ test('countries: spot checks against well-known facts', () => {
 });
 
 test('eras: views are finite for all countries and years', () => {
-  const years = [1965, 1970, 1990, presentYear(), 2035, 2050, 2060];
+  const years = [1950, 1955, 1965, 1970, 1990, presentYear(), 2035, 2050, 2060, 2070, 2090];
   for (const c of COUNTRIES) {
     for (const y of years) {
       const v = eraView(c, y);
@@ -95,10 +95,13 @@ test('eras: views are finite for all countries and years', () => {
       }
       assert.ok(inRange(v.imr, 0.5, 350) && inRange(v.u5mr, v.imr, 500), `${c.code} ${y}: imr/u5mr ${v.imr}/${v.u5mr}`);
       assert.ok(inRange(v.tfr, 0.5, 8), `${c.code} ${y}: tfr ${v.tfr}`);
-      assert.ok(inRange(v.births, 100, 1e8) && inRange(v.pop, 1e5, 4e9), `${c.code} ${y}: births/pop`);
+      assert.ok(inRange(v.births, 100, 1e8) && inRange(v.pop, 1e4, 4e9), `${c.code} ${y}: births/pop`);
       assert.ok(inRange(v.urban, 1, 100) && inRange(v.poverty, 0, 100) && inRange(v.childMarriage, 0, 100), `${c.code} ${y}: pct fields`);
     }
     assert.ok(eraView(c, 1970).le.F < eraView(c, 2050).le.F, `${c.code}: life expectancy should rise 1970 -> 2050`);
+    assert.ok(eraView(c, 1955).le.F <= eraView(c, 1990).le.F + 0.5, `${c.code}: life expectancy should not fall 1955 -> 1990`);
+    assert.ok(eraView(c, 2070).le.F >= eraView(c, 2050).le.F - 0.01, `${c.code}: life expectancy should not fall 2050 -> 2070`);
+    assert.ok(eraView(c, 1955).imr >= eraView(c, 1990).imr - 0.5, `${c.code}: infant mortality should not rise 1955 -> 1990`);
   }
   const w = worldView(presentYear());
   assert.ok(inRange(w.le, 66, 76) && inRange(w.imr, 10, 40) && inRange(w.school, 8, 14), `present world averages off: ${JSON.stringify(w)}`);
@@ -109,6 +112,9 @@ test('draw weights: every country can be drawn in every era and mode', () => {
   for (const mode of ['births', 'population']) {
     for (const era of ERA_KEYS) {
       const year = era === 'past' ? 1970 : era === 'future' ? 2050 : presentYear();
+      for (const y of era === 'past' ? [1955, 1990] : era === 'future' ? [2040, 2070] : []) {
+        for (const c of COUNTRIES) assert.ok(drawWeight(c, y, mode) > 0 && Number.isFinite(drawWeight(c, y, mode)), `${c.code} ${y} ${mode}`);
+      }
       let total = 0;
       for (const c of COUNTRIES) {
         const wgt = drawWeight(c, year, mode);
@@ -132,11 +138,12 @@ test('draw weights: every country can be drawn in every era and mode', () => {
   assert.ok(babyShare(BY_CODE.IND, presentYear(), 'births').per100 > 10, 'India should be > 10 of 100 babies');
 });
 
-test('names: every pool has >= 30 male, female and surnames; every country resolves', () => {
-  assert.ok(POOL_KEYS.length >= 25);
+test('names: every pool has >= 25 male and female names and surnames; every country resolves', () => {
+  assert.ok(POOL_KEYS.length >= 90);
   for (const k of POOL_KEYS) {
     const s = poolSizes(k);
-    assert.ok(s.M >= 30 && s.F >= 30 && s.S >= 30, `pool ${k}: ${JSON.stringify(s)}`);
+    const single = getPool(k).mode === 'syll';
+    assert.ok(s.M >= 25 && s.F >= 25 && (single || s.S >= 25), `pool ${k}: ${JSON.stringify(s)}`);
     const p = getPool(k);
     for (const list of [p.M, p.F, p.S]) for (const t of list) assert.ok(typeof t === 'string' && t.length > 0 && !/undefined/.test(t), `pool ${k}: bad token ${t}`);
   }
@@ -149,14 +156,14 @@ test('names: every pool has >= 30 male, female and surnames; every country resol
     regionsSeen.add(c.region);
     for (const g of ['F', 'M']) {
       const n = makeName(key, g, r);
-      assert.ok(n.full && n.given && n.family, `${c.code}: empty name`);
+      assert.ok(n.full && n.given, `${c.code}: empty name`);
       assert.ok(!/undefined|NaN|\|/.test(n.full), `${c.code}: bad name "${n.full}"`);
     }
   }
   assert.equal(regionsSeen.size, REGIONS.length);
-  // Display conventions
-  assert.match(makeName('zh', 'M', r).full, /^[一-鿿]{3}$/);
-  assert.match(makeName('ko', 'F', r).full, /^[가-힣]+（[一-鿿]+）$|^[가-힣]+$/);
+  // Display conventions (see names.test.mjs for the full set)
+  assert.match(makeName('zh_hant', 'M', r).full, /^[\u4e00-\u9fff]{3}$/);
+  assert.match(makeName('ko', 'F', r).full, /^[가-힣]+（[\u4e00-\u9fff]+）$|^[가-힣]+$/);
 });
 
 test('causes: table is well-formed and drawable for every income group and age band', () => {
@@ -179,7 +186,7 @@ test('causes: table is well-formed and drawable for every income group and age b
 });
 
 test('life tables: calibrated to the era life expectancy, monotone in old age', () => {
-  const years = [1970, presentYear(), 2050];
+  const years = [1955, 1970, 1990, presentYear(), 2050, 2070];
   for (const c of COUNTRIES) {
     for (const y of years) {
       for (const sex of ['F', 'M']) {

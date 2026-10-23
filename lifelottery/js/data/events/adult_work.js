@@ -200,7 +200,7 @@ export default [
     choices: [
       {
         label: '報名，咬牙讀完',
-        effects: (s, h) => { h.set('w_night_school'); h.set(h.chance(0.7) ? 'w_diploma_ok' : 'w_diploma_drop'); h.change('knowledge', +5); h.change('health', -3); h.change('wealth', -3); h.change('social', -2); },
+        effects: (s, h) => { h.set('w_night_school'); h.set(h.chance(0.7) ? 'w_diploma_ok' : 'w_diploma_drop'); h.enroll(h.eduAtLeast('secondary') ? 'tertiary' : 'secondary', { quiet: true }); h.change('knowledge', +5); h.change('health', -3); h.change('wealth', -3); h.change('social', -2); },
         result: '你學會了在捷運、公車上寫報告，也學會了跟瞌睡蟲談判。最糟的那個學期，你差點把筆摔了。',
         schedule: [{ id: 'work_diploma', inYears: [2, 4] }],
         ai: (s, h) => (h.stat('health') > 55 ? 1.5 : 0.6),
@@ -233,7 +233,7 @@ export default [
       : '你還是沒能把課程讀完。不是不想，而是工作、家人與睡眠一天比一天擠。但那些筆記你一直留著，後來在工作上還真用到了不少，有時候比證書還管用。'),
     effects: (s, h) => {
       if (h.has('w_diploma_ok')) { h.change('knowledge', +4); h.change('wealth', +3); h.change('happiness', +4); }
-      else { h.change('knowledge', +1); h.change('happiness', -2); }
+      else { h.change('knowledge', +1); h.change('happiness', -2); h.dropOut(); }
       h.unset('w_diploma_ok'); h.unset('w_diploma_drop');
     },
   },

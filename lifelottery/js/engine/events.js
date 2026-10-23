@@ -220,18 +220,38 @@ function markSeen(s, ev) {
   s.seen[ev.id] = s.age;
 }
 
+/**
+ * h.die() inside an event's effects logs the death immediately, i.e. before the event's own narrative entry
+ * (which is only pushed once the effects have run). Move the death entry/entries logged since `from` behind it.
+ */
+function deathLast(s, from) {
+  const tail = s.log.slice(from);
+  if (!tail.some((e) => e.kind === 'death')) return;
+  const rest = tail.filter((e) => e.kind !== 'death');
+  const deaths = tail.filter((e) => e.kind === 'death');
+  s.log.length = from;
+  s.log.push(...rest, ...deaths);
+}
+
 /** Fire a non-choice event. Returns the log entry. */
 function fireRegular(s, h, ev) {
   markSeen(s, ev);
   const text = str(ev.text, s, h);
+  const from = s.log.length;
   const delta = applyEffects(s, h, ev.effects);
   applyFlags(s, ev);
   scheduleFollowUps(s, ev.schedule);
   addHighlightFrom(s, h, ev, text);
-  return pushLog(s, ev.milestone ? 'milestone' : 'event', ev.title, text, delta);
+  const entry = pushLog(s, ev.milestone ? 'milestone' : 'event', ev.title, text, delta);
+  deathLast(s, from); // a death caused by the effects reads after the event's own narrative
+  return entry;
 }
 
-/** Present a major event: log its setup text and store the choice for the UI. */
+/**
+ * Present a major event: log its setup text and store the choice for the UI. Event-level `effects`, `set`
+ * and `unset` apply now (the situation itself has consequences); event-level `schedule` is queued when
+ * the choice is resolved, together with the chosen option's own follow-ups.
+ */
 function presentChoice(s, h, ev) {
   const options = [];
   ev.choices.forEach((c, i) => {
@@ -242,8 +262,12 @@ function presentChoice(s, h, ev) {
   if (options.length === 0) return null;
   markSeen(s, ev);
   const text = str(ev.text, s, h);
-  const entry = pushLog(s, 'event', ev.title, text);
-  s.flags._choice = { eventId: ev.id, title: ev.title, text, options };
+  const from = s.log.length;
+  const delta = applyEffects(s, h, ev.effects);
+  applyFlags(s, ev);
+  const entry = pushLog(s, 'event', ev.title, text, delta);
+  deathLast(s, from);
+  if (s.alive) s.flags._choice = { eventId: ev.id, title: ev.title, text, options };
   return entry;
 }
 
@@ -264,13 +288,17 @@ export function resolveChoice(s, h, optionIndex) {
   const ev = BY_ID.get(pc.eventId);
   const ch = ev.choices[opt.index];
   delete s.flags._choice;
+  const from = s.log.length;
   const delta = applyEffects(s, h, ch.effects);
   applyFlags(s, ch);
   scheduleFollowUps(s, ch.schedule);
+  scheduleFollowUps(s, ev.schedule); // event-level follow-ups of a choice event
   const result = ch.result === undefined ? '' : str(ch.result, s, h);
   addHighlightFrom(s, h, ch, result || ch.label);
   if (!ch.highlight) addHighlightFrom(s, h, ev, result || ev.title);
-  return pushLog(s, 'choice', ch.label, result, delta);
+  const entry = pushLog(s, 'choice', ch.label, result, delta);
+  deathLast(s, from); // a death caused by the choice reads after its result text
+  return entry;
 }
 
 /** Pick an option index for auto-play, weighted by each choice's `ai` (number or function). */

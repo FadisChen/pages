@@ -978,7 +978,7 @@ export default [
     choices: [
       {
         label: '報名夜校，辛苦一點',
-        effects: { knowledge: +4, health: -3, happiness: -1 },
+        effects: (s, h) => { h.enroll('secondary', { quiet: true }); h.change('knowledge', +4); h.change('health', -3); h.change('happiness', -1); },
         set: ['y_night_class'],
         result: '你第一天上課就睡著了，被老師點名驚醒。第二天你灌了兩杯濃茶。接下來的日子，你的眼袋大得可以裝東西，卻也寫完了第一份作業。',
         schedule: [{ id: 'youth_night_class_cert', inYears: [2, 4] }],
@@ -994,7 +994,7 @@ export default [
       {
         label: '改上線上或週末班，慢慢來',
         cond: (s, h) => h.year() >= 2010,
-        effects: { knowledge: +2, health: -1 },
+        effects: (s, h) => { h.enroll('secondary', { quiet: true }); h.change('knowledge', +2); h.change('health', -1); },
         set: ['y_night_class'],
         result: '你用手機看影片課程，一堂堂慢慢追。進度慢，卻不會讓你累垮。有一天你交出了第一份通過的小測驗，那種喜悅很安靜，卻很穩。',
         schedule: [{ id: 'youth_night_class_cert', inYears: [2, 4] }],

@@ -14,7 +14,6 @@
 const lowAccess = (h) => h.income() === 'L' || h.income() === 'LM';
 const PHYSICAL_JOBS = ['farmer', 'fisher', 'laborer', 'miner', 'factory', 'construction', 'driver', 'cook', 'domestic', 'caregiver'];
 const roadWeight = (h) => Math.max(0.2, Math.min(2.5, (h.stats().road || 10) / 12));
-const recentLoss = (s, titles, within) => s.log.some((e) => titles.includes(e.title) && s.age - e.age <= within);
 const clinicName = (h) => h.byIncome({ L: '衛生所', LM: '診所', UM: '醫院', H: '診所' });
 
 export default [
@@ -509,9 +508,9 @@ export default [
     ages: [10, 90],
     once: false,
     cooldown: 3,
-    weight: (s, h) => (recentLoss(s, ['母親過世', '父親過世'], 1) ? 4 : 0),
+    weight: (s, h) => (h.recentLog(['母親過世', '父親過世'], 1) ? 4 : 0),
     tags: ['health', 'mental', 'grief'],
-    cond: (s, h) => recentLoss(s, ['母親過世', '父親過世'], 1),
+    cond: (s, h) => h.recentLog(['母親過世', '父親過世'], 1),
     text: (s, h) => '喪事辦完了，親友各自回到自己的生活，屋子忽然安靜得讓人不習慣。吃飯時你還是不小心照著他的習慣，多拿了一副碗筷，才想起來他不會來了。',
     choices: [
       {

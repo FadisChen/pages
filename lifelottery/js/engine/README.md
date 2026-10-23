@@ -8,7 +8,7 @@ js/engine/  rng · birth · mortality · systems · events · helpers · life ·
 js/data/    countries (generated) · eras · names · causes · conditions · yearly · riskref (generated)
             events/ index · seed · childhood · youth · adult_work · adult_family · migration · health · aging · world · regional
 tools/      fetch-raw · build-data (→ countries.js) · calibrate-risk (→ riskref.js)
-tests/      data.test.mjs · events.test.mjs · simulation.test.mjs
+tests/      data.test.mjs · names.test.mjs · helpers.test.mjs · events.test.mjs · simulation.test.mjs · e2e.mjs
 ```
 
 ## 1. Quick start
@@ -62,8 +62,8 @@ kept in `state.settings.eraSetting`.
 
 ### birth.js (lottery reveal)
 
-* `describeBirth(state)` → `{ name, year, eraLabel, countryCode, countryName, region, income, city, urban, placeText, genderLabel, wealthQ, wealthLabel, wealthShort, babiesPer100, babiesText, lifeExpectancy, comparisons: [{ key: 'le'|'imr'|'school'|'gdp', label, unit, value, world, higherIsBetter }] }`.
-  `babiesText` is ready to drop into "…出生的 100 個嬰兒裡，有{babiesText}和你同國。"
+* `describeBirth(state)` → `{ name, year, eraName, eraLabel, countryCode, countryName, region, income, city, urban, placeText, genderLabel, wealthQ, wealthLabel, wealthShort, babiesPer100, babiesText, lifeExpectancy, comparisons: [{ key: 'le'|'imr'|'school'|'gdp', label, unit, value, world, higherIsBetter }] }`.
+  `eraName` is `過去 / 現在 / 未來`; `eraLabel` is `現在` or the birth year (`1962 年`) and reads as "{eraLabel}出生的 100 個嬰兒…". `babiesText` is ready to drop into "…出生的 100 個嬰兒裡，有{babiesText}和你同國。"
 * `babyShare(country, year, mode)` → `{ share, per100, oneIn }`; `babyShareText(...)`.
 * `drawCountry(rngState, year, mode)`, `WEALTH_LABELS`, `WEALTH_SHORT`, `GENDER_LABELS`.
 * For the spinning-name animation, `COUNTRIES` (`data/countries.js`) has all names.
@@ -96,9 +96,10 @@ per-stat `stats { peak, peakAge, mean, final }` and `statHistory`. `STAT_LABELS`
 
 Mortality: Gompertz–Makeham tables calibrated by bisection so that cohort life expectancy equals the country's era-adjusted
 `le[sex]`; ages 0–4 use `imr` / `u5mr`. The personal multiplier (health vs. age norm, wealth, smoking, conditions, `riskMult`,
-temporary `addRisk`s, early-childhood family wealth) is **normalised** by `data/riskref.js`, so mean lifespan stays at the
-country's life expectancy while individuals differ. **Regenerate `riskref.js` after changing systems, conditions or any
-event risk effect**: `node tools/calibrate-risk.mjs` (≈3 min).
+temporary `addRisk`s, early-childhood family wealth) is **normalised** by `data/riskref.js` (mean raw multiplier per income group × gender × **era** × 5-year age bin, keys like
+`'HF@past'`), so mean lifespan stays at the country's life expectancy while individuals differ (after the Phase 3A calibration: past −0.3, present 0.0, future +0.1 years over 6000 lives per era;
+individual countries within about ±1 year). **Regenerate `riskref.js` after changing systems, conditions or any
+event risk effect**: `node tools/calibrate-risk.mjs [lives] [passes]` (the Phase 3A table was made with `45000 4`, ≈ 10 min; sparse old-age bins stay noisy, only the mean matters).
 
 Wealth is a 0–100 stat: half the person's income percentile in their country, half the (log) absolute income in
 international dollars. `h.change('wealth', d)` also shifts the underlying percentile, so a shock persists.
@@ -123,7 +124,8 @@ health `health_`, aging `aging_`, world `world_`, regional `regional_`. Start fr
   text: (s, h) => string | string,    // 60–160 chars, second person, zh-Hant
   effects: { happiness: -3 } | (s, h) => void,     // keys: health happiness knowledge wealth social
   set: ['flag'], unset: ['flag'],
-  schedule: [{ id: 'other_event', inYears: [0, 2] }],   // follow-ups, fire regardless of cond/ages
+  schedule: [{ id: 'other_event', inYears: [0, 2] }],   // follow-ups, fire regardless of cond/ages. On an event with `choices`
+                                       // this is queued when the choice is resolved (together with the chosen option's own `schedule`)
   highlight: true | 'text' | (s, h) => text,       // end-of-life "重要時刻"
   choices: [{                          // 2–3 options
     label, hint?,
@@ -135,22 +137,45 @@ health `health_`, aging `aging_`, world `world_`, regional `regional_`. Start fr
 }
 ```
 
+For an event with `choices`, event-level `effects`, `set` and `unset` apply when the situation is presented (its log entry carries the delta) and event-level `schedule`
+when the choice is resolved.
+
 Rules enforced by `tests/events.test.mjs` (3000 random states): `cond`, `text`, `result`, `ai`, `weight`, `highlight` must not throw
 and strings must be non-empty without `undefined`/`NaN`. Therefore **write total functions**: use `h.partnerName()` (returns `'對方'`
 if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `text` is evaluated before `effects`.
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 89)
+### Helpers (`h`, all 99)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
-* **Country / statistics**: `country() homeCountry() stats() countryName() income() incomeAtLeast(g) region() isRegion(...r) byIncome({L,LM,UM,H}) city() urban() isMigrant() hasLivedIn(code)`.
+* **Country / statistics**: `country() homeCountry() stats() countryName() income() incomeAt() incomeAtLeast(g) region() isRegion(...r) byIncome({L,LM,UM,H}) city() urban() setUrban(bool) setCity(name?) isMigrant() hasLivedIn(code)`.
   `stats()` is the era-adjusted statistics record of the current country for the current calendar year (`le`, `imr`, `school`, `gdp`, …).
-  `byIncome` falls back to the nearest defined group: `h.byIncome({ L: '…', H: '…' })`.
-* **Identity & situation**: `stat(k) female() male() gender() wealthQ() annualIncome() isRich() isPoor() inSchool() eduLevel() eduAtLeast(level) eduYears() employed() unemployed() retired() workStatus() job() jobName() isJob(...ids) married() hasPartner() partnerStatus() partnerAge() yearsMarried() hasChildren() childCount() youngestChildAge() siblings() parentAlive('mother'|'father') parentsAlive() isSmoker() hasCondition(id) has(flag) flag(name) yearsSince(eventId) seenEvent(eventId)`.
-* **Changes**: `set(flag, v=true) unset(flag) inc(flag, n=1) change(stat, delta) addWealth(d) addCondition(id) removeCondition(id) startJob(id) loseJob() retire() dropOut() startSmoking() quitSmoking() setPartner({name,gender,age,status}) marry() divorce() addChild({gender}) migrate(code) addRisk(mult, years?) log(text, title?) highlight(text) die(causeId)`.
-  `die` is for wars/disasters only (`'disaster'`, `'conflict'`, …; ids in `data/causes.js`). `addRisk(m)` is permanent, `addRisk(m, n)` lapses after *n* years.
+  `income()` is the country's World Bank group **today** (static); `incomeAt()` is the group in the **current calendar year**, derived
+  from the era GDP per head (`eras.js: incomeGroupAt`): South Korea in 1975 is `'LM'`, most countries are a group higher in 2060 than now, and in the
+  present year it always equals `income()`. `byIncome` now picks by `incomeAt()` (so descriptions of living conditions follow the era) and falls back
+  to the nearest defined group: `h.byIncome({ L: '…', H: '…' })`. Use `income()` / `incomeAtLeast()` in `cond` for "what kind of country is this".
+  `setUrban(true|false)` moves between countryside and city inside the current country; `setCity()` picks a random city of the country, `setCity('台北')`
+  sets a name. (`migrate()` also moves you to a city of the new country and makes you urban with probability 0.85.)
+* **Identity & situation**: `stat(k) female() male() gender() wealthQ() annualIncome() isRich() isPoor() inSchool() inTertiary() eduLevel() eduAtLeast(level) eduYears() employed() unemployed() retired() workStatus() job() jobName() isJob(...ids) married() hasPartner() partnerStatus() partnerAge() yearsMarried() hasChildren() childCount() youngestChildAge() siblings() parentAlive('mother'|'father') parentsAlive() isSmoker() hasCondition(id) has(flag) flag(name) yearsSince(eventId) seenEvent(eventId) recentLog(titleOrKind, years?) stable(key, p)`.
+  * `inTertiary()`: studying at university level or beyond right now (`inSchool() && eduYears() >= 12`).
+  * `recentLog('母親過世' | ['母親過世', '父親過世'] | 'milestone', years = Infinity)`: the most recent log entry whose **title or kind** matches, at most `years` years ago, or `null`.
+    Use it instead of scanning `s.log` in `cond`/`weight`.
+  * `stable(key, p = 0.5)`: a deterministic per-life coin flip. The same life and `key` always give the same answer, and **no random numbers are consumed**, so it is safe
+    in `cond` and several events can agree on "was this person affected by the 2004 tsunami" (use one key per question). `p <= 0` is always `false`, `p >= 1` always `true`.
+* **Changes**: `set(flag, v=true) unset(flag) inc(flag, n=1) change(stat, delta) addWealth(d) addCondition(id) removeCondition(id) startJob(id) loseJob() retire() dropOut() enroll(level?) reenroll() startSmoking() quitSmoking() setPartner({name,gender,age,status}) newPartner({gender?,status?,age?}) endRelationship(years?) marry() divorce() addChild({gender}) migrate(code) addRisk(mult, years?) log(text, title?) highlight(text) die(causeId)`.
+  * `newPartner({ gender?, status: 'dating' | 'married' = 'dating', age? })`: creates the partner (name from the person's own culture group; migrants and multi-group countries
+    sometimes pair across groups; age near the person's; `gender` defaults to the usual mix incl. a small same-sex share) and returns the record. If the person already has an active partner
+    nothing changes and that partner is returned (end the relationship first). `setPartner({})` without a `name` now uses it too, instead of "他"/"她".
+  * `endRelationship(years?)`: ends a **dating** relationship (`divorce()` for a marriage): clears the partner, resets the private plan flags (`_dateAt`, `_marryAt`: the next relationship and the wedding move
+    back) and starts a cooldown of `years` (default 2–4) during which the yearly systems start no new relationship. Returns `true` if there was one.
+  * `enroll(level?)` / `reenroll()`: put someone who is not in school back into education (night school, second chance). `level` is `'primary' | 'secondary' | 'tertiary' | 'graduate'`
+    (default: the next level above their current one); returns `false` if they already study or already have that level. The yearly system then carries them through (≈ 2 school years per
+    calendar year below university, 1 above; 6 % yearly chance to drop out), adds knowledge, and logs the diploma milestone when the level is reached; the event supplies its own narrative.
+    A person with a job keeps it while studying.
+  `die` is for wars/disasters only (`'disaster'`, `'conflict'`, …; ids in `data/causes.js`). A death caused inside an event's effects is logged **after** the event's own
+  narrative (the engine moves the `death` entry behind it). `addRisk(m)` is permanent, `addRisk(m, n)` lapses after *n* years.
   Job ids: see `JOBS` in `systems.js`; condition ids: `data/conditions.js`.
 * **Names**: `name() givenName() partnerName() childName(i=0) lastChildName() motherName() fatherName()`.
 
@@ -163,9 +188,27 @@ engine-private — do not read or write them from events.
   `marryAge {F,M}`. The header documents every source and year; `est: [...]` lists fields that are estimates for that country (`tertiary`, `road`, `childMarriage`,
   `homicide` are estimates everywhere). Re-run `node tools/fetch-raw.mjs && node tools/build-data.mjs` to rebuild.
 * **eras.js**: anchors 1970 / present / 2050 interpolated by calendar year (`eraView`). 1970 uses real `le1970`, `imr1970`, `pop1970`; the rest are documented models.
-* **names.js**: 33 culture pools (≥ 30 male, female, surname each), mapped per country; `makeName(pool, gender, rng)`.
+  Birth years: **past 1955–1990** (uniform), present = this year, **future 2040–2070**. Years before 1970 continue the 1970→1985 trend backwards and years after 2050 the 2035→2050 trend
+  forwards (damped, clamped to plausible bounds, frozen before 1950 / after 2090), so life expectancy, IMR, TFR, schooling, GDP … exist for every year. GDP and population interpolate
+  geometrically (fast growers on a concave path); `GDP1970` holds hand-set 1970 incomes for economies the generic model misrepresents (Korea, Taiwan, China, oil states …).
+  `incomeGroupAt(country, year)` classifies the era GDP into `L/LM/UM/H` (what `h.incomeAt()` returns).
+* **names.js**: 104 language / culture **groups** (≥ 25 male, ≥ 25 female, ≥ 25 family names each; `syll` groups have no family names), see below.
 * **causes.js**: 22 cause categories (+ `disaster` for `h.die`), base tables by income × age band, country/personal modifiers.
 * **yearly.js**: "平凡的一年" templates — add lines freely (target 80); shape documented in the file header.
+
+### Names (`data/names.js`)
+
+Each group (`GROUPS[key]`: `zh_hans`, `zh_hant`, `ja`, `ko`, `hi`, `bn_hi`, `ta`, `ha`, `yo`, `ig`, `am`, `sw`, `ar_gulf`, `de`, `fr`, `it`, `es_la`, `pt_br`, `en_us` …) carries the naming conventions of its culture:
+`order` (`'family'` first for Chinese, Japanese, Korean, Vietnamese, Khmer, Mongolian, Hungarian), `mode` (`normal`; `patro`: the second name is the father's given name, Amharic / Oromo / Tigrinya / Somali / Malay with
+"bin/binti" / Tamil; `syll`: two given-name words and no family name, Burmese and Bhutanese; `ko`: hangul with hanja), `forms` (gendered surnames `Ivanov|Ivanova`), `mid` (Sikh Singh/Kaur), `singleP` (share of
+Indonesians with a single name), `maiden` (the mother keeps her own family name). `COUNTRY_GROUPS[code]` is a list of `[group, probability]` (population shares): Nigeria → Hausa / Yoruba / Igbo,
+India → Hindi-belt / Urdu / Marathi / Telugu / Bengali / Tamil / Gujarati / Kannada / Malayalam / Punjabi, Switzerland → German / French / Italian, Singapore → Chinese / Malay / Tamil / English, …
+Every country must map to existing groups (`tests/names.test.mjs`).
+
+* A life draws its group once (`flags._pool`) and its name tokens (`_gt` given, `_ft` family). Parents are named from the same group (patronymic: the father's given name *is* the player's second name).
+* Partners come from the person's own group (≈ 92 %; migrants ≈ 50 % from a group of the host country), see `flags._partnerPool`.
+* **Children always get names from the family's culture** (the person's group), wherever they live: the family-name token comes from the father (the person or the same-culture partner; patronymic cultures use his given name).
+* API: `makeName(group, gender, rng, familyToken?)`, `composeName`, `drawGroup(countryCode, rng)`, `childFamilyToken(group, father)`, `getPool(key)` (old save keys like `zh`, `af_w` are translated).
 
 ## 6. Tests & tools
 
@@ -184,6 +227,7 @@ until then it is printed with a warning.
 * A person's mortality uses the life table of the *birth* country (migration only scales `riskMult` by the life-expectancy gap).
 * Siblings are a count only (they do not age or die individually); grandchildren are not simulated (use `h.inc('grandchildren')`).
 * Education is modelled in whole school years (12 school + up to 6 tertiary); pre-primary is not simulated.
+* Fertility is calibrated by simulation (`tests/simulation.test.mjs`: children per woman within ±15 % of the TFR, for present-era lives against today's TFR, for past / future lives against the TFR of their late twenties: they plan marriage and children from `eraView(birthYear + 27)`); see `planChildren` in `systems.js`.
 * Partner genders: ~1–5 % same-sex depending on era, who do not have biological children in the model.
 * Income is a percentile model, not a ledger: there is no savings account or inflation.
 * Data are 2017–2022 vintage open data plus recollection-based estimates (see `countries.js` header); `tfr`, `le` for Taiwan and a few small states are WPP 2024 recollections.
