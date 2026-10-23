@@ -78,6 +78,7 @@ export function install() {
   for (const ev of ALL_EVENTS) {
     const text = ev.text;
     ev.text = (s, h) => { const t = typeof text === 'function' ? text(s, h) : text; record(s, t, ev.id); return t; };
+    if (ev.variants) ev.variants = ev.variants.map((v) => (s, h) => { const t = typeof v === 'function' ? v(s, h) : v; record(s, t, ev.id); return t; }); // Phase 5C phrasings are audited like the main text
     if (typeof ev.effects === 'function') {
       const fx = ev.effects;
       ev.effects = (s, h) => { CTX.current = ev.id; return fx(s, h); };
@@ -96,6 +97,7 @@ export function install() {
   YEARLY.forEach((y, i) => {
     const text = y.text;
     y.text = (s, h) => { const t = text(s, h); record(s, t, `yearly:${i}`); return t; };
+    if (y.variants) y.variants = y.variants.map((v) => (s, h) => { const t = typeof v === 'function' ? v(s, h) : v; record(s, t, `yearly:${i}`); return t; });
   });
 }
 
@@ -218,7 +220,7 @@ const JOB_END = /道別|收拾|資遣|離職|辭職|被裁|裁員|離開(了)?(�
 const WORK_PREMISE = /家裡小店|家裡的小店|家裡開的|家裡經營|家裡的生意|暑假的工|暑假你在|打工|兼職|兼差|工讀|學徒|幫工|做工|暑期工|實習|零工|當童工|幫忙(看店|顧店|家裡的店|家裡的攤)|家裡的店|家裡的攤|家裡的工廠|家裡的田|送報|送貨/;
 const PLACE_SCHOOL = /^(學校|操場|教室|書包|課本|班上|上課|校服|校長|校門)$/;
 const SCHOOL_CORE = /老師(?!傅)|同學|教室|考試|作業|下課/;
-const SCHOOL_EXT = /上課|學校|課本|書包|班導|導師|段考|校服|操場|校長|班上|上學|放學|功課|開學|校門/;
+const SCHOOL_EXT = /上課|(?<!離開)學校|課本|書包|班導|導師|段考|校服|操場|校長|班上|上學|放學|功課|(?<!離)開學|校門/;
 const SCHOOL_RE = new RegExp(SCHOOL_CORE.source + '|' + SCHOOL_EXT.source);
 const ADULT_ED = /夜校|夜間部|進修|課程|補校|職訓|訓練班|語言班|語言課|學程|成人教育|大學|線上課|函授|技職|證照班|補習班/;
 const PARTNER_RE = /伴侶|另一半|丈夫|妻子|老公|老婆|配偶|(?<!老)太太|先生(?!們)|婚|新娘|新郎|枕邊人|愛人|情人|男友|女友|男朋友|女朋友/;

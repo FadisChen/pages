@@ -13,6 +13,7 @@ import health from './health.js';
 import aging from './aging.js';
 import world from './world.js';
 import regional from './regional.js';
+import VARIANTS from './variants.js';
 
 /** File name -> events, kept separate so tests can check id prefixes per file. */
 export const EVENT_FILES = { seed, childhood, youth, adult_work, adult_family, migration, health, aging, world, regional };
@@ -23,4 +24,11 @@ export const EVENT_PREFIX = {
   migration: 'migration_', health: 'health_', aging: 'aging_', world: 'world_', regional: 'regional_',
 };
 
-export default Object.values(EVENT_FILES).flat();
+const ALL = Object.values(EVENT_FILES).flat();
+
+// Phase 5C: alternative phrasings of the most frequent ordinary events (variants.js, { eventId: [variant, ...] }).
+// The event's own `text` stays variant 0; the engine rotates through the list by the player's earlier lives (events.js).
+for (const ev of ALL) if (VARIANTS[ev.id]) ev.variants = VARIANTS[ev.id];
+
+export { VARIANTS };
+export default ALL;

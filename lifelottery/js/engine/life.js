@@ -1,6 +1,6 @@
 // Public engine API: create a life, advance it year by year, resolve choices, serialise.
 //
-//   createLife(settings, seed, opts?) -> state
+//   createLife(settings, seed, opts?) -> state   (opts.novelty = { eventId: earlier lives that met it }: see events.js)
 //   advanceYear(state, { auto? })     -> { entries, pendingChoice, died }
 //   choose(state, optionIndex)        -> { entries, pendingChoice: null, died }
 //   autoChoose(state)                 -> same as choose, picking by each choice's `ai` weight
@@ -17,7 +17,7 @@ import { createRngState } from './rng.js';
 import { drawBirth } from './birth.js';
 import { dies, drawCause } from './mortality.js';
 import { initSystems, runSystems, ctxOf, pushLog, STAT_KEYS, JOBS } from './systems.js';
-import { runEvents, resolveChoice, autoPickIndex, getPendingChoice } from './events.js';
+import { runEvents, resolveChoice, autoPickIndex, getPendingChoice, sanitizeNovelty } from './events.js';
 import { makeHelpers, recordDeath, hash01 } from './helpers.js';
 import { drawReligion, RELIGION_LABELS } from '../data/religion.js';
 import { FOCI, FOCUS_BY_ID, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus, ensureFocus, lapseFocus } from './focus.js';
@@ -61,7 +61,10 @@ function snapshotRow(s) {
  * Create a new life.
  * @param {object} settings  see DEFAULT_SETTINGS (optional extra: `birthYear` forces the present year)
  * @param {number|string} seed  any value; same seed + settings => identical life
- * @param {object} [opts]  force parts of the draw: { countryCode, gender, urban, wealthQ, birthYear }
+ * @param {object} [opts]  force parts of the draw: { countryCode, gender, urban, wealthQ, birthYear }.
+ *   `novelty` ({ eventId: number of earlier lives of this player that met it }, Phase 5C) makes events and "ordinary year"
+ *   lines the player has seen before less likely and rotates the phrasing of events that have `variants`. It is copied into
+ *   `state.novelty`, so it survives serialize/deserialize; without it (or when empty) the life is exactly the one it always was.
  */
 export function createLife(settings = {}, seed = Date.now(), opts = {}) {
   const requested = { ...DEFAULT_SETTINGS, ...settings };
@@ -102,6 +105,8 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
     alive: true,
     death: null,
   };
+  const novelty = sanitizeNovelty(opts.novelty);
+  if (novelty) s.novelty = novelty;
   initSystems(s);
   pushLog(s, 'milestone', '誕生', `${s.year} 年，${s.name.full}出生在${b.country.name}${s.urban ? s.city : s.city + '附近的鄉下'}。`);
   s.statHistory.push(snapshotRow(s));
@@ -197,6 +202,7 @@ export function deserialize(text) {
   for (const k of ['children', 'conditions', 'pending', 'log', 'statHistory', 'highlights']) if (!Array.isArray(s[k])) throw new Error(`Invalid save: ${k}`);
   // Saves from before Phase 4A: no life focus (balance) and no family religion (drawn now from the seed, like a new life)
   ensureFocus(s);
+  if ('novelty' in s) { const nv = sanitizeNovelty(s.novelty); if (nv) s.novelty = nv; else delete s.novelty; } // Phase 5C; saves from before have none
   if (!RELIGION_LABELS[s.religion]) s.religion = religionOf(s.seed, s.homeCountryCode, s.flags._pool, s.settings && s.settings.era, s.birthYear, s.name && s.name.full);
   return s;
 }

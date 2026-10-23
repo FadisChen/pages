@@ -8,6 +8,7 @@ import { JOBS, STAT_KEYS } from './systems.js';
 import { WEALTH_SHORT } from './birth.js';
 import { FOCUS_BY_ID, focusTimeline } from './focus.js';
 import { RELIGION_LABELS } from '../data/religion.js';
+import { composeEulogy } from './eulogy.js';
 
 export const EDU_LABELS = {
   none: '未受正式教育', primary: '小學', secondary: '中學', tertiary: '大學', graduate: '研究所',
@@ -133,7 +134,7 @@ export function getSummary(s) {
   }
   const kids = s.children;
   const highlights = curateHighlights(s.highlights);
-  return {
+  const sum = {
     name: s.name.full,
     gender: s.gender,
     birthYear: s.birthYear,
@@ -172,4 +173,7 @@ export function getSummary(s) {
     stats: statDigest(s.statHistory),
     statHistory: s.statHistory.map((r) => ({ ...r })),
   };
+  // Phase 5B: the 生平 (a pure function of the fields above, so an old record without it can be given one on the fly)
+  sum.eulogy = composeEulogy(sum);
+  return sum;
 }

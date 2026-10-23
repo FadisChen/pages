@@ -8,6 +8,7 @@ import { BY_CODE } from '../data/countries.js';
 import { MAP_W, MAP_H, SHAPES, ANCHORS, DOT_ONLY, TINY } from '../data/worldmap.js';
 import { lifeFacts } from './achievements.js';
 import { arcControl } from './worldmap.js';
+import { eulogyOf } from '../engine/eulogy.js';
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -437,7 +438,7 @@ export function drawShareCard(canvas, record) {
     [T.cardCompareWorld, sum.lifespan.worldLe, '#a79d89'],
   ];
   const maxBar = Math.max(100, ...barRows.map((r) => r[1])) * 1.0;
-  let by = rowEnd + 38;
+  let by = rowEnd + 34;
   g.textAlign = 'left';
   for (const [label, val, color] of barRows) {
     g.fillStyle = C.ink2;
@@ -456,16 +457,16 @@ export function drawShareCard(canvas, record) {
     g.textAlign = 'right';
     g.fillText(`${Math.round(val * 10) / 10}`, x0 + w0, by + 8);
     g.textAlign = 'left';
-    by += 44;
+    by += 37;
   }
 
   // odds: "這樣一生的機率  約 1／N" (the product of the birth lottery's draws and the age of death, engine/odds.js)
   let odds = null;
   try { odds = oddsFromSummary(sum, (record.meta && record.meta.drawMode) || 'births'); } catch (e) { odds = null; }
-  const oddsY = by - 44 + 34;
+  const oddsY = by - 37 + 28;
   let afterOdds = oddsY;
   if (odds) {
-    const bx = x0, bw = w0, bh = 76, byy = oddsY;
+    const bx = x0, bw = w0, bh = 72, byy = oddsY;
     g.save();
     roundRect(g, bx, byy, bw, bh, 16);
     g.fillStyle = 'rgba(180,67,44,0.08)';
@@ -480,19 +481,19 @@ export function drawShareCard(canvas, record) {
     g.fillStyle = C.accent;
     const bigPx = fitText(g, big, (p) => `800 ${p}px ${SERIF}`, 372, 50, 26);
     g.font = `800 ${bigPx}px ${SERIF}`;
-    g.fillText(big, bx + bw - 24, byy + 53);
+    g.fillText(big, bx + bw - 24, byy + 51);
     g.textAlign = 'left';
     g.fillStyle = C.ink;
     g.font = `700 27px ${SERIF}`;
-    g.fillText(S.odds.cardLabel, bx + 24, byy + 35);
+    g.fillText(S.odds.cardLabel, bx + 24, byy + 33);
     g.fillStyle = C.muted;
     fitText(g, S.odds.cardLead, (p) => `${p}px ${SANS}`, bw - 372 - 56, 21, 15);
-    g.fillText(S.odds.cardLead, bx + 24, byy + 61);
+    g.fillText(S.odds.cardLead, bx + 24, byy + 58);
     afterOdds = byy + bh;
   }
 
   // curves
-  const curveTop = afterOdds + 38;
+  const curveTop = afterOdds + 32;
   g.fillStyle = C.muted;
   g.font = `600 24px ${SANS}`;
   g.fillText(T.cardChartTitle, x0, curveTop);
@@ -512,32 +513,42 @@ export function drawShareCard(canvas, record) {
     g.fillText(S.life.statLabels[k], lx + 34, curveTop);
     lx += 34 + g.measureText(S.life.statLabels[k]).width + 22;
   }
-  drawCurves(g, sum.statHistory, x0, curveTop + 18, w0, 62);
+  drawCurves(g, sum.statHistory, x0, curveTop + 16, w0, 44);
 
-  // highlight + message. A message that needs three lines gets them (and the highlight line makes room); otherwise the
-  // highlight stays and the message has two lines. Whatever does not fit is cut with an ellipsis, never drawn past the paper.
-  let ty = curveTop + 18 + 62 + 26 + 36;
+  // The eulogy (a one or two sentence 生平) and the message. Both are cut with an ellipsis rather than drawn past the paper:
+  // the eulogy has two lines (its font shrinks a little before it is cut), the message three, or two when the card is crowded.
+  let ty = curveTop + 16 + 44 + 24 + 36;
   g.textAlign = 'left';
   const msg = (record.message || '').trim();
-  g.font = `500 32px ${SERIF}`;
-  const longMsg = msg ? wrap(g, msg, w0, 99).length > 2 : false;
-  const top = longMsg ? null : (sum.featuredHighlight || sum.highlights[0]);
-  if (top) {
+  const eu = eulogyOf(record).short;
+  if (eu) {
     g.fillStyle = C.ink2;
-    g.font = `28px ${SANS}`;
-    const line = wrap(g, `${T.cardHighlights}・${top.age} 歲　${top.text}`, w0, 1)[0];
-    g.fillText(line, x0, ty);
-    ty += 44;
+    // without a message there is room to set it larger
+    const sizes = msg ? [26, 24, 22] : [32, 30, 28, 26], maxLines = msg ? 2 : 3;
+    let lines = [], px = sizes[0];
+    for (px of sizes) {
+      g.font = `${px}px ${SERIF}`;
+      // each sentence starts a line (no lone last character on a second line)
+      lines = (eu.match(/[^。！？]+[。！？]?/g) || [eu]).flatMap((s) => wrap(g, s, w0, 99));
+      if (lines.length <= maxLines) break;
+    }
+    if (lines.length > maxLines) {
+      lines.length = maxLines;
+      let l = lines[maxLines - 1];
+      while (l.length > 1 && g.measureText(`${l}…`).width > w0) l = l.slice(0, -1);
+      lines[maxLines - 1] = `${l.replace(/[，。、；]$/, '')}…`;
+    }
+    for (const l of lines) { g.fillText(l, x0, ty); ty += Math.round(px * 1.35); }
+    ty += 10;
   }
   if (msg) {
     g.fillStyle = C.accent;
     g.font = `700 28px ${SERIF}`;
     g.fillText(`${ellipsize(g, `${T.cardMsgFrom}${sum.name}`, w0 - 36)}：`, x0, ty);
-    ty += 44;
+    ty += 41;
     g.fillStyle = C.ink;
     g.font = `500 32px ${SERIF}`;
-    const lines = wrap(g, msg, w0, top ? 2 : 3);
-    for (const l of lines) { g.fillText(l, x0, ty); ty += 44; }
+    for (const l of wrap(g, msg, w0, 3)) { g.fillText(l, x0, ty); ty += 41; }
   }
 
   // footer

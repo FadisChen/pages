@@ -12,6 +12,7 @@ import { badgeEl } from './collectionview.js';
 import { ACHIEVEMENTS, lifeFacts } from './achievements.js';
 import { oddsFromSummary, personalFromSummary } from '../engine/odds.js';
 import { focusTimelineCard } from './focusview.js';
+import { eulogyOf } from '../engine/eulogy.js';
 import { drawShareCard, cardToBlob, cardFileName, canShareImage, shareCard, CARD_W, CARD_H } from './sharecard.js';
 
 const T = S.summary;
@@ -62,6 +63,14 @@ function statsSection(sum) {
   return el('section', { class: 'card', 'aria-labelledby': 'sec-stats' },
     el('h2', { id: 'sec-stats', class: 'card-title' }, T.statsTitle),
     el('dl', { class: 'stat-grid' }, items.map(([k, v]) => el('div', { class: 'stat-item' }, el('dt', null, k), el('dd', null, v)))));
+}
+
+/** 生平: a few sentences about the whole life, at the top of the review (the stored text, or one composed now for an old record). */
+function eulogySection(record) {
+  const e = eulogyOf(record);
+  return el('section', { class: 'card eulogy-card', 'aria-labelledby': 'sec-eulogy', 'data-role': 'eulogy', 'data-shape': e.shape },
+    el('h2', { id: 'sec-eulogy', class: 'card-title' }, S.eulogy.title),
+    el('p', { class: 'eulogy-text', lang: 'zh-Hant' }, e.text));
 }
 
 /** 人生足跡: the birth country, the countries lived in and the order of the moves. */
@@ -133,6 +142,8 @@ export function renderReview(record, ctx, { mode, unlocked = [] }) {
     sum.cause ? el('p', { class: 'hero-cause' }, el('b', null, sum.cause.label), '・', sum.cause.text) : null,
     S.religion[sum.religion] ? el('p', { class: 'hero-religion', 'data-role': 'religion', title: S.focus.religionNote }, S.focus.religionLabel, '：', el('b', null, S.religion[sum.religion])) : null,
   ));
+
+  parts.push(eulogySection(record));
 
   if (sum.suicide) parts.push(helpCard('help-top'));
 

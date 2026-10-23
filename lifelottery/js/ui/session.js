@@ -11,6 +11,7 @@ let state = null;
 let recordId = null;
 let saveWarned = false;
 let fresh = false;
+let counted = false; // the events of this life are already in the cross-life counts (lifelottery.seenEvents)
 
 function newId() {
   return `l${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -22,6 +23,8 @@ function newId() {
  */
 function recordMeta(s) {
   const meta = { drawMode: s.settings && s.settings.drawMode === 'population' ? 'population' : 'births' };
+  const events = store.eventIdsOfState(s);
+  if (events.length) meta.events = events; // lets the cross-life counts be rebuilt from the album (storage.deriveSeenFromAlbum)
   const p = s.partner;
   if (p && Number.isFinite(p.since)) {
     const end = s.death ? s.death.year : s.year;
@@ -46,6 +49,8 @@ export const session = {
     if (saved) {
       state = saved.state;
       recordId = saved.recordId;
+      // a life that ended and got its album record before the reload was counted then
+      counted = !state.alive && !!recordId && !!store.getRecord(recordId);
     }
     return state;
   },
@@ -62,8 +67,12 @@ export const session = {
     const seed = params.get('seed') || `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
     const opts = {};
     if (params.get('country')) opts.countryCode = params.get('country');
-    state = createLife(settings, seed, opts);
+    // what earlier lives of this player met: events seen before are drawn less often and read differently (engine/events.js)
+    let novelty = {};
+    try { novelty = store.loadSeenEvents(); } catch (e) { novelty = {}; }
+    state = createLife(settings, seed, { ...opts, novelty });
     recordId = newId();
+    counted = false;
     fresh = true;
     this.persist();
     return state;
@@ -82,11 +91,20 @@ export const session = {
     if (!recordId) recordId = newId();
     let rec = store.getRecord(recordId);
     if (!rec) {
+      // count first: with no seenEvents yet, the counts are derived from the album, which must not contain this life already
+      this.countSeen();
       const res = store.putRecord({ id: recordId, savedAt: Date.now(), message: '', summary: getSummary(state), meta: recordMeta(state) });
       rec = res.record;
-    }
+    } else counted = true;
     this.persist();
     return rec;
+  },
+
+  /** Add the life in progress to the cross-life event counts, once. */
+  countSeen() {
+    if (!state || counted) return;
+    counted = true;
+    try { store.recordSeenEvents(state); } catch (e) { /* the counts are a nicety: the game goes on without them */ }
   },
 
   record() {
@@ -95,8 +113,10 @@ export const session = {
 
   /** Forget the life in progress (after the summary, or when the player abandons it). */
   discard() {
+    if (state && state.age > 0) this.countSeen(); // an abandoned life was still read
     state = null;
     recordId = null;
+    counted = false;
     store.clearSave();
   },
 

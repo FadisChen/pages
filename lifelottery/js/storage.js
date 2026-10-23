@@ -8,6 +8,7 @@ export const KEYS = {
   album: 'lifelottery.album',
   theme: 'lifelottery.theme',
   achievements: 'lifelottery.achievements',
+  seenEvents: 'lifelottery.seenEvents',
 };
 
 export const ALBUM_VERSION = 1;
@@ -211,6 +212,7 @@ export function normalizeSummary(x) {
     focus: focusId(x.focus),
     focusTimeline: arr(x.focusTimeline).slice(0, 20).filter((g) => g && typeof g === 'object' && Number.isFinite(g.fromAge) && Number.isFinite(g.toAge)).map((g) => ({ fromAge: num(g.fromAge), toAge: num(g.toAge), focus: focusId(g.focus), label: str(g.label, 12) })),
     riskTrail: riskTrail(x.riskTrail, x.age),
+    ...(x.eulogy && x.eulogy.v === 1 && typeof x.eulogy.text === 'string' ? { eulogy: { v: 1, text: str(x.eulogy.text, 400), short: str(x.eulogy.short, 120), shape: str(x.eulogy.shape, 12), slots: [], opening: str(x.eulogy.opening, 16) } } : {}), // Phase 5B: the life story is kept with the record
     highlights: arr(x.highlights).slice(0, 80).filter((h) => h && typeof h.text === 'string').map((h) => ({ age: num(h.age), year: num(h.year), text: str(h.text, 300) })),
     counts: { choices: num(counts.choices), events: num(counts.events), milestones: num(counts.milestones), years: num(counts.years, num(x.age)) },
     stats,
@@ -219,14 +221,17 @@ export function normalizeSummary(x) {
 }
 
 /**
- * Optional facts the game stores next to the summary when a life ends ({ drawMode, partnerYears }). Old records have none;
- * everything that reads them has a fallback (ui/achievements.js, engine/odds.js).
+ * Optional facts the game stores next to the summary when a life ends ({ drawMode, partnerYears, events }). Old records have none;
+ * everything that reads them has a fallback (ui/achievements.js, engine/odds.js, loadSeenEvents below). `events` lists the ids
+ * of the events the life met (Phase 5C), so the cross-life counts can be rebuilt from an album that has no seenEvents.
  */
 export function normalizeMeta(m) {
   if (!m || typeof m !== 'object') return undefined;
   const out = {};
   if (m.drawMode === 'births' || m.drawMode === 'population') out.drawMode = m.drawMode;
   if (typeof m.partnerYears === 'number' && Number.isFinite(m.partnerYears)) out.partnerYears = Math.max(0, Math.min(120, Math.round(m.partnerYears)));
+  const events = eventIdList(m.events);
+  if (events.length) out.events = events;
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -296,6 +301,100 @@ export function clearAlbum() {
   albumCache = [];
   persistAlbum();
   removeRaw(KEYS.achievements); // a fresh album announces its achievements again
+  removeRaw(KEYS.seenEvents);   // ... and a fresh start meets every event as new again
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cross-life novelty (Phase 5C): how many of the player's lives met each event, { eventId: lives }, stored as
+// { v: 1, lives, counts }. createLife({ novelty }) turns it into lower odds for what the player has seen before and into a
+// different phrasing the next time; only ids and counts are kept.
+// ---------------------------------------------------------------------------------------------
+
+const SEEN_ID = /^(yearly:\d{1,4}|[a-z][a-z0-9_]{0,80})$/;
+const SEEN_MAX_IDS = 2000;
+const SEEN_MAX_COUNT = 999;
+
+/** Event ids (no "yearly:" lines) from an unknown value, de-duplicated and capped. */
+function eventIdList(v) {
+  if (!Array.isArray(v)) return [];
+  const out = new Set();
+  for (const id of v) if (typeof id === 'string' && SEEN_ID.test(id) && !id.startsWith('yearly:')) out.add(id);
+  return [...out].slice(0, 400);
+}
+
+/** A clean `{ id: count }` (valid ids, integer counts of 1..999) from an unknown value. */
+function cleanSeen(counts) {
+  const out = {};
+  if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return out;
+  let n = 0;
+  for (const [id, c] of Object.entries(counts)) {
+    if (!SEEN_ID.test(id) || !(c >= 1) || n >= SEEN_MAX_IDS) continue;
+    out[id] = Math.min(SEEN_MAX_COUNT, Math.floor(c));
+    n++;
+  }
+  return out;
+}
+
+/** Ids of the events a life met: the keys of `state.seen` (event ids and "yearly:N" lines). */
+export function seenIdsOfState(state) {
+  return state && state.seen && typeof state.seen === 'object' ? Object.keys(state.seen).filter((id) => SEEN_ID.test(id)) : [];
+}
+
+/** Ids for the album record's `meta.events`: the events of the life (the "ordinary year" lines are left out to keep records small). */
+export function eventIdsOfState(state) {
+  return eventIdList(seenIdsOfState(state));
+}
+
+/**
+ * Rebuild the counts from album records: one life per record, using `meta.events` (or a log with event ids, `eventId` / `id`,
+ * if a record has one). Records from before Phase 5C carry neither, so an old album simply yields {} (counting starts from zero).
+ */
+export function deriveSeenFromAlbum(list = loadAlbum()) {
+  const counts = {};
+  let lives = 0;
+  for (const r of list) {
+    const ids = new Set(eventIdList(r && r.meta && r.meta.events));
+    const log = r && (r.log || (r.summary && r.summary.log));
+    if (Array.isArray(log)) for (const e of log) { const id = e && (e.eventId || e.id); if (typeof id === 'string' && SEEN_ID.test(id)) ids.add(id); }
+    if (!ids.size) continue;
+    lives++;
+    for (const id of ids) counts[id] = (counts[id] || 0) + 1;
+  }
+  return { counts: cleanSeen(counts), lives };
+}
+
+function writeSeen(counts, lives) {
+  return writeRaw(KEYS.seenEvents, JSON.stringify({ v: 1, lives, counts }));
+}
+
+/**
+ * The counts to hand to createLife({ novelty }). Never throws; {} when nothing is known. A player who has an album but no
+ * seenEvents yet (a save from before this feature, or an imported album) gets the counts derived from the album, once.
+ */
+export function loadSeenEvents() {
+  const raw = readJSON(KEYS.seenEvents);
+  if (raw && typeof raw === 'object' && raw.counts) return cleanSeen(raw.counts);
+  let derived = { counts: {}, lives: 0 };
+  try { derived = deriveSeenFromAlbum(); } catch (e) { /* unreadable album: start from zero */ }
+  if (Object.keys(derived.counts).length) writeSeen(derived.counts, derived.lives);
+  return derived.counts;
+}
+
+/**
+ * Add one life to the counts (each event the life met counts once). Returns the new counts. Without a stored value the
+ * counts are first derived from the album, so an old player does not start over.
+ */
+export function recordSeenEvents(state) {
+  const counts = loadSeenEvents();
+  const raw = readJSON(KEYS.seenEvents);
+  const lives = (raw && Number.isFinite(raw.lives) ? raw.lives : 0) + 1;
+  for (const id of seenIdsOfState(state)) counts[id] = Math.min(SEEN_MAX_COUNT, (counts[id] || 0) + 1);
+  writeSeen(cleanSeen(counts), lives);
+  return counts;
+}
+
+export function clearSeenEvents() {
+  removeRaw(KEYS.seenEvents);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -11,7 +11,7 @@
 import ALL_EVENTS from '../data/events/index.js';
 import YEARLY from '../data/yearly.js';
 import { STAT_KEYS, applyDelta, pushLog, addHighlight } from './systems.js';
-import { rand, randInt, weightedIndex, chance } from './rng.js';
+import { rand, randInt, weightedIndex, chance, hash01 } from './rng.js';
 import { focusEventMult } from './focus.js';
 
 export const EFFECT_KEYS = STAT_KEYS;
@@ -27,6 +27,81 @@ export const TUNING = {
 };
 
 // ---------------------------------------------------------------------------------------------
+// Cross-life novelty (Phase 5C)
+//
+// `state.novelty` is a snapshot of how many earlier lives of this player met each event: { eventId: lives, 'yearly:7': lives }.
+// It exists only when createLife was given one (the game passes localStorage "lifelottery.seenEvents"); without it every
+// function below returns the neutral value and the engine behaves exactly as before (same random numbers, same log).
+//   * weight of an ordinary event x noveltyFactor(count) = max(0.4, 1 / (1 + 0.45 x count))
+//   * the same factor thins out the "ordinary year" lines
+//   * an event with `variants` rotates through its phrasings: variant = (hash(seed, id) + count) mod (1 + variants.length)
+// ---------------------------------------------------------------------------------------------
+
+export const NOVELTY = { floor: 0.4, slope: 0.45, maxCount: 99 };
+
+/** Weight multiplier for something the player has met in `count` earlier lives. */
+export function noveltyFactor(count) {
+  return count > 0 ? Math.max(NOVELTY.floor, 1 / (1 + NOVELTY.slope * count)) : 1;
+}
+
+/** A clean `{ id: count }` copy (finite positive integers only), or null when there is nothing in it. */
+export function sanitizeNovelty(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  let n = 0;
+  for (const [id, c] of Object.entries(raw)) {
+    if (!/^(yearly:\d{1,4}|[a-z][a-z0-9_]{0,80})$/.test(id)) continue;
+    const v = Math.min(NOVELTY.maxCount, Math.floor(+c));
+    if (v >= 1) { out[id] = v; n++; }
+  }
+  return n ? out : null;
+}
+
+const noveltyCount = (s, key) => (s.novelty && s.novelty[key]) || 0;
+
+/** Events the novelty weighting leaves alone: milestones, chance-type (calendar / life-stage) events, world events, follow-ups and story chains. */
+function noveltyExempt(ev) {
+  if (ev.novelty === false || ev.milestone || ev.chance !== undefined || ev.weight === 0) return true;
+  if (ev.id.startsWith('world_')) return true;
+  const tags = ev.tags || [];
+  return tags.includes('world') || tags.includes('era') || tags.includes('followup') || tags.includes('chain') || tags.includes('milestone');
+}
+
+const NOVELTY_EXEMPT = new Set();
+
+/** Is this event left alone by the novelty weighting (tests and the debug panel)? */
+export function isNoveltyExempt(id) { return NOVELTY_EXEMPT.has(id); }
+
+/** Weight multiplier of an event for this life (1 without novelty, for exempt events and for events never met before). */
+function noveltyMult(s, ev) {
+  if (!s.novelty || NOVELTY_EXEMPT.has(ev.id)) return 1;
+  return noveltyFactor(s.novelty[ev.id] || 0);
+}
+
+/** Which phrasing of `key` (an event id or "yearly:N") this life uses: 0 = the main text, i >= 1 = variants[i - 1]. */
+function variantIndex(s, key, n) {
+  if (n <= 1) return 0;
+  return (Math.floor(hash01(`${s.seed}|variant|${key}`) * n) + noveltyCount(s, key)) % n;
+}
+
+/**
+ * The phrasings of `spec` (an event or a yearly template) for this life: `main` is the event's own text, `list` is every
+ * phrasing in preference order (`list[0]` is the one this life uses, the rest follow in rotation order as fallbacks).
+ * The main text is always rendered first and exactly once, as before: it is what repeat detection compares, and it keeps every
+ * random number it may draw where it always was, so a variant never changes which events fire. Variants therefore must not
+ * use random numbers or change the state.
+ */
+function renderText(s, h, spec, key) {
+  const main = str(spec.text, s, h);
+  const vs = spec.variants;
+  if (!vs || !vs.length) return { main, list: [main] };
+  const n = vs.length + 1;
+  const first = variantIndex(s, key, n);
+  const all = [main, ...vs.map((v) => str(v, s, h))];
+  return { main, list: Array.from({ length: n }, (_, k) => all[(first + k) % n]) };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Indexing and validation
 // ---------------------------------------------------------------------------------------------
 
@@ -40,9 +115,11 @@ export function isMajor(ev) {
 
 function indexEvents(list) {
   BY_ID.clear();
+  NOVELTY_EXEMPT.clear();
   for (const b of BY_AGE) { b.regular.length = 0; b.major.length = 0; b.chance.length = 0; }
   for (const ev of list) {
     BY_ID.set(ev.id, ev);
+    if (noveltyExempt(ev)) NOVELTY_EXEMPT.add(ev.id);
     const [a, b] = ev.ages || [0, 120];
     for (let age = Math.max(0, a); age <= Math.min(121, b); age++) {
       const bucket = BY_AGE[age];
@@ -104,6 +181,7 @@ export function validateEvents(list, byId = null) {
     if (ev.followCond !== undefined && typeof ev.followCond !== 'function') errors.push(`${w}: followCond must be a function`);
     if (typeof ev.text !== 'function' && typeof ev.text !== 'string') errors.push(`${w}: text must be a string or function`);
     if (ev.once !== undefined && typeof ev.once !== 'boolean') errors.push(`${w}: once must be boolean`);
+    if (ev.variants !== undefined && (!Array.isArray(ev.variants) || !ev.variants.length || ev.variants.some((v) => (typeof v !== 'string' && typeof v !== 'function') || v === ''))) errors.push(`${w}: variants must be a non-empty array of strings or functions`);
     if (ev.again !== undefined && typeof ev.again !== 'string' && typeof ev.again !== 'function') errors.push(`${w}: again must be a string or function`);
     if (ev.max !== undefined && !(Number.isInteger(ev.max) && ev.max >= 1)) errors.push(`${w}: max must be a positive integer`);
     if (ev.cooldown !== undefined && !(Number.isInteger(ev.cooldown) && ev.cooldown >= 0)) errors.push(`${w}: cooldown must be a non-negative integer`);
@@ -163,6 +241,7 @@ function weightOf(s, h, ev) {
 function pickWeighted(s, h, list, nullWeight = 0) {
   if (!list.length) return null;
   const w = list.map((ev) => weightOf(s, h, ev));
+  if (s.novelty) for (let i = 0; i < w.length; i++) w[i] *= noveltyMult(s, list[i]); // events met in earlier lives are drawn less often
   if (nullWeight > 0) w.push(nullWeight);
   const i = weightedIndex(s.rng, w);
   return i < 0 || i >= list.length ? null : list[i];
@@ -252,26 +331,40 @@ function textHash(t) {
   return x >>> 0;
 }
 
-/** First firing: remember the text only for repeatable events (once-only events never need the history). */
-function recordFirst(s, ev, text) {
-  if (ev.once === false) ((s.flags._rt ||= {})[ev.id] ||= []).push(textHash(text));
-  return text;
+/**
+ * First firing: remember the text only for repeatable events (once-only events never need the history). `_rt` keeps one
+ * hash of the main text per firing (the repeat detector); `_rtv` keeps the hashes of the phrasings actually shown, for events with variants.
+ */
+function recordFirst(s, ev, r) {
+  if (ev.once === false) {
+    ((s.flags._rt ||= {})[ev.id] ||= []).push(textHash(r.main));
+    if (r.list.length > 1) ((s.flags._rtv ||= {})[ev.id] ||= []).push(textHash(r.list[0]));
+  }
+  return r.list[0];
 }
 
 /**
  * The text this firing of `ev` shows, or null when the event has nothing new to say: a repeatable event never
  * repeats a text word for word within one life. A repeat uses the event's `again` text (string or function) when it
- * has one; otherwise it is skipped (its cooldown still starts).
+ * has one; otherwise it is skipped (its cooldown still starts). Whether it repeats is decided by the main text alone
+ * (as it always was); an event with variants then shows the first phrasing it has not shown in this life.
  */
 function freshText(s, h, ev) {
   const hist = (s.flags._rt ||= {});
   const shown = (hist[ev.id] ||= []);
-  let text = str(ev.text, s, h);
-  let hash = textHash(text);
-  if (shown.includes(hash) && ev.again !== undefined) {
-    text = str(ev.again, s, h);
-    hash = textHash(text);
+  const r = renderText(s, h, ev, ev.id);
+  const mainHash = textHash(r.main);
+  if (!shown.includes(mainHash)) {
+    shown.push(mainHash);
+    if (r.list.length === 1) return r.list[0];
+    const said = ((s.flags._rtv ||= {})[ev.id] ||= []);
+    const text = r.list.find((t) => !said.includes(textHash(t))) ?? r.list[0];
+    said.push(textHash(text));
+    return text;
   }
+  if (ev.again === undefined) return null;
+  const text = str(ev.again, s, h);
+  const hash = textHash(text);
   if (shown.includes(hash)) return null;
   shown.push(hash);
   return text;
@@ -307,7 +400,7 @@ function entryFirst(s, from, entry) {
 /** Fire a non-choice event. Returns the log entry, or null when a repeat had nothing new to say. */
 function fireRegular(s, h, ev) {
   const again = s.seen[ev.id] !== undefined;
-  const text = again ? freshText(s, h, ev) : (recordFirst(s, ev, str(ev.text, s, h)));
+  const text = again ? freshText(s, h, ev) : (recordFirst(s, ev, renderText(s, h, ev, ev.id)));
   markSeen(s, ev);
   if (text === null) return null;
   const from = s.log.length;
@@ -335,7 +428,7 @@ function presentChoice(s, h, ev) {
   });
   if (options.length === 0) return null;
   const again = s.seen[ev.id] !== undefined;
-  const text = again ? freshText(s, h, ev) : recordFirst(s, ev, str(ev.text, s, h));
+  const text = again ? freshText(s, h, ev) : recordFirst(s, ev, renderText(s, h, ev, ev.id));
   markSeen(s, ev);
   if (text === null) return null;
   const from = s.log.length;
@@ -417,14 +510,16 @@ function pickYearly(s, h) {
   if (!use.length) return null;
   // Narrow lines first: a line that fits only a few ages is used while it fits, broad ones are kept for later years.
   const narrow = (i) => { const [a, b] = YEARLY[i].ages || [0, 120]; return 1 + 40 / (Math.min(b, 105) - a + 1); };
-  const idx = use[weightedIndex(s.rng, use.map((i) => (YEARLY[i].weight ?? 1) * narrow(i)))];
+  // Lines an earlier life of this player already used come up less often (the same factor as ordinary events).
+  const fresh = (i) => (s.novelty ? noveltyFactor(s.novelty[`yearly:${i}`] || 0) : 1);
+  const idx = use[weightedIndex(s.rng, use.map((i) => (YEARLY[i].weight ?? 1) * narrow(i) * fresh(i)))];
   s.seen[`yearly:${idx}`] = s.age;
-  return YEARLY[idx];
+  return { t: YEARLY[idx], key: `yearly:${idx}` };
 }
 
 function yearlyEntry(s, h) {
-  const t = pickYearly(s, h);
-  const text = t ? t.text(s, h) : '平凡的一年悄悄過去。';
+  const pick = pickYearly(s, h);
+  const text = pick ? renderText(s, h, pick.t, pick.key).list[0] : '平凡的一年悄悄過去。';
   return pushLog(s, 'year', `${s.age} 歲`, text);
 }
 

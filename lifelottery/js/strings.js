@@ -197,6 +197,18 @@ export const S = {
     eduStudying: '就學中',
   },
 
+  // Phase 5A: pacing of the life screen (hold to accelerate)
+  pacing: {
+    boostChip: '快轉中',
+    holdHint: '按住畫面（電腦：按住 Shift）可以暫時加速，放開就恢復。',
+    shortcutHold: ['按住 Shift', '暫時加速，放開即恢復（手機：按住畫面）'],
+  },
+  // Phase 5B: the 生平 (a few sentences about the finished life; engine/eulogy.js writes them)
+  eulogy: {
+    title: '生平',
+    aria: (name) => `${name}的生平`,
+    note: '依這一生留下的紀錄寫成，同一段人生永遠是同一段話。',
+  },
   focus: {
     chipLabel: '人生重心',
     chip: (label) => `重心：${label}`,
