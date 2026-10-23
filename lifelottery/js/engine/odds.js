@@ -163,3 +163,68 @@ export function oddsFromSummary(sum, drawMode = 'births') {
     deathAge: Number.isFinite(sum.age) ? sum.age : null,
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// Personal odds: how likely was it to get this far with THIS life's health and risks?
+// ---------------------------------------------------------------------------------------------
+//
+// The headline 約 1／N above is a population probability: it uses the country's average life table and does not know whether
+// this person was healthy or frail. This is the second, separate question. During the game every year's death check uses
+// q(age) x m(age), where m is the personal risk multiplier (health against the age norm, wealth, smoking, chronic
+// conditions, events, life focus; normalised so the population average is 1, see mortality.js). The engine keeps the m that
+// it actually applied in each year (`state.flags._riskTrail`, `summary.riskTrail`), so
+//
+//   P(reach age a | this life's risks) = prod over x < a of (1 - min(1, q(x) m(x)))
+//
+// is computed from the real thing, not from the final stats. It is compared with the same product without the personal
+// factor (the baseline, = the life table's survival to a). The two answers must not be multiplied together: the headline
+// already contains the chance of dying at exactly that age.
+
+/**
+ * @param {{ countryCode: string, birthYear: number, gender: 'F'|'M', deathAge: number, riskTrail: number[] }} life
+ *   `riskTrail[x]` is the multiplier applied in the year of life x (ages 0 .. deathAge-1 are needed).
+ * @returns {{ age: number, p: number, baseline: number, ratio: number } | null}
+ *   null when the data is missing or incomplete (old records have no trail), or for a life that ended before age 1.
+ */
+export function personalSurvival(life) {
+  if (!life) return null;
+  const country = BY_CODE[life.countryCode];
+  const age = Math.floor(life.deathAge);
+  const trail = life.riskTrail;
+  if (!country || !Number.isFinite(age) || age < 1 || age > MAX_AGE || !Array.isArray(trail) || trail.length < age) return null;
+  const table = lifeTable(country, life.gender === 'M' ? 'M' : 'F', life.birthYear);
+  let p = 1, baseline = 1;
+  for (let x = 0; x < age; x++) {
+    const m = trail[x];
+    if (!Number.isFinite(m) || m < 0) return null;
+    baseline *= 1 - table.q[x];
+    p *= 1 - Math.min(1, table.q[x] * m);
+  }
+  p = Math.max(p, 1e-12);
+  baseline = Math.max(baseline, 1e-12);
+  return { age, p, baseline, ratio: p / baseline };
+}
+
+/** Personal survival of an engine state that has died (null while the person is alive or has no trail). */
+export function personalFromState(s) {
+  if (!s || !s.death) return null;
+  return personalSurvival({
+    countryCode: s.homeCountryCode,
+    birthYear: s.birthYear,
+    gender: s.gender,
+    deathAge: s.death.age,
+    riskTrail: s.flags && s.flags._riskTrail,
+  });
+}
+
+/** Personal survival from an album summary (old records without `riskTrail` give null). */
+export function personalFromSummary(sum) {
+  if (!sum || !sum.homeCountry || !Array.isArray(sum.riskTrail)) return null;
+  let code = sum.homeCountry.code;
+  if (!BY_CODE[code]) {
+    const byName = COUNTRIES.find((c) => c.name === sum.homeCountry.name);
+    code = byName ? byName.code : null;
+  }
+  if (!code || !Number.isFinite(sum.birthYear)) return null;
+  return personalSurvival({ countryCode: code, birthYear: sum.birthYear, gender: sum.gender, deathAge: sum.age, riskTrail: sum.riskTrail });
+}

@@ -347,7 +347,7 @@ dialog { color: var(--ink); }
 }
 .tile-title { font-weight: 700; }
 .tile-desc { font-size: 0.8125rem; color: var(--muted); line-height: 1.45; }
-.tile input:checked + label { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.tile input:checked + label { border-color: var(--accent); background: var(--accent-soft); }
 .tile input:checked + label .tile-title::after { content: " ✓"; color: var(--accent); }
 .tile input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: 2px; }
 .tile:hover label { border-color: var(--accent); }
@@ -942,3 +942,178 @@ dialog { color: var(--ink); }
 @media (min-width: 600px) { .badges { gap: 14px; } }
 @media (max-width: 359px) { .col-tiles { gap: 8px; } .odds-row-top { flex-direction: column; gap: 0; } }
 .list-title { margin: 26px 0 -2px; font-size: 1.25rem; }
+
+/* ---------------------------------------------------------------------------------------------
+   14. Life focus, map zoom, personal odds (Phase 4B)
+   --------------------------------------------------------------------------------------------- */
+:root {
+  /* one colour per life focus: the same hues as the stat each one feeds (so both themes are covered by the stat tokens) */
+  --fc-balance: color-mix(in srgb, var(--muted) 70%, var(--surface-3));
+  --fc-study: var(--c-knowledge);
+  --fc-work: var(--c-wealth);
+  --fc-family: var(--c-social);
+  --fc-health: var(--c-health);
+  --fc-self: var(--c-happiness);
+}
+.fc-balance { --fc: var(--fc-balance); }
+.fc-study { --fc: var(--fc-study); }
+.fc-work { --fc: var(--fc-work); }
+.fc-family { --fc: var(--fc-family); }
+.fc-health { --fc: var(--fc-health); }
+.fc-self { --fc: var(--fc-self); }
+.icon-inline { width: 1.05em; height: 1.05em; vertical-align: -0.16em; flex: none; }
+
+/* header chip */
+.life-side { gap: 6px; }
+.life-meta-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.life-meta-row .life-meta { flex: 0 1 auto; min-width: 0; }
+.life-meta-row .paused-chip { flex: none; padding: 0 7px; line-height: 1.5; }
+.focus-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; max-width: 150px; padding: 0 11px 0 9px;
+  border: 1.5px solid var(--line-strong); border-radius: 999px; background: var(--surface-2); color: var(--ink);
+  font-size: 0.875rem; font-weight: 700; line-height: 1.2;
+}
+.focus-chip:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.focus-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.focus-chip .icon { width: 18px; height: 18px; color: var(--accent); flex: none; }
+.focus-chip[data-focus="study"] .icon { color: var(--fc-study); }
+.focus-chip[data-focus="work"] .icon { color: var(--fc-work); }
+.focus-chip[data-focus="family"] .icon { color: var(--fc-family); }
+.focus-chip[data-focus="health"] .icon { color: var(--fc-health); }
+.focus-chip[data-focus="self"] .icon { color: var(--fc-self); }
+.focus-chip[data-focus="balance"] .icon { color: var(--muted); }
+.focus-chip-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 459px) {
+  .family-btn { padding: 0 10px; min-width: 42px; }
+  .family-label { display: none; }
+  .focus-chip { max-width: 132px; }
+}
+
+/* the list of foci (stage card and selector) */
+.focus-picker { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; display: grid; gap: 10px; position: relative; z-index: 1; }
+.focus-opt { position: relative; display: block; cursor: pointer; }
+.focus-opt input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.focus-body {
+  position: relative; display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start; padding: 11px 14px 11px 18px;
+  background: var(--surface-2); border: 1.5px solid var(--line-strong); border-radius: 12px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.focus-body::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 6px; border-radius: 0 4px 4px 0; background: var(--fc, var(--line-strong)); }
+.focus-opt:hover .focus-body { border-color: var(--accent); background: var(--accent-soft); }
+.focus-opt input:checked + .focus-body { border-color: var(--accent); background: var(--accent-soft); }
+.focus-opt input:focus-visible + .focus-body { outline: 3px solid var(--focus); outline-offset: 2px; }
+.focus-num {
+  display: grid; place-items: center; width: 30px; height: 30px; margin-top: 1px; border-radius: 50%; font-weight: 800;
+  border: 2px solid var(--line-strong); color: var(--ink-2); background: var(--surface);
+}
+.focus-opt input:checked + .focus-body .focus-num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.focus-main { display: grid; gap: 2px; min-width: 0; }
+.focus-name { font-weight: 700; font-size: 1.0625rem; line-height: 1.5; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.focus-name .tag { font-size: 0.6875rem; padding: 2px 7px; }
+.focus-desc { font-size: 0.875rem; line-height: 1.6; color: var(--ink-2); }
+.focus-effect { font-size: 0.8125rem; line-height: 1.5; color: var(--accent); font-weight: 600; }
+/* on phones only the chosen focus shows its long description, so six options still fit on one screen */
+@media (max-width: 559px) {
+  .choice-card .focus-opt input:not(:checked) + .focus-body .focus-desc { display: none; }
+  .focus-body { padding-block: 9px; }
+}
+.focus-confirm { margin-top: 2px; position: relative; z-index: 1; }
+.focus-lead { margin: 10px 0 14px; }
+.focus-drawer .drawer-body { padding-top: 6px; }
+.focus-card-live .choice-text { font-size: 0.9375rem; line-height: 1.75; color: var(--ink-2); }
+.kind-focus .entry-text { font-size: 0.9375rem; color: var(--ink-2); }
+.kind-focus .entry-text b { color: var(--accent); }
+.kind-focus .entry-text .icon-inline { color: var(--accent); }
+.kind-focus .entry-body { border-left-style: dashed; }
+.focus-note { display: flex; gap: 8px; align-items: flex-start; }
+.focus-note .icon { margin-top: 0.25em; color: var(--accent); }
+
+/* review: focus timeline */
+.ft { margin-top: 14px; }
+.ft-bar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-strong); background: var(--surface-3); }
+.ft-seg {
+  flex: var(--w) 1 0; min-width: 4px; display: grid; place-items: center; overflow: hidden; white-space: nowrap;
+  background-color: var(--fc); color: var(--accent-ink); font: 700 0.8125rem var(--font-sans);
+  box-shadow: inset -2px 0 0 var(--surface);
+}
+.ft-seg:last-child { box-shadow: none; }
+.ft-seg-label { padding: 0 4px; text-shadow: 0 0 6px color-mix(in srgb, var(--fc) 70%, transparent); }
+/* a pattern per focus, so the bar does not rely on colour alone */
+.ft-seg.fc-study, .ft-sw-study, .ft-legend .fc-study .ft-sw { background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent-ink) 26%, transparent) 0 2px, transparent 2px 7px); }
+.ft-seg.fc-work, .ft-legend .fc-work .ft-sw { background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent-ink) 26%, transparent) 0 2px, transparent 2px 7px); }
+.ft-seg.fc-family, .ft-legend .fc-family .ft-sw { background-image: radial-gradient(color-mix(in srgb, var(--accent-ink) 34%, transparent) 1.4px, transparent 1.8px); background-size: 7px 7px; }
+.ft-seg.fc-health, .ft-legend .fc-health .ft-sw { background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--accent-ink) 26%, transparent) 0 2px, transparent 2px 7px); }
+.ft-seg.fc-self, .ft-legend .fc-self .ft-sw { background-image: repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent-ink) 26%, transparent) 0 2px, transparent 2px 7px); }
+.ft-axis { position: relative; height: 20px; margin-top: 4px; font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ft-axis span { position: absolute; top: 0; left: var(--x, 0); transform: translateX(-50%); line-height: 1.6; }
+.ft-axis span:first-child { transform: none; }
+.ft-axis span.is-end { display: none; }
+.ft-axis .ft-axis-end { left: auto; right: 0; transform: none; }
+.ft-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 0.875rem; }
+.ft-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.ft-legend b { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; font-size: 0.8125rem; }
+.ft-sw { width: 16px; height: 16px; border-radius: 4px; background-color: var(--fc); border: 1px solid color-mix(in srgb, var(--fc) 60%, var(--ink)); flex: none; }
+.hero-religion { margin: 8px 0 0; font-size: 0.875rem; color: var(--muted); }
+.hero-religion b { color: var(--ink-2); font-weight: 700; }
+
+/* odds: the personal line */
+.odds-personal-row { margin-top: 10px; padding: 12px 2px 4px; border-bottom: 0; border-top: 2px solid var(--gold); }
+.odds-personal-row .odds-label { color: var(--ink); font-weight: 700; line-height: 1.55; }
+.odds-personal-row .odds-val { color: var(--gold); font-size: 1.125rem; white-space: nowrap; }
+.odds-personal-sub { margin: 4px 0 0; font-size: 0.8125rem; color: var(--ink-2); }
+.odds-personal-note { margin: 6px 0 0; font-size: 0.75rem; line-height: 1.7; color: var(--muted); }
+
+/* maps: the small map is a button that opens the zoom view */
+button.wm-wrap { display: block; width: 100%; padding: 0; cursor: zoom-in; text-align: inherit; color: inherit; font: inherit; }
+button.wm-wrap:hover { border-color: var(--accent); }
+.wm-zoom-hint {
+  position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px 3px 6px;
+  border-radius: 999px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface) 90%, transparent);
+  font: 700 0.75rem/1.4 var(--font-sans); color: var(--ink-2); pointer-events: none;
+}
+.wm-zoom-hint .icon { width: 16px; height: 16px; }
+button.wm-wrap:hover .wm-zoom-hint { color: var(--ink); border-color: var(--accent); }
+
+.mapzoom {
+  position: fixed; inset: 0; margin: 0; padding: 0; width: 100%; max-width: none; height: 100%; max-height: none;
+  border: 0; border-radius: 0; background: var(--bg); color: var(--ink);
+}
+.mapzoom[open] { display: flex; flex-direction: column; }
+.mapzoom::backdrop { background: var(--overlay); }
+html:has(dialog.mapzoom[open]) { overflow: hidden; }
+.mz-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 16px; border-bottom: 1px solid var(--line); flex: none; }
+.mz-title { margin: 0; font-size: 1.0625rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mz-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.mz-stage { position: relative; flex: 1; min-width: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; outline-offset: -4px; }
+.mz-stage.is-dragging { cursor: grabbing; }
+.mz-stage .wm-wrap { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; }
+.mz-stage .wm { width: 100%; height: 100%; }
+.mz-controls { position: absolute; right: 12px; bottom: 14px; z-index: 2; display: grid; gap: 8px; justify-items: center; }
+.mz-btn {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; padding: 0;
+  border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+}
+.mz-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.mz-btn:active:not(:disabled) { transform: translateY(1px); }
+.mz-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mz-btn .icon { width: 24px; height: 24px; }
+.mz-level { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: 700 0.75rem/1.5 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.mz-tip {
+  position: absolute; z-index: 3; pointer-events: none; max-width: calc(100% - 12px); padding: 7px 13px; border-radius: 10px;
+  background: var(--ink); color: var(--bg); font: 700 0.9375rem/1.4 var(--font-sans); box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+.mz-foot { flex: none; padding: 8px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); text-align: center; }
+.mz-foot .map-legend { margin-top: 2px; }
+.mz-caption { margin: 6px 0 0; font-size: 0.875rem; }
+.mz-help { margin: 4px 0 0; }
+@media (max-height: 520px) { .mz-foot { display: none; } }
+
+/* inside the zoom view: constant-width outlines, and markers that shrink while the shapes grow (--zm is set by ui/mapzoom.js) */
+.wm-zoom .wm-land { stroke-width: 0.7px; vector-effect: non-scaling-stroke; }
+.wm-zoom .wm-hi { stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.wm-zoom .wm-sc { transform-box: fill-box; transform-origin: center; transform: scale(var(--zm, 1)); vector-effect: non-scaling-stroke; }
+.wm-zoom .wm-dot { stroke-width: 1.5px; }
+.wm-zoom .wm-tiny, .wm-zoom .wm-tiny.n1, .wm-zoom .wm-tiny.n2, .wm-zoom .wm-tiny.n3, .wm-zoom .wm-tiny.n4 { stroke-width: 2px; }
+.wm-zoom .wm-stop, .wm-zoom .wm-pin-dot { stroke-width: 2px; }
+.wm-zoom .wm-arc { stroke-width: 2.5px; vector-effect: non-scaling-stroke; stroke-dasharray: 7 6; stroke-dashoffset: 0; animation: none; }
+.wm-zoom .wm-hi { cursor: pointer; }

@@ -39,6 +39,7 @@ export default function mount(ctx, root) {
   const form = el('form', { class: 'setup-form', novalidate: true },
     era, mode, pace, auto,
     el('p', { class: 'fine' }, T.pace.note),
+    el('p', { class: 'fine focus-note', 'data-role': 'focus-note' }, icon('target', 'icon icon-inline'), ' ', T.focusNote),
     el('p', { class: 'fine notice-inline' }, el('span', { class: 'notice-badge small', 'aria-hidden': 'true' }, S.landing.noticeBadge), ' ', T.notice),
     el('div', { class: 'form-actions' },
       el('button', { class: 'btn btn-primary btn-lg', type: 'submit' }, icon('star'), T.submit),

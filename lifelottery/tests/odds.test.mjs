@@ -8,8 +8,11 @@ import { createLife, advanceYear } from '../js/engine/life.js';
 import { drawBirth, drawCountry } from '../js/engine/birth.js';
 import { createRngState } from '../js/engine/rng.js';
 import { getSummary } from '../js/engine/summary.js';
+import { lifeTable } from '../js/engine/mortality.js';
+import { normalizeSummary } from '../js/storage.js';
 import {
   lifeOdds, oddsFromState, oddsFromSummary, humanizeOneIn, countryShare, genderShare, urbanShare, deathAtAge, SCALES,
+  personalSurvival, personalFromState, personalFromSummary,
 } from '../js/engine/odds.js';
 
 const close = (a, b, rel = 1e-10) => Math.abs(a - b) <= rel * Math.max(Math.abs(a), Math.abs(b), 1e-300);
@@ -154,4 +157,120 @@ test('oddsFromSummary copes with old / odd records', () => {
   assert.equal(oddsFromSummary({ ...sum, homeCountry: { code: '', name: '不存在國' } }), null);
   assert.equal(oddsFromSummary(null), null);
   assert.equal(oddsFromSummary({ ...sum, birthYear: undefined }), null);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Personal odds (Phase 4B): P(reach this age | the risk multipliers this life really had)
+// ---------------------------------------------------------------------------------------------
+
+const survivalTo = (code, gender, year, age) => {
+  const table = lifeTable(BY_CODE[code], gender, year);
+  let p = 1;
+  for (let x = 0; x < age; x++) p *= 1 - table.q[x];
+  return p;
+};
+const flat = (n, m) => new Array(n).fill(m);
+
+test('personalSurvival: with no personal factor (all multipliers 1) it is exactly the life table survival', () => {
+  for (const [code, g, year, age] of [['TWN', 'F', 2026, 83], ['NGA', 'M', 1971, 37], ['JPN', 'F', 2060, 100], ['IND', 'M', 2026, 1], ['BRA', 'F', 1960, 55]]) {
+    const r = personalSurvival({ countryCode: code, birthYear: year, gender: g, deathAge: age, riskTrail: flat(age, 1) });
+    const s = survivalTo(code, g, year, age);
+    assert.ok(close(r.p, s, 1e-9), `${code} ${age}: ${r.p} vs ${s}`);
+    assert.ok(close(r.baseline, s, 1e-9));
+    assert.ok(close(r.ratio, 1, 1e-9));
+    assert.equal(r.age, age);
+    // consistent with the headline: P(die at exactly this age) = P(reach age) * q(age)
+    assert.ok(close(deathAtAge(BY_CODE[code], g, year, age), s * lifeTable(BY_CODE[code], g, year).q[age], 1e-9));
+  }
+});
+
+test('personalSurvival: riskier years make a long life less likely, safer years more likely, and it stays a probability', () => {
+  const base = { countryCode: 'USA', birthYear: 2026, gender: 'M', deathAge: 70 };
+  const neutral = personalSurvival({ ...base, riskTrail: flat(70, 1) });
+  const risky = personalSurvival({ ...base, riskTrail: flat(70, 2.5) });
+  const safe = personalSurvival({ ...base, riskTrail: flat(70, 0.5) });
+  assert.ok(risky.p < neutral.p && neutral.p < safe.p, `${risky.p} < ${neutral.p} < ${safe.p}`);
+  assert.ok(risky.ratio < 1 && safe.ratio > 1);
+  for (const r of [neutral, risky, safe]) assert.ok(r.p > 0 && r.p <= 1 && r.baseline > 0 && r.baseline <= 1);
+  // only the years before the death age count; extra entries are ignored
+  const longer = personalSurvival({ ...base, riskTrail: [...flat(70, 1), 9, 9, 9] });
+  assert.equal(longer.p, neutral.p);
+  // a huge multiplier cannot push a yearly death probability above 1
+  const doomed = personalSurvival({ ...base, riskTrail: flat(70, 50) });
+  assert.ok(doomed.p >= 0 && doomed.p < 1e-6);
+  // a later death age (same multipliers) can only be less likely
+  const earlier = personalSurvival({ ...base, deathAge: 40, riskTrail: flat(70, 1.3) });
+  const later = personalSurvival({ ...base, deathAge: 60, riskTrail: flat(70, 1.3) });
+  assert.ok(later.p < earlier.p);
+});
+
+test('personalSurvival: missing, short or broken data gives null instead of a wrong number', () => {
+  const ok = { countryCode: 'TWN', birthYear: 2026, gender: 'F', deathAge: 30, riskTrail: flat(30, 1) };
+  assert.ok(personalSurvival(ok));
+  assert.equal(personalSurvival(null), null);
+  assert.equal(personalSurvival({ ...ok, riskTrail: undefined }), null);
+  assert.equal(personalSurvival({ ...ok, riskTrail: flat(29, 1) }), null, 'trail shorter than the age');
+  assert.equal(personalSurvival({ ...ok, riskTrail: [...flat(10, 1), null, ...flat(19, 1)] }), null, 'a hole in the trail');
+  assert.equal(personalSurvival({ ...ok, riskTrail: [...flat(10, 1), NaN, ...flat(19, 1)] }), null);
+  assert.equal(personalSurvival({ ...ok, countryCode: 'XXX' }), null);
+  assert.equal(personalSurvival({ ...ok, deathAge: 0, riskTrail: [] }), null, 'a life that ended before age 1 has nothing to report');
+  assert.equal(personalFromSummary({ homeCountry: { code: 'TWN', name: '台灣' }, birthYear: 2026, gender: 'F', age: 30 }), null, 'old record: no trail');
+  assert.equal(personalFromState(createLife({ era: 'present' }, 'pv-alive', { countryCode: 'TWN' })), null, 'a living person has no death age');
+});
+
+test('the engine records the multiplier it really applied, and the summary and the album copy carry it', () => {
+  let checked = 0, withTrail = 0;
+  for (const [seed, code] of [['pr-1', 'TWN'], ['pr-2', 'NGA'], ['pr-3', 'USA'], ['pr-4', 'IND'], ['pr-5', 'DEU'], ['pr-6', 'BRA']]) {
+    const s = live(seed, { countryCode: code });
+    const sum = getSummary(s);
+    const d = s.death.age;
+    if (d < 1) continue;
+    checked++;
+    const trail = s.flags._riskTrail;
+    for (let a = 0; a <= d; a++) assert.ok(Number.isFinite(trail[a]) && trail[a] > 0 && trail[a] <= 8, `${seed} age ${a}: ${trail[a]}`);
+    assert.equal(sum.riskTrail.length, d, 'summary keeps ages 0 .. death age - 1');
+    const fromState = personalFromState(s);
+    const fromSummary = personalFromSummary(sum);
+    const fromAlbum = personalFromSummary(normalizeSummary(JSON.parse(JSON.stringify(sum))));
+    assert.ok(fromState && fromState.p > 0 && fromState.p <= 1);
+    assert.deepEqual(fromSummary, fromState);
+    assert.deepEqual(fromAlbum, fromState, 'survives the album normalisation and a JSON round trip');
+    withTrail++;
+  }
+  assert.ok(checked >= 5 && withTrail === checked);
+});
+
+test('the recorded multipliers follow the life: lives that were frail at 50 carry higher risk through their fifties', () => {
+  const rows = [];
+  for (let i = 0; i < 320; i++) {
+    const s = createLife({ era: 'present' }, `pr-split-${i}`, { countryCode: 'USA' });
+    let h50 = null, g = 0;
+    while (s.alive && g++ < 140) { advanceYear(s, { auto: true }); if (s.age === 50) h50 = s.stats.health; }
+    if (s.death.age >= 60 && h50 != null) {
+      const t = s.flags._riskTrail;
+      rows.push({ h: h50, m: t.slice(50, 60).reduce((a, b) => a + b, 0) / 10 });
+    }
+  }
+  rows.sort((a, b) => a.h - b.h);
+  const half = Math.floor(rows.length / 2);
+  const mean = (a) => a.reduce((x, r) => x + r.m, 0) / a.length;
+  assert.ok(rows.length >= 100, `rows ${rows.length}`);
+  assert.ok(mean(rows.slice(0, half)) > mean(rows.slice(half)), `frail ${mean(rows.slice(0, half)).toFixed(2)} vs healthy ${mean(rows.slice(half)).toFixed(2)}`);
+});
+
+test('normalizeSummary keeps a complete riskTrail, drops a damaged or short one, and keeps religion and focus as ids', () => {
+  const s = live('pr-norm', { countryCode: 'JPN' });
+  const sum = JSON.parse(JSON.stringify(getSummary(s)));
+  const n = normalizeSummary(sum);
+  assert.equal(n.riskTrail.length, s.death.age);
+  assert.equal(typeof n.religion, 'string');
+  assert.equal(typeof n.focus, 'string');
+  assert.ok(Array.isArray(n.focusTimeline) && n.focusTimeline.length >= 1);
+  assert.equal(normalizeSummary({ ...sum, riskTrail: [1, 'x', 1] }).riskTrail, null);
+  assert.equal(normalizeSummary({ ...sum, riskTrail: sum.riskTrail.slice(0, 3) }).riskTrail, null, 'shorter than the age');
+  const old = { ...sum }; delete old.riskTrail; delete old.religion; delete old.focus; delete old.focusTimeline;
+  const o = normalizeSummary(old);
+  assert.equal(o.riskTrail, null);
+  assert.equal(o.religion, '');
+  assert.deepEqual(o.focusTimeline, []);
 });

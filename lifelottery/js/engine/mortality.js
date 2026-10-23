@@ -176,8 +176,20 @@ export function riskMultiplier(s, country, view) {
 export function dies(s, country, view) {
   if (s.age >= MAX_AGE) return true; // nobody lives past the end of the table
   const table = lifeTable(country, s.gender, s.birthYear);
-  const q = table.q[Math.min(s.age, MAX_AGE)] * riskMultiplier(s, country, view);
+  const m = riskMultiplier(s, country, view);
+  recordRisk(s, m);
+  const q = table.q[Math.min(s.age, MAX_AGE)] * m;
   return rand(s.rng) < Math.min(q, 1);
+}
+
+/**
+ * Keep the multiplier that was really applied in each year of life (`flags._riskTrail[age]`, 3 decimals), so the review can
+ * answer "how likely was it to get this far with THIS life's health and risks?" (engine/odds.js personalSurvival). Pure
+ * bookkeeping: no random numbers are used, so lives are unchanged. Old saves simply have a trail with holes (the odds line is then skipped).
+ */
+function recordRisk(s, m) {
+  const trail = Array.isArray(s.flags._riskTrail) ? s.flags._riskTrail : (s.flags._riskTrail = []);
+  trail[Math.min(s.age, MAX_AGE)] = Math.round(m * 1000) / 1000;
 }
 
 /** Draw a cause of death id for the person described by `s` (does not mutate it, except the rng). */

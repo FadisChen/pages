@@ -80,6 +80,7 @@ export const S = {
       on: '開',
       off: '關',
     },
+    focusNote: '人生每進入新的階段（6、12、18、25、40、60 歲），你可以重新選擇「人生重心」，把心力放在學業、工作、家庭、健康或興趣；也能隨時從人生畫面上方更換。',
     notice: '遊戲會出現疾病、死亡、暴力與貧窮等情節。',
     submit: '抽籤',
     cancel: '返回',
@@ -157,9 +158,11 @@ export const S = {
     shortcuts: [
       ['空白鍵', '暫停／播放'],
       ['N 或 →', '跳到下一年'],
-      ['1 2 3', '選擇第幾個選項'],
+      ['1 2 3', '選擇第幾個選項（人生重心的卡片也適用）'],
+      ['Enter', '確定人生重心'],
       ['A', '自動抉擇開關'],
       ['F', '家人'],
+      ['G', '更換人生重心'],
     ],
     dying: '時間靜了下來……',
     announceYear: (age, text) => `${age} 歲。${text}`,
@@ -192,6 +195,60 @@ export const S = {
       unemployed: '失業中', homemaker: '持家', retired: '已退休', none: '沒有工作',
     },
     eduStudying: '就學中',
+  },
+
+  focus: {
+    chipLabel: '人生重心',
+    chip: (label) => `重心：${label}`,
+    chipAria: (label) => `人生重心：${label}。點一下可以更換`,
+    selectorTitle: '人生重心',
+    selectorLead: (age, stage, label) => `你現在 ${age} 歲，${stage}。目前的重心是「${label}」。選一個，往後的日子會慢慢偏向它；之後隨時可以再換。`,
+    effects: {
+      balance: '沒有加成，也沒有代價',
+      study: '知識與升學機會上升；幸福、人際略降',
+      work: '收入與升遷機會上升；健康、人際略降',
+      family: '人際、幸福與成家機會上升；收入略降',
+      health: '身體衰退較慢、風險略低；財富略降',
+      self: '幸福上升，興趣與旅行更常出現；財富略降',
+    },
+    promptEyebrow: (stage) => `新的人生階段・${stage}`,
+    promptTitle: (age) => `你 ${age} 歲了。接下來這幾年，你想把重心放在…`,
+    promptText: '重心會慢慢影響身心狀態、人生的機會與遇到的事。選好之後，隨時可以按畫面上方的重心按鈕更換。',
+    promptHint: '時間已暫停。選好重心，故事就會繼續。',
+    current: '目前',
+    autoTag: '自動',
+    confirm: '就這樣決定',
+    confirmKeep: (label) => `維持「${label}」`,
+    confirmPick: (label) => `決定「${label}」`,
+    countdown: (n, label) => `${n} 秒後自動選擇「${label}」`,
+    changed: (label) => `人生重心：${label}`,
+    timelineKept: (label) => `你繼續把重心放在「${label}」。`,
+    timelineSet: (label) => `你把重心放在「${label}」。`,
+    timelineTitle: '人生重心',
+    option: (n, label) => `${n}. ${label}`,
+    // review / album
+    summaryTitle: '人生重心',
+    summaryLead: '在每個人生階段，這個人把心力放在哪裡。',
+    ageRange: (a, b) => (a === b ? `${a} 歲` : `${a}–${b} 歲`),
+    years: (n) => `${n} 年`,
+    barAria: (segs) => `人生重心時間軸：${segs.join('；')}`,
+    barSeg: (range, label) => `${range} ${label}`,
+    axisStart: '0 歲',
+    axisEnd: (age) => `${age} 歲`,
+    religionLabel: '家庭信仰／傳統',
+    religionNote: '出生時的家庭傳統，會影響節日、儀式與日常。',
+  },
+
+  religion: {
+    christian: '基督宗教',
+    muslim: '伊斯蘭教',
+    hindu: '印度教',
+    buddhist: '佛教',
+    folk: '民間信仰與傳統宗教',
+    jewish: '猶太教',
+    sikh: '錫克教',
+    none: '沒有特定宗教',
+    other: '其他信仰',
   },
 
   death: {
@@ -242,6 +299,7 @@ export const S = {
       choices: '重大抉擇',
       events: '大小事件',
       conditions: '長期病痛',
+      religion: '家庭信仰／傳統',
     },
     educationValue: (label, years) => (years > 0 ? `${label}（就學 ${years} 年）` : label),
     jobsNone: '沒有工作過',
@@ -287,6 +345,8 @@ export const S = {
     cardTitle: '人生籤',
     cardTagline: '你也來抽一支籤吧',
     cardMsgFrom: '給',
+    cardMapPlaces: (names) => names.join(' → '),
+    cardMapStayed: (country) => `一生都在${country}`,
     cardCompareCountry: (c) => `${c}同年代平均`,
     cardCompareWorld: '世界同年代平均',
     cardChartTitle: '一生的曲線',
@@ -414,6 +474,24 @@ export const S = {
     legendMany: '4 次以上',
     tinyNote: '圓點與圓圈標出太小、在地圖上看不見的國家。',
     countryTip: (name, n) => (n > 1 ? `${name}：出生 ${n} 次` : `${name}`),
+    tipBirth: (name) => `${name}・出生地`,
+    tipLived: (name) => `${name}・住過的地方`,
+    zoom: {
+      open: (title) => `放大地圖：${title}`,
+      openShort: '放大',
+      dialog: (title) => `${title}（放大檢視）`,
+      stage: '地圖。可用滑鼠、手指或方向鍵移動，用滾輪、雙指或加減號縮放。',
+      close: '關閉',
+      in: '放大',
+      out: '縮小',
+      reset: '重設',
+      controls: '地圖縮放',
+      level: (n) => `${n.toFixed(1)}×`,
+      help: '拖曳移動・滾輪或雙指縮放・方向鍵移動・＋／－縮放・Esc 關閉',
+      helpTouch: '拖曳移動・雙指縮放・點一下標示的國家看名稱',
+      announceZoom: (n) => `縮放 ${n.toFixed(1)} 倍`,
+      announceReset: '已重設地圖',
+    },
   },
 
   odds: {
@@ -435,6 +513,13 @@ export const S = {
     rowAria: (label, n) => `${label}，機率約 ${n}`,
     mode: { births: '抽籤方式：依新生兒人數', population: '抽籤方式：依現有人口' },
     note: '各項相乘估算：國家與性別依該年出生的統計，家庭經濟為五等分，城鄉依該國都市化程度，離世年齡依該國同年代的生命表。不含人生中的選擇與事件。',
+    personal: {
+      label: (age) => `以這一生的健康與風險，活到 ${age} 歲的機率`,
+      value: (pct) => `約 ${pct}`,
+      aria: (age, pct) => `以這一生的健康與風險，活到 ${age} 歲的機率約 ${pct}`,
+      baseline: (pct) => `同國家、同性別、同年代的人平均約 ${pct}`,
+      note: '上面的 1／N 是出生那一刻的母體機率，用該國的平均生命表算，不看這個人的身體好壞。這一行則改用這一生每年實際的健康、財富與風險算出「走到這個歲數」的機率，回答的是另一個問題，兩者不能相乘或直接比較。',
+    },
     noteReveal: '各項相乘估算：國家與性別依該年出生的統計，家庭經濟為五等分，城鄉依該國都市化程度。',
     units: { '': '', wan: '萬', yi: '億', zhao: '兆' },
     cardLabel: '這樣一生的機率',
@@ -522,6 +607,17 @@ function fmt1(n) {
 /** Page titles per route (document.title). */
 export function pageTitle(part) {
   return part ? `${part}｜${S.appName}` : `${S.appName} Life Lottery`;
+}
+
+/** "93%", "4.2%", "0.35%", "不到 0.1%": a probability (0..1) as a percentage with sensible precision. */
+export function percentText(p) {
+  const v = p * 100;
+  if (!(v > 0)) return '0%';
+  if (v >= 99.5) return '99% 以上';
+  if (v >= 10) return `${Math.round(v)}%`;
+  if (v >= 1) return `${(Math.round(v * 10) / 10).toString()}%`;
+  if (v >= 0.1) return `${(Math.round(v * 100) / 100).toString()}%`;
+  return '不到 0.1%';
 }
 
 /** Number part of a rounded "1 in N" (see engine/odds.js humanizeOneIn): "47", "4,300", "3.5萬", "1.2億". */

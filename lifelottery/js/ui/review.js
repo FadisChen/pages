@@ -10,7 +10,8 @@ import { createWorldMap } from './worldmap.js';
 import { oddsCard } from './oddsview.js';
 import { badgeEl } from './collectionview.js';
 import { ACHIEVEMENTS, lifeFacts } from './achievements.js';
-import { oddsFromSummary } from '../engine/odds.js';
+import { oddsFromSummary, personalFromSummary } from '../engine/odds.js';
+import { focusTimelineCard } from './focusview.js';
 import { drawShareCard, cardToBlob, cardFileName, canShareImage, shareCard, CARD_W, CARD_H } from './sharecard.js';
 
 const T = S.summary;
@@ -72,7 +73,11 @@ function mapSection(record) {
   const moved = route.slice(1);
   const names = moved.map((c) => (BY_CODE[c] || {}).name).filter(Boolean);
   const home = sum.homeCountry.name;
-  const map = createWorldMap({ title: S.map.lifeAlt(sum.name), desc: S.map.lifeDesc(home, names), birth: f.code, lived: moved, route });
+  const map = createWorldMap({
+    title: S.map.lifeAlt(sum.name), desc: S.map.lifeDesc(home, names), birth: f.code, lived: moved, route,
+    caption: names.length ? [home, ...names].join(' → ') : S.map.lifeStayed(home),
+    legend: [['', S.map.legendBirth], ...(names.length ? [['lived', S.map.legendLived], ['move', S.map.legendMove]] : [])],
+  });
   return el('section', { class: 'card map-card', 'aria-labelledby': 'sec-map' },
     el('h2', { id: 'sec-map', class: 'card-title' }, S.map.lifeTitle),
     map.node,
@@ -126,6 +131,7 @@ export function renderReview(record, ctx, { mode, unlocked = [] }) {
       : el('p', { class: 'hero-age' }, el('span', { class: 'hero-age-pre' }, '享年'), el('span', { class: 'big' }, sum.age), el('span', { class: 'hero-age-unit' }, T.years)),
     el('p', { class: 'hero-from' }, T.from(sum.homeCountry.name, sum.wealthShort, gender)),
     sum.cause ? el('p', { class: 'hero-cause' }, el('b', null, sum.cause.label), '・', sum.cause.text) : null,
+    S.religion[sum.religion] ? el('p', { class: 'hero-religion', 'data-role': 'religion', title: S.focus.religionNote }, S.focus.religionLabel, '：', el('b', null, S.religion[sum.religion])) : null,
   ));
 
   if (sum.suicide) parts.push(helpCard('help-top'));
@@ -134,7 +140,9 @@ export function renderReview(record, ctx, { mode, unlocked = [] }) {
 
   let odds = null;
   try { odds = oddsFromSummary(sum, (record.meta && record.meta.drawMode) || 'births'); } catch (e) { console.error(e); }
-  if (odds) parts.push(oddsCard(odds, { mode: 'life', age: sum.age, drawMode: (record.meta && record.meta.drawMode) || 'births' }));
+  let personal = null;
+  try { personal = personalFromSummary(sum); } catch (e) { console.error(e); }
+  if (odds) parts.push(oddsCard(odds, { mode: 'life', age: sum.age, drawMode: (record.meta && record.meta.drawMode) || 'births', personal }));
   parts.push(mapSection(record));
 
   parts.push(lifespanSection(sum));
@@ -146,6 +154,7 @@ export function renderReview(record, ctx, { mode, unlocked = [] }) {
     el('p', { class: 'fine' }, T.chartDesc),
     chart.node));
 
+  parts.push(focusTimelineCard(sum));
   parts.push(highlightsSection(sum));
   parts.push(statsSection(sum));
 

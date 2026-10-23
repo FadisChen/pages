@@ -4,6 +4,10 @@
 import { S, oneInText } from '../strings.js';
 import { oddsFromSummary } from '../engine/odds.js';
 import { STAT_KEYS } from './chart.js';
+import { BY_CODE } from '../data/countries.js';
+import { MAP_W, MAP_H, SHAPES, ANCHORS, DOT_ONLY, TINY } from '../data/worldmap.js';
+import { lifeFacts } from './achievements.js';
+import { arcControl } from './worldmap.js';
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -15,6 +19,7 @@ const C = {
   skyTop: '#0a1024', skyMid: '#16224a', skyBot: '#27386d',
   paper: '#f8f1de', paperLine: 'rgba(120,100,60,0.13)', ink: '#2a2620', ink2: '#5d5547', muted: '#85796a',
   accent: '#b4432c', gold: '#e8b765', cream: '#efe8d6',
+  mapSea: '#ebe3cc', mapLand: '#c2b693', mapEdge: '#f3ead2', lived: '#d9962b',
   health: '#c0503a', happiness: '#c98a12', knowledge: '#3b78a8', wealth: '#4f8a5b', social: '#8a5cb0',
 };
 const DASH = { health: [], happiness: [8, 4], knowledge: [2, 4], wealth: [12, 3, 2, 3], social: [1, 5] };
@@ -67,6 +72,15 @@ function fitText(g, text, font, maxW, startPx, minPx) {
     px -= 2;
   } while (px > minPx);
   return px;
+}
+
+/** Cut `text` so it fits `maxW` in the current font, ending with an ellipsis when something was removed. */
+function ellipsize(g, text, maxW) {
+  const s = String(text);
+  if (g.measureText(s).width <= maxW) return s;
+  let out = s;
+  while (out.length > 1 && g.measureText(`${out}…`).width > maxW) out = out.slice(0, -1);
+  return `${out}…`;
 }
 
 function drawSky(g, id) {
@@ -175,6 +189,146 @@ function drawCurves(g, rows, x, y, w, h) {
   g.fillText(`${maxAge} ${S.summary.years}`, x + w, y + h + 26);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Mini world map: birth country, countries lived in, and the moves between them
+// ---------------------------------------------------------------------------------------------
+
+let landPath = null;
+const shapeCache = new Map();
+const shapePath = (code) => {
+  if (!shapeCache.has(code)) shapeCache.set(code, new Path2D(SHAPES[code]));
+  return shapeCache.get(code);
+};
+const TINY_SET = new Set(TINY);
+const DOT_SET = new Set(DOT_ONLY);
+
+/** Where a life went: the birth country code, the other countries in the order lived, and their names. */
+export function lifeRoute(record) {
+  const f = lifeFacts(record);
+  if (!f.code) return null;
+  const lived = [...f.lived];
+  const stops = lived.filter((c, i) => ANCHORS[c] && (i === 0 || c !== lived[i - 1]));
+  return { birth: f.code, lived, stops, names: lived.map((c) => (BY_CODE[c] || {}).name).filter(Boolean) };
+}
+
+/**
+ * Paint the map into the box (x, y, w) (height follows the map's aspect ratio). Everything is drawn in output pixels by
+ * scaling the context, so sizes below are pixels of the card, not map units.
+ */
+function drawMiniMap(g, route, x, y, w) {
+  const s = w / MAP_W;
+  const h = MAP_H * s;
+  if (!landPath) landPath = new Path2D(Object.values(SHAPES).join(''));
+  const px = (v) => v / s; // card pixels -> map units
+  g.save();
+  roundRect(g, x, y, w, h, 16);
+  g.fillStyle = C.mapSea;
+  g.fill();
+  g.clip();
+  g.translate(x, y);
+  g.scale(s, s);
+  g.fillStyle = C.mapLand;
+  g.fill(landPath, 'evenodd');
+  g.lineJoin = 'round';
+  g.strokeStyle = C.mapEdge;
+  g.lineWidth = px(0.9);
+  g.stroke(landPath);
+
+  const lived = route.lived.filter((c) => c !== route.birth);
+  const paint = (code, color) => {
+    if (SHAPES[code]) {
+      g.fillStyle = color;
+      g.fill(shapePath(code), 'evenodd');
+      g.strokeStyle = C.paper;
+      g.lineWidth = px(1.2);
+      g.stroke(shapePath(code));
+    }
+  };
+  const marker = (code, color, big) => {
+    const a = ANCHORS[code];
+    if (!a) return;
+    if (DOT_SET.has(code) || TINY_SET.has(code)) {
+      g.beginPath();
+      g.arc(a[0], a[1], px(big ? 7 : 5.5), 0, Math.PI * 2);
+      g.fillStyle = color;
+      g.fill();
+      if (TINY_SET.has(code)) {
+        g.beginPath();
+        g.arc(a[0], a[1], px(big ? 13 : 10.5), 0, Math.PI * 2);
+        g.strokeStyle = color;
+        g.lineWidth = px(2.6);
+        g.stroke();
+      }
+    }
+  };
+  for (const c of lived) { paint(c, C.lived); marker(c, C.lived, false); }
+  paint(route.birth, C.accent);
+
+  // moves: dashed arcs and numbered stops (only when the person lived in more than one country)
+  const stops = route.stops;
+  if (stops.length > 1) {
+    g.lineCap = 'round';
+    g.strokeStyle = C.ink;
+    g.lineWidth = px(3.2);
+    g.setLineDash([px(9), px(7)]);
+    for (let i = 1; i < stops.length; i++) {
+      const a = ANCHORS[stops[i - 1]], b = ANCHORS[stops[i]];
+      const [qx, qy] = arcControl(a, b);
+      g.beginPath();
+      g.moveTo(a[0], a[1]);
+      g.quadraticCurveTo(qx, qy, b[0], b[1]);
+      g.stroke();
+    }
+    g.setLineDash([]);
+  }
+  marker(route.birth, C.accent, true);
+  const bAnchor = ANCHORS[route.birth];
+  if (stops.length > 1) {
+    stops.forEach((code, i) => {
+      const a = ANCHORS[code];
+      g.beginPath();
+      g.arc(a[0], a[1], px(stops.length > 3 ? 9.5 : 11), 0, Math.PI * 2);
+      g.fillStyle = i === 0 ? C.accent : C.ink;
+      g.fill();
+      g.lineWidth = px(2.6);
+      g.strokeStyle = C.paper;
+      g.stroke();
+      g.fillStyle = C.paper;
+      g.font = `800 ${px(stops.length > 3 ? 12.5 : 14)}px ${SANS}`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(String(i + 1), a[0], a[1] + px(0.5));
+    });
+    g.textBaseline = 'alphabetic';
+  } else if (bAnchor) {
+    g.beginPath();
+    g.arc(bAnchor[0], bAnchor[1], px(8), 0, Math.PI * 2);
+    g.fillStyle = C.accent;
+    g.fill();
+    g.lineWidth = px(3);
+    g.strokeStyle = C.paper;
+    g.stroke();
+    g.beginPath();
+    g.arc(bAnchor[0], bAnchor[1], px(17), 0, Math.PI * 2);
+    g.strokeStyle = C.accent;
+    g.lineWidth = px(2.8);
+    g.stroke();
+  }
+  g.restore();
+  // frame
+  g.save();
+  roundRect(g, x, y, w, h, 16);
+  g.strokeStyle = 'rgba(120,100,60,0.45)';
+  g.lineWidth = 2;
+  g.stroke();
+  g.restore();
+  return h;
+}
+
+// Vertical layout of the card (px). The paper runs from PAPER_Y to PAPER_Y + PAPER_H; the sections below are fixed rows so
+// that the longest name, a three-line message and a four-country life all fit (tests/e2e.mjs renders those cases).
+const PAPER = { x: 60, y: 184, w: 960, h: 1086 };
+
 /** Paint the share card for an album record ({ id, message, summary }). */
 export function drawShareCard(canvas, record) {
   const sum = record.summary;
@@ -191,13 +345,12 @@ export function drawShareCard(canvas, record) {
   g.textAlign = 'left';
   g.fillStyle = C.cream;
   g.font = `700 52px ${SERIF}`;
-  g.fillText(T.cardTitle, 80, 110);
+  g.fillText(T.cardTitle, 80, 106);
   g.fillStyle = C.gold;
   g.font = `600 22px ${SANS}`;
-  g.fillText('L I F E   L O T T E R Y', 82, 146);
+  g.fillText('L I F E   L O T T E R Y', 82, 142);
 
-  const px = 60, py = 200, pw = 960, ph = 1050;
-  drawPaper(g, px, py, pw, ph);
+  drawPaper(g, PAPER.x, PAPER.y, PAPER.w, PAPER.h);
 
   const x0 = 156;
   const w0 = 800;
@@ -206,51 +359,75 @@ export function drawShareCard(canvas, record) {
   // dates
   g.fillStyle = C.muted;
   g.font = `600 30px ${SANS}`;
-  g.fillText(T.lifespanSpan(sum.birthYear, sum.deathYear), x0, 278);
+  g.fillText(T.lifespanSpan(sum.birthYear, sum.deathYear), x0, 254);
 
   // name
   g.fillStyle = C.ink;
-  const namePx = fitText(g, sum.name, (p) => `700 ${p}px ${SERIF}`, w0, 88, 44);
+  const namePx = fitText(g, sum.name, (p) => `700 ${p}px ${SERIF}`, w0, 88, 40);
   g.font = `700 ${namePx}px ${SERIF}`;
-  g.fillText(sum.name, x0, 370);
+  g.fillText(ellipsize(g, sum.name, w0), x0, 344);
 
   // origin
   g.fillStyle = C.ink2;
   g.font = `32px ${SANS}`;
   const gender = sum.gender === 'M' ? '男性' : '女性';
   const origin = T.from(sum.homeCountry.name, sum.wealthShort, gender);
-  fitText(g, origin, (p) => `${p}px ${SANS}`, w0, 32, 22);
-  g.fillText(origin, x0, 424);
+  fitText(g, origin, (p) => `${p}px ${SANS}`, w0, 32, 20);
+  g.fillText(ellipsize(g, origin, w0), x0, 396);
 
-  // age block
-  g.fillStyle = C.muted;
-  g.font = `34px ${SANS}`;
+  // ---- row A: age + cause on the left, the map on the right ----
+  const route = lifeRoute(record);
+  const colW = 300;
   const infant = sum.age < 1;
-  if (!infant) g.fillText('享年', x0, 548);
+  g.fillStyle = C.muted;
+  g.font = `32px ${SANS}`;
+  if (!infant) g.fillText('享年', x0, 466);
   g.fillStyle = C.accent;
-  g.font = `800 ${infant ? 120 : 176}px ${SERIF}`;
   const ageStr = infant ? '不滿一歲' : String(sum.age);
-  g.fillText(ageStr, infant ? x0 : x0 + 84, 580);
+  const unitW = infant ? 0 : 62;
+  const agePx = fitText(g, ageStr, (p) => `800 ${p}px ${SERIF}`, colW - unitW, infant ? 72 : 144, 60);
+  g.font = `800 ${agePx}px ${SERIF}`;
   const ageW = g.measureText(ageStr).width;
-  g.font = `700 54px ${SERIF}`;
-  if (!infant) g.fillText(T.years, x0 + 84 + ageW + 10, 580);
+  g.fillText(ageStr, x0, infant ? 548 : 578);
+  if (!infant) {
+    g.font = `700 52px ${SERIF}`;
+    g.fillText(T.years, x0 + ageW + 8, 578);
+  }
 
-  // cause stamp
+  // cause stamp: under the age (next to the map), or at the right when there is no map
   if (sum.cause) {
     g.save();
-    g.translate(x0 + w0 - 150, 500);
-    g.rotate(-0.07);
+    if (route) g.translate(x0 + colW / 2 - 6, 650); else g.translate(x0 + w0 - 150, 528);
+    g.rotate(-0.06);
     g.strokeStyle = C.accent;
     g.fillStyle = C.accent;
     g.lineWidth = 5;
-    roundRect(g, -150, -62, 300, 124, 14);
+    const bw = route ? 280 : 300, bh = route ? 90 : 124;
+    roundRect(g, -bw / 2, -bh / 2, bw, bh, 14);
     g.stroke();
     g.textAlign = 'center';
-    g.font = `600 24px ${SANS}`;
-    g.fillText(S.death.causeLabel, 0, -22);
-    fitText(g, sum.cause.label, (p) => `700 ${p}px ${SERIF}`, 260, 46, 24);
-    g.fillText(sum.cause.label, 0, 28);
+    g.font = `600 ${route ? 22 : 24}px ${SANS}`;
+    g.fillText(S.death.causeLabel, 0, route ? -14 : -22);
+    fitText(g, sum.cause.label, (p) => `700 ${p}px ${SERIF}`, bw - 40, route ? 40 : 46, 22);
+    g.fillText(ellipsize(g, sum.cause.label, bw - 40), 0, route ? 26 : 28);
     g.restore();
+  }
+
+  let rowEnd = route ? 690 : 600;
+  if (route) {
+    const mx = x0 + colW + 30, mw = x0 + w0 - mx;
+    const mh = drawMiniMap(g, route, mx, 418, mw);
+    // the places, as a caption under the map
+    g.textAlign = 'left';
+    g.fillStyle = C.ink2;
+    g.font = `600 23px ${SANS}`;
+    const places = route.stops.length > 1
+      ? T.cardMapPlaces(route.stops.map((c, i) => `${i + 1} ${(BY_CODE[c] || {}).name || ''}`))
+      : T.cardMapStayed(sum.homeCountry.name);
+    const lines = wrap(g, places, mw, 2);
+    let cy = 418 + mh + 30;
+    for (const l of lines) { g.fillText(l, mx, cy); cy += 30; }
+    rowEnd = Math.max(rowEnd, cy - 16);
   }
 
   // lifespan comparison bars
@@ -260,13 +437,13 @@ export function drawShareCard(canvas, record) {
     [T.cardCompareWorld, sum.lifespan.worldLe, '#a79d89'],
   ];
   const maxBar = Math.max(100, ...barRows.map((r) => r[1])) * 1.0;
-  let by = 664;
+  let by = rowEnd + 38;
   g.textAlign = 'left';
   for (const [label, val, color] of barRows) {
     g.fillStyle = C.ink2;
     g.font = `26px ${SANS}`;
     fitText(g, label, (p) => `${p}px ${SANS}`, 330, 26, 18);
-    g.fillText(label, x0, by + 8);
+    g.fillText(ellipsize(g, label, 330), x0, by + 8);
     const bx = x0 + 340, bw = w0 - 340 - 110;
     g.fillStyle = 'rgba(120,100,60,0.16)';
     roundRect(g, bx, by - 14, bw, 24, 12);
@@ -279,14 +456,16 @@ export function drawShareCard(canvas, record) {
     g.textAlign = 'right';
     g.fillText(`${Math.round(val * 10) / 10}`, x0 + w0, by + 8);
     g.textAlign = 'left';
-    by += 52;
+    by += 44;
   }
 
   // odds: "這樣一生的機率  約 1／N" (the product of the birth lottery's draws and the age of death, engine/odds.js)
   let odds = null;
   try { odds = oddsFromSummary(sum, (record.meta && record.meta.drawMode) || 'births'); } catch (e) { odds = null; }
+  const oddsY = by - 44 + 34;
+  let afterOdds = oddsY;
   if (odds) {
-    const bx = x0, bw = w0, bh = 80, byy = 804;
+    const bx = x0, bw = w0, bh = 76, byy = oddsY;
     g.save();
     roundRect(g, bx, byy, bw, bh, 16);
     g.fillStyle = 'rgba(180,67,44,0.08)';
@@ -301,20 +480,22 @@ export function drawShareCard(canvas, record) {
     g.fillStyle = C.accent;
     const bigPx = fitText(g, big, (p) => `800 ${p}px ${SERIF}`, 372, 50, 26);
     g.font = `800 ${bigPx}px ${SERIF}`;
-    g.fillText(big, bx + bw - 24, byy + 55);
+    g.fillText(big, bx + bw - 24, byy + 53);
     g.textAlign = 'left';
     g.fillStyle = C.ink;
     g.font = `700 27px ${SERIF}`;
-    g.fillText(S.odds.cardLabel, bx + 24, byy + 37);
+    g.fillText(S.odds.cardLabel, bx + 24, byy + 35);
     g.fillStyle = C.muted;
     fitText(g, S.odds.cardLead, (p) => `${p}px ${SANS}`, bw - 372 - 56, 21, 15);
-    g.fillText(S.odds.cardLead, bx + 24, byy + 64);
+    g.fillText(S.odds.cardLead, bx + 24, byy + 61);
+    afterOdds = byy + bh;
   }
 
   // curves
+  const curveTop = afterOdds + 38;
   g.fillStyle = C.muted;
   g.font = `600 24px ${SANS}`;
-  g.fillText(T.cardChartTitle, x0, 928);
+  g.fillText(T.cardChartTitle, x0, curveTop);
   // tiny legend
   let lx = x0 + 180;
   g.font = `22px ${SANS}`;
@@ -323,32 +504,35 @@ export function drawShareCard(canvas, record) {
     g.lineWidth = 5;
     g.setLineDash(DASH[k]);
     g.beginPath();
-    g.moveTo(lx, 920);
-    g.lineTo(lx + 26, 920);
+    g.moveTo(lx, curveTop - 8);
+    g.lineTo(lx + 26, curveTop - 8);
     g.stroke();
     g.setLineDash([]);
     g.fillStyle = C.ink2;
-    g.fillText(S.life.statLabels[k], lx + 34, 928);
+    g.fillText(S.life.statLabels[k], lx + 34, curveTop);
     lx += 34 + g.measureText(S.life.statLabels[k]).width + 22;
   }
-  drawCurves(g, sum.statHistory, x0, 948, w0, 84);
+  drawCurves(g, sum.statHistory, x0, curveTop + 18, w0, 62);
 
-  // highlight + message
-  let ty = 1100;
+  // highlight + message. A message that needs three lines gets them (and the highlight line makes room); otherwise the
+  // highlight stays and the message has two lines. Whatever does not fit is cut with an ellipsis, never drawn past the paper.
+  let ty = curveTop + 18 + 62 + 26 + 36;
   g.textAlign = 'left';
-  const top = sum.featuredHighlight || sum.highlights[0];
+  const msg = (record.message || '').trim();
+  g.font = `500 32px ${SERIF}`;
+  const longMsg = msg ? wrap(g, msg, w0, 99).length > 2 : false;
+  const top = longMsg ? null : (sum.featuredHighlight || sum.highlights[0]);
   if (top) {
     g.fillStyle = C.ink2;
     g.font = `28px ${SANS}`;
     const line = wrap(g, `${T.cardHighlights}・${top.age} 歲　${top.text}`, w0, 1)[0];
     g.fillText(line, x0, ty);
-    ty += 46;
+    ty += 44;
   }
-  const msg = (record.message || '').trim();
   if (msg) {
     g.fillStyle = C.accent;
     g.font = `700 28px ${SERIF}`;
-    g.fillText(`${T.cardMsgFrom}${sum.name}：`, x0, ty);
+    g.fillText(`${ellipsize(g, `${T.cardMsgFrom}${sum.name}`, w0 - 36)}：`, x0, ty);
     ty += 44;
     g.fillStyle = C.ink;
     g.font = `500 32px ${SERIF}`;
@@ -360,12 +544,12 @@ export function drawShareCard(canvas, record) {
   g.textAlign = 'center';
   g.fillStyle = C.cream;
   g.font = `600 40px ${SERIF}`;
-  g.fillText(T.cardTagline, CARD_W / 2, 1296);
+  g.fillText(T.cardTagline, CARD_W / 2, 1308);
   g.fillStyle = 'rgba(239,232,214,0.6)';
   g.font = `24px ${SANS}`;
   let url = '';
   try { if (/^https?:$/.test(location.protocol)) url = `${location.host}${location.pathname.replace(/index\.html$/, '')}`; } catch (e) { url = ''; }
-  if (url) g.fillText(url, CARD_W / 2, 1334);
+  if (url) g.fillText(url, CARD_W / 2, 1340);
   return canvas;
 }
 

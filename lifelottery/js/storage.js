@@ -138,6 +138,18 @@ const arr = (v) => (Array.isArray(v) ? v : []);
 
 const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 
+const RELIGIONS = ['christian', 'muslim', 'hindu', 'buddhist', 'folk', 'jewish', 'sikh', 'none', 'other'];
+const FOCUS_IDS = ['balance', 'study', 'work', 'family', 'health', 'self'];
+/** Family religion id from a summary ({ id, label } since Phase 4A), or '' for records from before that. */
+const religionId = (r) => (r && typeof r === 'object' && RELIGIONS.includes(r.id) ? r.id : '');
+const focusId = (f) => (typeof f === 'string' ? f : f && typeof f === 'object' ? f.id : '');
+/** The per-year personal risk multipliers (Phase 4B): a complete list of finite numbers, else null (old records have none). */
+function riskTrail(v, age) {
+  if (!Array.isArray(v) || v.length < 1 || v.length > 130) return null;
+  const out = v.map((m) => (typeof m === 'number' && Number.isFinite(m) ? Math.max(0, Math.min(20, m)) : NaN));
+  return out.some(Number.isNaN) || out.length < Math.floor(num(age)) ? null : out;
+}
+
 /**
  * Coerce an imported/loaded summary to a shape the UI can render without ever throwing.
  * Returns null when it is not recognisable as a life summary at all.
@@ -195,6 +207,10 @@ export function normalizeSummary(x) {
     countriesLived: arr(x.countriesLived).slice(0, 20).map((c) => str(c, 40)).filter(Boolean),
     conditions: arr(x.conditions).slice(0, 20).map((c) => str(c, 30)),
     smoker: !!x.smoker,
+    religion: religionId(x.religion),
+    focus: focusId(x.focus),
+    focusTimeline: arr(x.focusTimeline).slice(0, 20).filter((g) => g && typeof g === 'object' && Number.isFinite(g.fromAge) && Number.isFinite(g.toAge)).map((g) => ({ fromAge: num(g.fromAge), toAge: num(g.toAge), focus: focusId(g.focus), label: str(g.label, 12) })),
+    riskTrail: riskTrail(x.riskTrail, x.age),
     highlights: arr(x.highlights).slice(0, 80).filter((h) => h && typeof h.text === 'string').map((h) => ({ age: num(h.age), year: num(h.year), text: str(h.text, 300) })),
     counts: { choices: num(counts.choices), events: num(counts.events), milestones: num(counts.milestones), years: num(counts.years, num(x.age)) },
     stats,

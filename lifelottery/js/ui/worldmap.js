@@ -8,15 +8,22 @@
 //     counts: { TWN: 2, JPN: 1 },       // album mode: shade each country by how often it was a birth country
 //     names: (code) => '台灣',          // tooltip text in count mode
 //     pulse: true,
+//     legend: [['birth', '出生地']],    // swatches shown under the map in the zoom view (class suffix of .map-sw, text)
+//     caption: '台灣 → 日本',          // a line of text shown under the map in the zoom view
 //   });
 //   host.append(map.node);
+//
+// The map node is a button: tapping it opens the full-screen zoom view (ui/mapzoom.js, which builds the same map again with
+// `zoom: true`). `map.tips` is { ISO3: text } for every highlighted country (the tooltip the zoom view shows on a tap).
 //
 // Colours come from CSS variables (see .wm-wrap in css/style.css), so both themes work without any script. Countries too small
 // to see (TINY in the data) get a marker ring; countries without a shape (DOT_ONLY: Singapore, Bahrain, Mauritius ...) a dot.
 // Every animation is CSS-only and switches off under prefers-reduced-motion (the final state is the static map).
 
 import { MAP_W, MAP_H, SHAPES, ANCHORS, DOT_ONLY, TINY } from '../data/worldmap.js';
-import { el, svg } from './dom.js';
+import { S } from '../strings.js';
+import { BY_CODE } from '../data/countries.js';
+import { el, svg, icon } from './dom.js';
 
 let landPath = null;
 let uid = 0;
@@ -33,45 +40,55 @@ export function countLevel(n) {
   return n >= 4 ? 4 : n >= 3 ? 3 : n >= 2 ? 2 : n >= 1 ? 1 : 0;
 }
 
-function marker(code, cls, big) {
+function marker(code, cls, big, zoom) {
   const a = ANCHORS[code];
   if (!a) return null;
   const nodes = [];
-  if (DOT_SET.has(code)) nodes.push(svg('circle', { class: `wm-dot ${cls}`, cx: a[0], cy: a[1], r: big ? 8 : 6 }));
-  else if (TINY_SET.has(code)) nodes.push(svg('circle', { class: `wm-tiny ${cls}`, cx: a[0], cy: a[1], r: big ? 12 : 9, fill: 'none' }), svg('circle', { class: `wm-dot ${cls}`, cx: a[0], cy: a[1], r: big ? 4.5 : 3.5 }));
+  const sc = zoom ? ' wm-sc' : '';
+  if (DOT_SET.has(code)) nodes.push(svg('circle', { class: `wm-dot ${cls}${sc}`, cx: a[0], cy: a[1], r: big ? 8 : 6, 'data-code': code }));
+  else if (TINY_SET.has(code)) nodes.push(svg('circle', { class: `wm-tiny ${cls}${sc}`, cx: a[0], cy: a[1], r: big ? 12 : 9, fill: 'none', 'data-code': code }), svg('circle', { class: `wm-dot ${cls}${sc}`, cx: a[0], cy: a[1], r: big ? 4.5 : 3.5, 'data-code': code }));
   return nodes;
 }
 
-function arcPath(a, b) {
+/** Control point of the quadratic arc between two anchors (shared with the share card). */
+export function arcControl(a, b) {
   const [x1, y1] = a, [x2, y2] = b;
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
   const dist = Math.hypot(x2 - x1, y2 - y1);
   const lift = Math.min(dist * 0.28, 70);
   const nx = -(y2 - y1) / (dist || 1), ny = (x2 - x1) / (dist || 1); // a normal; take the one pointing up the page
   const sign = ny > 0 ? -1 : 1;
-  return `M${x1} ${y1}Q${(mx + nx * sign * lift).toFixed(1)} ${(my + ny * sign * lift).toFixed(1)} ${x2} ${y2}`;
+  return [mx + nx * sign * lift, my + ny * sign * lift];
+}
+
+function arcPath(a, b) {
+  const [qx, qy] = arcControl(a, b);
+  return `M${a[0]} ${a[1]}Q${qx.toFixed(1)} ${qy.toFixed(1)} ${b[0]} ${b[1]}`;
 }
 
 export function createWorldMap(opts = {}) {
   const id = `wm${++uid}`;
-  const { title = '', desc = '', birth = null, lived = [], route = [], counts = null, names = null, pulse = false, className = '' } = opts;
+  const { title = '', desc = '', birth = null, lived = [], route = [], counts = null, names = null, pulse = false, className = '', zoom = false } = opts;
+  const nameOf = (code) => (BY_CODE[code] || {}).name || code;
 
   const shapes = []; // highlighted countries, drawn above the land
   const marks = [];
+  const tips = {};   // tooltip text per highlighted country
   const add = (code, cls, tip) => {
-    if (SHAPES[code]) shapes.push(svg('path', { class: `wm-hi ${cls}`, d: SHAPES[code], 'fill-rule': 'evenodd' }, tip ? svg('title', null, tip) : null));
+    if (tip) tips[code] = tip;
+    if (SHAPES[code]) shapes.push(svg('path', { class: `wm-hi ${cls}`, d: SHAPES[code], 'fill-rule': 'evenodd', 'data-code': code }, tip && !zoom ? svg('title', null, tip) : null));
   };
 
   if (counts) {
     for (const [code, n] of Object.entries(counts)) {
       const lvl = countLevel(n);
       if (!lvl) continue;
-      add(code, `wm-n${lvl}`, names ? mapTip(names, code, n) : null);
-      marks.push(marker(code, `wm-m n${lvl}`, false));
+      add(code, `wm-n${lvl}`, (names ? mapTip(names, code, n) : null) || S.map.countryTip(nameOf(code), n));
+      marks.push(marker(code, `wm-m n${lvl}`, false, zoom));
     }
   }
-  for (const code of lived) if (code !== birth) { add(code, 'wm-lived'); marks.push(marker(code, 'wm-m wm-m-lived', false)); }
-  if (birth) { add(birth, 'wm-birth'); marks.push(marker(birth, 'wm-m wm-m-birth', true)); }
+  for (const code of lived) if (code !== birth) { add(code, 'wm-lived', S.map.tipLived(nameOf(code))); marks.push(marker(code, 'wm-m wm-m-lived', false, zoom)); }
+  if (birth) { add(birth, 'wm-birth', S.map.tipBirth(nameOf(birth))); marks.push(marker(birth, 'wm-m wm-m-birth', true, zoom)); }
 
   // migration arcs between consecutive distinct stops
   const arcs = [];
@@ -79,20 +96,21 @@ export function createWorldMap(opts = {}) {
   for (let i = 1; i < stops.length; i++) {
     arcs.push(svg('path', { class: 'wm-arc', d: arcPath(ANCHORS[stops[i - 1]], ANCHORS[stops[i]]), pathLength: 1, style: { '--i': String(i - 1) } }));
   }
-  const stopDots = stops.slice(1).map((c) => svg('circle', { class: 'wm-stop', cx: ANCHORS[c][0], cy: ANCHORS[c][1], r: 5 }));
+  const stopDots = stops.slice(1).map((c) => svg('circle', { class: `wm-stop${zoom ? ' wm-sc' : ''}`, cx: ANCHORS[c][0], cy: ANCHORS[c][1], r: 5 }));
 
-  // the pin on the birth country: a dot with expanding rings
+  // the pin on the birth country: a dot with expanding rings (the zoom view keeps just the dot, which scales with the zoom)
+  const ringed = pulse && !zoom;
   let pin = null;
   if (birth && ANCHORS[birth]) {
     const [x, y] = ANCHORS[birth];
     pin = svg('g', { class: 'wm-pin' },
-      pulse ? svg('circle', { class: 'wm-ring', cx: x, cy: y, r: 26 }) : null,
-      pulse ? svg('circle', { class: 'wm-ring wm-ring-2', cx: x, cy: y, r: 26 }) : null,
-      svg('circle', { class: 'wm-pin-dot', cx: x, cy: y, r: 6 }));
+      ringed ? svg('circle', { class: 'wm-ring', cx: x, cy: y, r: 26 }) : null,
+      ringed ? svg('circle', { class: 'wm-ring wm-ring-2', cx: x, cy: y, r: 26 }) : null,
+      svg('circle', { class: `wm-pin-dot${zoom ? ' wm-sc' : ''}`, cx: x, cy: y, r: 6 }));
   }
 
   const root = svg('svg', {
-    class: `wm${pulse ? ' wm-pulse' : ''}`,
+    class: `wm${ringed ? ' wm-pulse' : ''}${zoom ? ' wm-zoom' : ''}`,
     viewBox: `0 0 ${MAP_W} ${MAP_H}`,
     role: 'img',
     'aria-labelledby': `${id}-t ${id}-d`,
@@ -109,8 +127,19 @@ export function createWorldMap(opts = {}) {
   svg('g', null, stopDots),
   pin);
 
-  const node = el('div', { class: `wm-wrap ${className}`.trim() }, root);
-  return { node, svg: root };
+  let node;
+  if (zoom) {
+    node = el('div', { class: `wm-wrap ${className}`.trim() }, root);
+  } else {
+    // The whole map is one button: tap to open the full-screen zoom view (loaded on demand).
+    node = el('button', { class: `wm-wrap wm-open ${className}`.trim(), type: 'button', 'aria-label': S.map.zoom.open(title), 'aria-describedby': `${id}-d`, 'aria-haspopup': 'dialog', 'data-action': 'zoom-map' },
+      root,
+      el('span', { class: 'wm-zoom-hint', 'aria-hidden': 'true' }, icon('zoomIn'), el('span', null, S.map.zoom.openShort)));
+    node.addEventListener('click', () => {
+      import('./mapzoom.js').then((m) => m.openMapZoom(opts, node)).catch((e) => console.error(e));
+    });
+  }
+  return { node, svg: root, tips, opts };
 }
 
 function mapTip(names, code, n) {

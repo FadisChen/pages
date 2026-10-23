@@ -102,6 +102,22 @@ export function featuredHighlight(list) {
   return best;
 }
 
+/**
+ * The personal risk multipliers applied in each year lived (ages 0 .. age-1), or null when the life has no complete record
+ * (an old save, or a life that has not lived a full year). Used by engine/odds.js personalSurvival.
+ */
+function riskTrailOf(s) {
+  const end = s.death ? s.death.age : s.age;
+  const trail = s.flags && s.flags._riskTrail;
+  if (!Array.isArray(trail) || end < 1) return null;
+  const out = [];
+  for (let a = 0; a < end; a++) {
+    if (!Number.isFinite(trail[a])) return null;
+    out.push(trail[a]);
+  }
+  return out;
+}
+
 /** Full summary of a life (call after death; works on living lives too for "so far" screens). */
 export function getSummary(s) {
   const home = BY_CODE[s.homeCountryCode];
@@ -149,6 +165,7 @@ export function getSummary(s) {
     focus: { id: s.focus || 'balance', label: (FOCUS_BY_ID[s.focus] || FOCUS_BY_ID.balance).label },
     focusTimeline: focusTimeline(s).segments,
     focusYears: focusTimeline(s).years,
+    riskTrail: riskTrailOf(s),
     highlights,
     featuredHighlight: featuredHighlight(highlights),
     counts: { choices, events, milestones, years: s.age },

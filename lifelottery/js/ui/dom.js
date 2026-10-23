@@ -93,6 +93,11 @@ const ICONS = {
   swap: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
   rings: '<circle cx="9.5" cy="12" r="5"/><circle cx="14.5" cy="12" r="5"/>',
   family2: '<circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><circle cx="12" cy="15" r="2.2"/><path d="M3.5 19c.3-2.6 2-4 4.5-4M20.5 19c-.3-2.6-2-4-4.5-4"/>',
+  zoomIn: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/><path d="M10.5 8v5M8 10.5h5"/>',
+  zoomOut: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/><path d="M8 10.5h5"/>',
+  fit: '<path d="M4 9V4.5h4.5M15.5 4.5H20V9M20 15v4.5h-4.5M8.5 19.5H4V15"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.6"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   star: '<path d="m12 3.5 2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/>',
 };
 

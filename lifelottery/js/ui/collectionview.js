@@ -54,6 +54,7 @@ export function collectionCard(records) {
     counts: st.countryCounts,
     names: (code, n) => S.map.countryTip((BY_CODE[code] || {}).name || code, n),
     className: 'col-map',
+    legend: [['n1', S.map.legendFew], ['n4', S.map.legendMany]],
   });
 
   const legend = el('ul', { class: 'map-legend', 'aria-hidden': 'true' },

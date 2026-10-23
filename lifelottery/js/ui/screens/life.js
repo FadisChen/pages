@@ -6,13 +6,15 @@
 
 import { S } from '../../strings.js';
 import { CONDITIONS } from '../../data/conditions.js';
-import { advanceYear, choose, autoChoose, getStatus, getPendingChoice } from '../../engine/life.js';
+import { advanceYear, choose, autoChoose, getStatus, getPendingChoice, setFocus, autoFocus } from '../../engine/life.js';
 import { EDU_LABELS } from '../../engine/summary.js';
 import { el, icon, announce, reducedMotion, FAST, toast } from '../dom.js';
 import { secondsPerYear, AUTO_CHOICE_SECONDS, AUTO_CHOICE_SECONDS_FAST } from '../pacing.js';
 import { loadSettings, saveSettings, storageUnavailable } from '../../storage.js';
+import { focusPicker, stageName, focusLabel } from '../focusview.js';
 
 const T = S.life;
+const F = S.focus;
 const STATS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 const MINUS = '−';
 
@@ -29,6 +31,8 @@ export default function mount(ctx, root) {
   let elapsed = 0;
   let yearMs = secondsPerYear(s) * 1000;
   let choiceActive = false;
+  let focusActive = false;   // the life-stage focus card is open (time stops, like a choice card)
+  let focusUI = null;
   let autoLeft = 0;
   let autoTotal = 0;
   let dying = false;
@@ -44,7 +48,9 @@ export default function mount(ctx, root) {
   const ageEl = el('span', { class: 'life-age' });
   const metaEl = el('p', { class: 'life-meta' });
   const pausedChip = el('span', { class: 'paused-chip', hidden: true }, T.paused);
-  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'family' }, icon('family'), el('span', null, T.family));
+  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'family' }, icon('family'), el('span', { class: 'family-label' }, T.family));
+  const focusChipText = el('span', { class: 'focus-chip-text' });
+  const focusChip = el('button', { class: 'focus-chip', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'focus-chip' }, icon('target'), focusChipText);
   const statEls = {};
   const statsRow = el('div', { class: 'stats', role: 'group', 'aria-label': Object.values(T.statLabels).join('、') },
     STATS.map((k) => {
@@ -59,8 +65,8 @@ export default function mount(ctx, root) {
     }));
   const yearBar = el('div', { class: 'year-bar', 'aria-hidden': 'true' }, el('i'));
   const header = el('header', { class: 'life-head' },
-    el('div', { class: 'life-id' }, el('div', { class: 'life-title' }, nameEl, ageEl), metaEl),
-    el('div', { class: 'life-side' }, pausedChip, familyBtn),
+    el('div', { class: 'life-id' }, el('div', { class: 'life-title' }, nameEl, ageEl), el('div', { class: 'life-meta-row' }, metaEl, pausedChip)),
+    el('div', { class: 'life-side' }, focusChip, familyBtn),
     statsRow,
     yearBar,
   );
@@ -94,6 +100,10 @@ export default function mount(ctx, root) {
     const where = [st.countryName, st.city].filter(Boolean).join(' ');
     metaEl.textContent = `${T.yearLabel(st.year)}・${where}・${st.stage}`;
     ctx.setTitle(`${st.name}・${T.ageOf(st.age)}`);
+    focusChipText.textContent = st.focusLabel;
+    focusChip.setAttribute('aria-label', F.chipAria(st.focusLabel));
+    focusChip.title = F.chip(st.focusLabel);
+    focusChip.dataset.focus = st.focus;
     for (const k of STATS) {
       const v = Math.round(st.stats[k]);
       const e = statEls[k];
@@ -140,6 +150,8 @@ export default function mount(ctx, root) {
       body.append(el('p', { class: 'entry-text' }, e.text));
     } else if (kind === 'year') {
       body.append(el('p', { class: 'entry-text' }, e.text));
+    } else if (kind === 'focus') {
+      body.append(el('p', { class: 'entry-text' }, icon('target', 'icon icon-inline'), ' ', el('b', null, e.title), '：', e.text));
     } else {
       if (e.title) body.append(el('h3', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
       body.append(el('p', { class: 'entry-text' }, e.text));
@@ -195,8 +207,8 @@ export default function mount(ctx, root) {
   // Controls state
   // ---------------------------------------------------------------------------------------------
 
-  const blocked = () => choiceActive || dying;
-  const running = () => !userPaused && !choiceActive && !dying && !modalOpen && !document.hidden;
+  const blocked = () => choiceActive || focusActive || dying;
+  const running = () => !userPaused && !choiceActive && !focusActive && !dying && !modalOpen && !document.hidden;
 
   function refreshControls() {
     const playing = !userPaused;
@@ -209,7 +221,8 @@ export default function mount(ctx, root) {
     autoBtn.setAttribute('aria-label', auto ? T.autoOn : T.autoOff);
     pausedChip.hidden = !(userPaused && !choiceActive && !dying);
     root.firstElementChild.classList.toggle('is-paused', !running());
-    root.firstElementChild.classList.toggle('is-choosing', choiceActive);
+    root.firstElementChild.classList.toggle('is-choosing', choiceActive || focusActive);
+    focusChip.disabled = dying;
   }
 
   function setPaused(v) {
@@ -228,7 +241,8 @@ export default function mount(ctx, root) {
     auto = v;
     s.settings.autoChoice = v;
     saveSettings({ autoChoice: v });
-    if (choiceActive) {
+    if (focusActive && focusUI) focusUI.picker.markAuto(v ? focusUI.autoId : null);
+    if (choiceActive || focusActive) {
       if (v) startCountdown(); else stopCountdown();
     }
     refreshControls();
@@ -257,9 +271,11 @@ export default function mount(ctx, root) {
   function updateCountdown() {
     if (!countdownEls) return;
     const secs = Math.max(1, Math.ceil(autoLeft / 1000));
-    if (countdownEls.shownSecs !== secs) {
-      countdownEls.text.textContent = T.choiceAuto(secs);
+    const label = countdownEls.fmt(secs);
+    if (countdownEls.shownSecs !== secs || countdownEls.shownLabel !== label) {
+      countdownEls.text.textContent = label;
       countdownEls.shownSecs = secs;
+      countdownEls.shownLabel = label;
     }
     countdownEls.bar.style.setProperty('--c', String(Math.max(0, autoLeft / autoTotal)));
   }
@@ -275,7 +291,7 @@ export default function mount(ctx, root) {
     const cdText = el('span', { class: 'countdown-text' });
     const cdBar = el('i');
     const cdWrap = el('div', { class: 'countdown', hidden: true, role: 'timer' }, el('span', { class: 'countdown-track', 'aria-hidden': 'true' }, cdBar), cdText);
-    countdownEls = { wrap: cdWrap, text: cdText, bar: cdBar, shownSecs: null };
+    countdownEls = { wrap: cdWrap, text: cdText, bar: cdBar, shownSecs: null, fmt: (n) => T.choiceAuto(n) };
     const card = el('section', { class: 'choice-card', role: 'group', 'aria-labelledby': 'choice-title' },
       el('p', { class: 'eyebrow' }, T.choiceTitle),
       title,
@@ -311,6 +327,122 @@ export default function mount(ctx, root) {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Life focus (人生重心): the stage card at ages 6/12/18/25/40/60, and the chip's selector
+  // ---------------------------------------------------------------------------------------------
+
+  /** Say it in the timeline (not part of the engine log: it is only a note about what the player decided). */
+  function noteFocus(prev, now) {
+    const text = prev === now ? F.timelineKept(focusLabel(now)) : F.timelineSet(focusLabel(now));
+    appendEntries([{ kind: 'focus', age: s.age, year: s.year, title: F.timelineTitle, text }]);
+    announce(F.changed(focusLabel(now)));
+  }
+
+  /** The card shown when a new life stage starts. Same look as a choice card; the current focus is preselected. */
+  function showFocusPrompt() {
+    if (focusActive) return;
+    focusActive = true;
+    elapsed = 0;
+    const st = getStatus(s);
+    const autoId = autoFocus(s);
+    const picker = focusPicker({ foci: st.foci, current: st.focus, autoId: auto ? autoId : null });
+    const title = el('h2', { class: 'choice-title', id: 'focus-title', tabindex: '-1' }, F.promptTitle(st.age));
+    const confirm = el('button', { class: 'btn btn-primary btn-block focus-confirm', type: 'button', 'data-action': 'focus-confirm' });
+    const label = () => (picker.value() === st.focus ? F.confirmKeep : F.confirmPick)(focusLabel(picker.value()));
+    const refresh = () => {
+      confirm.replaceChildren(icon('check'), label());
+      if (countdownEls) updateCountdown();
+    };
+    picker.onChange(refresh);
+    confirm.addEventListener('click', () => confirmFocus(false));
+    const cdText = el('span', { class: 'countdown-text' });
+    const cdBar = el('i');
+    const cdWrap = el('div', { class: 'countdown', hidden: true, role: 'timer' }, el('span', { class: 'countdown-track', 'aria-hidden': 'true' }, cdBar), cdText);
+    countdownEls = { wrap: cdWrap, text: cdText, bar: cdBar, shownSecs: null, fmt: (n) => F.countdown(n, focusLabel(picker.touched() ? picker.value() : autoId)) };
+    const card = el('section', { class: 'choice-card focus-card-live', role: 'group', 'aria-labelledby': 'focus-title', 'data-role': 'focus-prompt' },
+      el('p', { class: 'eyebrow' }, F.promptEyebrow(stageName(st.age))),
+      title,
+      el('p', { class: 'choice-text' }, F.promptText),
+      picker.node,
+      confirm,
+      el('p', { class: 'choice-note' }, F.promptHint),
+      cdWrap);
+    focusUI = { picker, autoId, prev: st.focus };
+    choiceHost.replaceChildren(card);
+    refresh();
+    if (auto) startCountdown();
+    refreshControls();
+    announce(`${F.promptEyebrow(stageName(st.age))}。${F.promptTitle(st.age)}`);
+    scrollTo(card, false, 'center');
+    title.focus({ preventScroll: true });
+  }
+
+  /** Apply the focus card's selection (or, when the countdown ran out, the automatic pick unless the player chose something). */
+  function confirmFocus(fromCountdown) {
+    if (!focusActive || !focusUI) return;
+    const { picker, autoId, prev } = focusUI;
+    const id = fromCountdown && !picker.touched() ? autoId : picker.value();
+    focusActive = false;
+    focusUI = null;
+    countdownEls = null;
+    autoLeft = 0;
+    choiceHost.replaceChildren();
+    const now = setFocus(s, id);
+    ctx.session.persist();
+    noteFocus(prev, now);
+    renderHeader();
+    // the choice that arrived in the same year (if any) comes next
+    const pc = getPendingChoice(s);
+    if (pc) showChoice(pc); else refreshControls();
+    last = performance.now();
+  }
+
+  /** The chip's selector: the foci open at this age, with their effects. Applies the selection on confirm. */
+  function openFocusSelector() {
+    if (dying || modalOpen) return;
+    if (focusActive) { const c = choiceHost.querySelector('.choice-card'); if (c) scrollTo(c, false, 'center'); return; }
+    const st = getStatus(s);
+    const picker = focusPicker({ foci: st.foci, current: st.focus });
+    const closeBtn = el('button', { class: 'icon-btn drawer-close', type: 'button', 'aria-label': T.close }, icon('close'));
+    const confirm = el('button', { class: 'btn btn-primary btn-block focus-confirm', type: 'button', 'data-action': 'focus-apply' });
+    const refresh = () => confirm.replaceChildren(icon('check'), (picker.value() === st.focus ? F.confirmKeep : F.confirmPick)(focusLabel(picker.value())));
+    picker.onChange(refresh);
+    refresh();
+    const dlg = el('dialog', { class: 'drawer focus-drawer', 'aria-labelledby': 'focus-drawer-title', 'data-role': 'focus-selector' },
+      el('div', { class: 'drawer-head' }, el('h2', { id: 'focus-drawer-title' }, F.selectorTitle), closeBtn),
+      el('div', { class: 'drawer-body' },
+        el('p', { class: 'fine focus-lead' }, F.selectorLead(st.age, stageName(st.age), st.focusLabel)),
+        picker.node,
+        confirm));
+    let applied = false;
+    const close = () => dlg.close();
+    closeBtn.addEventListener('click', close);
+    confirm.addEventListener('click', () => {
+      const id = picker.value();
+      applied = true;
+      dlg.close();
+      const prev = s.focus;
+      const now = setFocus(s, id);
+      ctx.session.persist();
+      if (id !== prev || now !== prev) noteFocus(prev, now);
+      else announce(F.changed(focusLabel(now)));
+      renderHeader();
+    });
+    dlg.addEventListener('keydown', (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (/^[1-9]$/.test(ev.key) && picker.setByNumber(Number(ev.key))) ev.preventDefault();
+      else if (ev.key === 'Enter' && ev.target.tagName !== 'BUTTON') { ev.preventDefault(); confirm.click(); }
+    });
+    dlg.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
+    dlg.addEventListener('close', () => { dlg.remove(); modalOpen = false; last = performance.now(); refreshControls(); if (!applied) focusChip.focus(); else focusChip.focus(); });
+    document.body.append(dlg);
+    modalOpen = true;
+    refreshControls();
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    const cur = picker.inputs.find((i) => i.checked);
+    (cur || closeBtn).focus();
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Year step / death
   // ---------------------------------------------------------------------------------------------
 
@@ -320,6 +452,8 @@ export default function mount(ctx, root) {
     ctx.session.persist();
     if (storageUnavailable() && !ctx.session.warnedAboutStorage()) toast(S.album.storageOff, 'error');
     if (r.died) { onDeath(); return; }
+    // A new life stage asks for a focus first (time is stopped); a choice that came with it follows once it is answered.
+    if (getStatus(s).focusPrompt) { showFocusPrompt(); return; }
     if (r.pendingChoice) { showChoice(r.pendingChoice); return; }
     refreshControls();
   }
@@ -359,11 +493,11 @@ export default function mount(ctx, root) {
     const dt = Math.min(now - last, 1000);
     last = now;
     if (dying || modalOpen || document.hidden) return;
-    if (choiceActive) {
+    if (choiceActive || focusActive) {
       if (auto && autoLeft > 0) {
         autoLeft -= dt;
         updateCountdown();
-        if (autoLeft <= 0) pick(0, true);
+        if (autoLeft <= 0) { if (focusActive) confirmFocus(true); else pick(0, true); }
       }
       return;
     }
@@ -431,13 +565,21 @@ export default function mount(ctx, root) {
   nextBtn.addEventListener('click', () => step());
   autoBtn.addEventListener('click', () => setAuto(!auto));
   familyBtn.addEventListener('click', openFamily);
+  focusChip.addEventListener('click', openFocusSelector);
 
   function onKey(ev) {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || modalOpen) return;
     const t = ev.target;
     const tag = t && t.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
     const k = ev.key;
+    const typing = tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable) || (tag === 'INPUT' && t.type !== 'radio');
+    if (typing) return;
+    // the life-stage focus card: number keys choose, Enter confirms (radios and buttons keep their own Enter/Space)
+    if (focusActive && focusUI) {
+      if (/^[1-9]$/.test(k)) { if (focusUI.picker.setByNumber(Number(k))) ev.preventDefault(); return; }
+      if (k === 'Enter' && tag !== 'BUTTON' && tag !== 'A' && tag !== 'SUMMARY') { ev.preventDefault(); confirmFocus(false); return; }
+    }
+    if (tag === 'INPUT') return;
     if (k === ' ' && tag !== 'BUTTON' && tag !== 'A' && tag !== 'SUMMARY') {
       ev.preventDefault();
       if (!blocked()) setPaused(!userPaused);
@@ -447,6 +589,8 @@ export default function mount(ctx, root) {
       setAuto(!auto);
     } else if (k === 'f' || k === 'F') {
       openFamily();
+    } else if (k === 'g' || k === 'G') {
+      openFocusSelector();
     } else if (/^[1-9]$/.test(k) && choiceActive) {
       const i = Number(k) - 1;
       const n = choiceHost.querySelectorAll('.choice-btn').length;
@@ -471,9 +615,11 @@ export default function mount(ctx, root) {
   appendEntries(initial, { instant: true });
   renderHeader();
   refreshControls();
-  if (pending) showChoice(pending);
+  // A reload during a stage prompt asks again (flags._focusPrompt is saved); a choice that was waiting behind it follows.
+  if (s.alive && getStatus(s).focusPrompt) showFocusPrompt();
+  else if (pending) showChoice(pending);
   if (!s.alive) onDeath();
-  if (!pending) window.scrollTo(0, document.documentElement.scrollHeight);
+  if (!pending && !focusActive) window.scrollTo(0, document.documentElement.scrollHeight);
 
   syncChrome();
 
