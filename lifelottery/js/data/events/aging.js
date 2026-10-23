@@ -34,7 +34,7 @@ export default [
         label: '把重心放回身體與家人',
         effects: { health: +3, social: +3, happiness: +1 },
         set: ['midlife_done'],
-        result: '你開始固定散步、準時吃飯，週日不再加班，而是和家人一起慢慢吃一頓午餐。生活沒有改變很多，只是變得比較像自己的。',
+        result: '你開始固定散步、準時吃飯，週日不再忙著瑣事，而是和家人一起慢慢吃一頓午餐。生活沒有改變很多，只是變得比較像自己的。',
         schedule: [{ id: 'aging_midlife_followup', inYears: [2, 4] }],
         ai: 2,
       },
@@ -81,7 +81,7 @@ export default [
       {
         label: '硬撐過去，不想大驚小怪',
         effects: { health: -2, happiness: -2 },
-        result: '你照常上班、做家事，夜裡默默起來擦汗。有一天朋友說：「你最近臉色不好。」你才發現自己撐得太用力。',
+        result: '你照常出門、做家事，夜裡默默起來擦汗。有一天朋友說：「你最近臉色不好。」你才發現自己撐得太用力。',
         ai: 1,
       },
     ],
@@ -126,7 +126,7 @@ export default [
     ages: [55, 80],
     weight: (s, h) => (h.retired() ? 4 : 0),
     tags: ['aging', 'retirement'],
-    cond: (s, h) => h.retired(),
+    cond: (s, h) => h.retired() && !!h.recentLog('退休', 1),
     text: (s, h) => '退休後的第一個週一，你還是準時醒來，走到客廳才想起今天沒有地方要去。陽光慢慢爬過地板，你煮了一杯很慢很慢的咖啡或茶，竟然有點不知所措。',
     effects: { happiness: +2, social: -2 },
   },
@@ -138,10 +138,10 @@ export default [
     tags: ['aging', 'money', 'regional'],
     cond: (s, h) => (h.retired() || s.age >= 63) && (lowInc(h) || h.isPoor()),
     text: (s, h) => h.byIncome({
-      L: '你的手已經沒有年輕時有力，但家裡沒有任何養老的保障。孩子們也過得不寬裕，餐桌上的每一口飯，你都記得是怎麼來的，所以總是吃得很慢、很認真。',
-      LM: '退休金只有微薄的一點，不夠付房租和藥錢。你每個月打開存摺，把數字和日期對了又對，知道自己得想別的辦法，卻不知道該先從哪一件開始。',
-      UM: '退休金扣掉醫藥費和房貸，所剩無幾。你開始精算每一餐，把一週的菜單排得像一本帳簿，連買一顆蛋都先在心裡算過，算完才發現自己其實已經很會過日子。',
-      H: '退休金比想像中少，物價卻一直漲。你把年輕時沒用到的折價券剪報翻出來，一條一條找優惠，居然從中找到了一點小時候玩尋寶遊戲的樂趣，還去跟鄰居分享。',
+      L: `你的手已經沒有年輕時有力，但家裡沒有任何養老的保障。${h.hasChildren() ? '孩子們' : '親戚們'}也過得不寬裕，餐桌上的每一口飯，你都記得是怎麼來的，所以總是吃得很慢、很認真。`,
+      LM: `${h.retired() ? '退休金只有微薄的一點' : '年紀大了，一天的收入越來越少'}，不夠付房租和藥錢。你每個月打開存摺，把數字和日期對了又對，知道自己得想別的辦法，卻不知道該先從哪一件開始。`,
+      UM: `${h.retired() ? '退休金' : '手邊的收入'}扣掉醫藥費和房貸，所剩無幾。你開始精算每一餐，把一週的菜單排得像一本帳簿，連買一顆蛋都先在心裡算過，算完才發現自己其實已經很會過日子。`,
+      H: `${h.retired() ? '退休金' : '存下來的錢'}比想像中少，物價卻一直漲。你把年輕時沒用到的折價券剪報翻出來，一條一條找優惠，居然從中找到了一點小時候玩尋寶遊戲的樂趣，還去跟鄰居分享。`,
     }),
     choices: [
       {
@@ -151,9 +151,12 @@ export default [
         ai: 2,
       },
       {
-        label: '和子女商量，一起分擔',
+        label: '和家人商量，一起分擔',
+        cond: (s, h) => h.hasChildren() || h.siblings() > 0,
         effects: { wealth: +1, social: +3, happiness: +1 },
-        result: '你終於開口，孩子沒有一絲猶豫地說「應該的」。每個月他們匯來一些錢，你也幫他們看小孩、煮飯，彼此都不欠誰。',
+        result: (s, h) => (h.hasChildren()
+          ? '你終於開口，孩子沒有一絲猶豫地說「應該的」。每個月他們匯來一些錢，你也幫他們看小孩、煮飯，彼此都不欠誰。'
+          : '你終於向手足開了口，對方沒有一絲猶豫地說「應該的」。每個月他們匯來一些錢，你也幫忙看家、煮飯，彼此都不欠誰。'),
         ai: 1.5,
       },
       {
@@ -184,18 +187,20 @@ export default [
     weight: 0.6,
     tags: ['aging', 'home'],
     cond: (s, h) => h.incomeAtLeast('UM') && h.urban() && h.stat('wealth') > 40,
-    text: (s, h) => '孩子們都離家了，你每天要打掃的房間遠比要用到的多。樓梯越來越難爬，窗外的樹也長得比以前高。你站在客廳裡，想起每一面牆上的回憶，也想起冬天的水電費。',
+    text: (s, h) => `${h.hasChildren() ? '孩子們都離家了' : h.hasPartner() ? '家裡只剩你們兩個人' : '家裡只剩你一個人'}，你每天要打掃的房間遠比要用到的多。樓梯越來越難爬，窗外的樹也長得比以前高。你站在客廳裡，想起每一面牆上的回憶，也想起冬天的水電費。`,
     choices: [
       {
         label: '賣掉大房子，搬到小一點的公寓',
         effects: { wealth: +3, social: -1, happiness: +1, health: +1 },
-        result: '搬家那天，你捨不得的不是房子，而是門框上孩子們的身高刻痕。新家小小的，打掃十分鐘就夠，剩下的時間你可以去泡茶。',
+        result: (s, h) => `搬家那天，你捨不得的不是房子，而是${h.hasChildren() ? '門框上孩子們的身高刻痕' : '牆角那些住了幾十年的痕跡'}。新家小小的，打掃十分鐘就夠，剩下的時間你可以去泡茶。`,
         ai: 1.5,
       },
       {
-        label: '搬到離子女近的地方',
+        label: '搬到離家人近的地方',
         effects: { social: +4, happiness: +2, wealth: -1 },
-        result: '你搬進離孩子半小時車程的社區。孫輩常常過來吃飯，你們有了新的週末慣例，連鄰居都跟著認識了。',
+        result: (s, h) => (h.hasChildren()
+          ? `你搬進離孩子半小時車程的社區。${h.hasGrandchildren() ? '孫輩' : '孩子們'}常常過來吃飯，你們有了新的週末慣例，連鄰居都跟著認識了。`
+          : '你搬進離親戚半小時車程的社區。他們常常過來吃飯，你們有了新的週末慣例，連鄰居都跟著認識了。'),
         ai: 1.5,
       },
       {
@@ -217,7 +222,7 @@ export default [
     weight: 1.2,
     tags: ['aging', 'family'],
     cond: (s, h) => h.has('grandparent'),
-    text: (s, h) => `${h.childName(0)}開口問你：「爸媽，你們願不願意幫忙帶孩子？」你想起當年自己的手忙腳亂，也想起自己的體力早已不是從前，一邊答應，一邊低頭算算每天的行程。`,
+    text: (s, h) => `${h.childName(0)}開口問你：「${h.hasPartner() ? '爸媽，你們' : h.male() ? '爸，你' : '媽，你'}願不願意幫忙帶孩子？」你想起當年自己的手忙腳亂，也想起自己的體力早已不是從前，一邊答應，一邊低頭算算每天的行程。`,
     choices: [
       {
         label: '每天接送、幫忙帶',
@@ -233,9 +238,9 @@ export default [
       },
       {
         label: '用視訊電話和孫輩保持聯繫',
-        cond: (s, h) => h.yearIn(2008, 2200),
+        cond: (s, h) => h.yearIn(2008, 2200) && h.techReady(2012),
         effects: { happiness: +3, social: +3, knowledge: +1 },
-        result: '你學會了怎麼按那個綠色的按鈕。每晚七點半，螢幕那頭的小臉出現，說：「阿公（阿嬤），我今天學會了一件事！」',
+        result: (s, h) => `你學會了怎麼按那個綠色的按鈕。每晚七點半，螢幕那頭的小臉出現，說：「${h.male() ? '阿公' : '阿嬤'}，我今天學會了一件事！」`,
         ai: 1.5,
       },
     ],
@@ -287,8 +292,9 @@ export default [
     ages: [45, 66],
     weight: 0.8,
     tags: ['aging', 'family'],
-    cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 19,
-    text: (s, h) => `${h.childName(0)}搬出去的那天，你幫他把最後一個箱子搬上車，回到家才發現，屋子裡的每個角落都比昨天更寬敞。飯桌上少了幾副碗筷，連你煮的菜量都沒學會減少。`,
+    cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 19 && !h.has('f_child_left'),
+    set: ['f_child_left'],
+    text: (s, h) => `${h.childName(0)}搬出去的那天，你幫${h.childHe(0)}把最後一個箱子搬上車，回到家才發現，屋子裡的每個角落都比昨天更寬敞。飯桌上少了幾副碗筷，連你煮的菜量都沒學會減少。`,
     choices: [
       {
         label: '把空出來的時間拿來做自己的事',
@@ -297,16 +303,18 @@ export default [
         ai: 1.6,
       },
       {
-        label: '和伴侶、朋友一起規劃旅行',
+        label: '規劃一趟久違的旅行',
         cond: (s, h) => h.incomeAtLeast('UM') || h.hasPartner(),
         effects: { happiness: +4, social: +3, wealth: -3 },
-        result: '你們把想去而一直沒去的地方列成清單。第一趟出發時，兩人都像被放出籠的小學生，連行李箱的輪子聲都格外輕快。',
+        result: (s, h) => (h.hasPartner()
+          ? '你們把想去而一直沒去的地方列成清單。第一趟出發時，兩人都像被放出籠的小學生，連行李箱的輪子聲都格外輕快。'
+          : '你和幾個老朋友把想去而一直沒去的地方列成清單。第一趟出發時，大家都像被放出籠的小學生，連行李箱的輪子聲都格外輕快。'),
         ai: 1.5,
       },
       {
-        label: '常常打電話給孩子，問他們好不好',
+        label: '常常打電話給孩子，問問好不好',
         effects: { social: +2, happiness: +1 },
-        result: '你每週都打電話。孩子一開始說「我很好啦」，後來發現你其實只是想聽聽他的聲音，漸漸也開始主動打來了。',
+        result: (s, h) => `你每週都打電話。${h.childName(0)}一開始說「我很好啦」，後來發現你其實只是想聽聽${h.childHe(0)}的聲音，漸漸也開始主動打來了。`,
         ai: 1.2,
       },
     ],
@@ -317,14 +325,14 @@ export default [
     ages: [58, 90],
     weight: 0.7,
     tags: ['aging', 'hobby'],
-    cond: (s, h) => !h.has('new_hobby'),
+    cond: (s, h) => !h.has('new_hobby') && (h.retired() || h.age() >= 68),
     text: (s, h) => '退下來、慢下來之後，你發現時間竟然有一大塊是自己的。附近的活動中心貼出各種課程簡章，鄰居也在鼓勵你。你站在公告欄前，一個一個唸那些你從沒想過會做的事。',
     choices: [
       {
         label: '學樂器或唱歌',
         effects: { happiness: +4, social: +3, knowledge: +1 },
         set: ['new_hobby'],
-        result: '你的手指笨得像在彈木頭，但同學們比你更笨，大家笑成一團。學期末的發表會，你緊張得手心冒汗，卻在謝幕時鞠躬鞠得比誰都深。',
+        result: '你的手指笨得像在彈木頭，但同班的學員們比你更笨，大家笑成一團。學期末的發表會，你緊張得手心冒汗，卻在謝幕時鞠躬鞠得比誰都深。',
         highlight: '晚年學了一項新的才藝。',
         ai: 1.2,
       },
@@ -352,10 +360,11 @@ export default [
     cooldown: 10,
     weight: (s, h) => (h.stat('social') < 40 ? 1.8 : 0.2) + (widowed(h) ? 0.8 : 0),
     tags: ['aging', 'mental', 'social'],
+    cond: (s, h) => !h.hasPartner() && !h.has('elder_housed'),
     text: (s, h) => h.byIncome({
-      L: '孩子們都在外地討生活，村子裡的老人家也一個個走了。你每天坐在門口看著路，希望有人經過，又怕沒有人經過，所以常常一坐就是一個下午。',
-      LM: '孩子們忙著工作，電話裡總是「我很忙，改天回去」。你把飯菜多煮了一份，放在桌上等了很久，最後又自己默默把它吃完，連碗筷都洗得特別慢。',
-      UM: '孩子們很孝順，每個月都會轉帳，卻很少回家。你把電視的音量開大，假裝屋子裡有人在說話，然後在廣告時間裡突然覺得很安靜，安靜得有點讓人想打電話。',
+      L: `${h.hasChildren() ? '孩子們' : '年輕一輩的親戚'}都在外地討生活，村子裡的老人家也一個個走了。你每天坐在門口看著路，希望有人經過，又怕沒有人經過，所以常常一坐就是一個下午。`,
+      LM: `${h.hasChildren() ? '孩子們' : '親戚朋友們'}忙著工作，電話裡總是「我很忙，改天回去」。你把飯菜多煮了一份，放在桌上等了很久，最後又自己默默把它吃完，連碗筷都洗得特別慢。`,
+      UM: `${h.hasChildren() ? '孩子們很孝順，每個月都會轉帳，卻很少回家' : '親戚們都很客氣，逢年過節才打個電話'}。你把電視的音量開大，假裝屋子裡有人在說話，然後在廣告時間裡突然覺得很安靜，安靜得有點讓人想打電話。`,
       H: '你住在整潔的公寓裡，有保全、有電梯，卻已經三天沒跟任何人說過話。冰箱的嗡嗡聲，成了這個家最大的聲音，你甚至開始跟它打招呼。',
     }),
     choices: [
@@ -366,9 +375,10 @@ export default [
         ai: 2.5,
       },
       {
-        label: '告訴子女你想他們，請他們常聯絡',
+        label: '告訴孩子你想他們，請他們常聯絡',
+        cond: (s, h) => h.hasChildren(),
         effects: { social: +3, happiness: +3 },
-        result: '你鼓起勇氣說了心裡話。孩子沉默了一下，說「對不起，是我太忙了」，隔週就帶著孫輩出現在門口。',
+        result: (s, h) => `你鼓起勇氣說了心裡話。孩子沉默了一下，說「對不起，是我太忙了」，隔週就帶著${h.hasGrandchildren() ? '孫輩' : '點心'}出現在門口。`,
         ai: 1.8,
       },
       {
@@ -391,7 +401,7 @@ export default [
       {
         label: '讓家人與朋友陪伴',
         effects: { social: +4, happiness: +2 },
-        result: '孩子們輪流來住，朋友每天打電話。他們沒有說大道理，只是安靜地坐在你旁邊，吃著你煮的菜，那樣就夠了。',
+        result: (s, h) => `${h.hasChildren() ? '孩子們' : '親戚們'}輪流來住，朋友每天打電話。他們沒有說大道理，只是安靜地坐在你旁邊，吃著你煮的菜，那樣就夠了。`,
         schedule: [{ id: 'aging_late_love', inYears: [2, 5] }],
         ai: 2.2,
       },
@@ -467,7 +477,7 @@ export default [
       {
         label: '請孩子與親人輪流協助',
         effects: { social: +3, health: -1, happiness: -1 },
-        result: '孩子們安排了輪值表，週末和夜班都排上了人。大家吵過幾次，也合作過幾次，最後都坐在同一張桌旁，一邊吃飯一邊交換心得。',
+        result: (s, h) => `${h.hasChildren() ? '孩子們' : '親人們'}安排了輪值表，週末和夜班都排上了人。大家吵過幾次，也合作過幾次，最後都坐在同一張桌旁，一邊吃飯一邊交換心得。`,
         schedule: [{ id: 'aging_spouse_dementia_later', inYears: [2, 4] }],
         ai: 1.8,
       },
@@ -475,6 +485,7 @@ export default [
   },
   {
     id: 'aging_spouse_dementia_later',
+    followCond: (s, h) => !!s.partner && s.partner.status === 'married',
     title: '那首老歌',
     ages: [68, 100],
     weight: 0,
@@ -505,6 +516,7 @@ export default [
         label: '考慮搬到有照護人員的地方',
         cond: (s, h) => h.incomeAtLeast('LM') || h.hasChildren(),
         effects: { health: -2, wealth: -3, social: +1 },
+        set: ['elder_housed'],
         result: '你參觀了幾個地方，最後選了一間陽光最好的。護理人員喊你「爺爺奶奶」，你一邊覺得被當成小孩，一邊覺得自己很安全。',
         schedule: [{ id: 'aging_fall_recovery', inYears: [0, 1] }],
         ai: 1,
@@ -535,9 +547,10 @@ export default [
     text: (s, h) => '洗澡、做飯、吃藥，這些以前一眨眼就做完的事，現在都需要停下來想一想。你一直不想麻煩別人，但某天你發現，連系鞋帶都需要別人幫忙。',
     choices: [
       {
-        label: '和子女或親人同住',
+        label: '和家人同住',
         cond: (s, h) => h.hasChildren() || h.siblings() > 0 || !h.incomeAtLeast('UM'),
         effects: { social: +3, happiness: +2, health: +1 },
+        set: ['elder_housed'],
         result: (s, h) => (h.hasChildren()
           ? '你搬進孩子家，一間靠陽光的小房間。孫輩常常趴在門口偷看，你假裝睡著，等他們靠近時忽然睜開眼，一屋子的笑聲。'
           : '你搬到親戚或老鄰居家附近，住進一間小小的房間。鄰家的孩子常趴在窗邊偷看你種的花，你假裝沒發現，等他們靠近時才忽然笑出聲。'),
@@ -547,6 +560,7 @@ export default [
         label: '住進長照或養護機構',
         cond: (s, h) => h.incomeAtLeast('UM'),
         effects: { wealth: -5, health: +2, social: -1 },
+        set: ['elder_housed'],
         result: '機構的人員很專業，房間很乾淨。你一開始想念家裡的味道，後來在公共空間認識了牌搭子，每天下午都有一桌等著你。',
         ai: 1.4,
       },
@@ -593,7 +607,7 @@ export default [
     ages: [68, 95],
     weight: (s, h) => 0.6 + (h.hasCondition('dementia') ? 0.6 : 0),
     tags: ['aging', 'mental'],
-    text: (s, h) => '你站在廚房，完全想不起為什麼走進來。幾天後，你叫錯了孫輩的名字，大家都笑了，你也笑，但回房間時，心裡有一點涼意。你想，也許該為此做點什麼。',
+    text: (s, h) => `你站在廚房，完全想不起為什麼走進來。幾天後，你叫錯了${h.hasGrandchildren() ? '孫輩' : h.hasChildren() ? '孩子' : '鄰居孩子'}的名字，大家都笑了，你也笑，但回房間時，心裡有一點涼意。你想，也許該為此做點什麼。`,
     choices: [
       {
         label: '去醫院做記憶檢查',
@@ -623,12 +637,12 @@ export default [
     weight: 1,
     tags: ['aging', 'money'],
     cond: (s, h) => h.yearIn(2005, 2200) && h.incomeAtLeast('LM') && !h.isPoor(),
-    text: (s, h) => '電話那頭的聲音很焦急，說你的孫輩出了事，需要立刻轉帳；或說你的帳戶被盜用，需要提供密碼。你的手心全是汗，心跳得很快，電話還在耳邊，那聲音說：「你快一點，沒時間了。」',
+    text: (s, h) => `電話那頭的聲音很焦急，說你的${h.hasGrandchildren() ? '孫輩' : h.hasChildren() ? '孩子' : '親人'}出了事，需要立刻轉帳；或說你的帳戶被盜用，需要提供密碼。你的手心全是汗，心跳得很快，電話還在耳邊，那聲音說：「你快一點，沒時間了。」`,
     choices: [
       {
         label: '掛斷電話，打給家人確認',
         effects: { happiness: +1, social: +2 },
-        result: '你深吸一口氣，掛掉電話，撥給孩子。對方笑著說：「我沒事啊，你被騙了？」你們一起笑出來，這件事成了家族的故事。',
+        result: (s, h) => `你深吸一口氣，掛掉電話，撥給${h.hasGrandchildren() ? '孫輩的爸媽' : h.hasChildren() ? '孩子' : h.hasPartner() ? h.partnerName() : '一位親近的人'}。對方笑著說：「我沒事啊，你被騙了？」你們一起笑出來，這件事成了家族的故事。`,
         ai: 3,
       },
       {
@@ -651,7 +665,7 @@ export default [
     ages: [62, 92],
     weight: 0.4,
     tags: ['aging', 'tech', 'family'],
-    cond: (s, h) => h.yearIn(2008, 2200) && (h.incomeAtLeast('LM') || h.urban()),
+    cond: (s, h) => h.yearIn(2008, 2200) && (h.incomeAtLeast('LM') || h.urban()) && h.hasGrandchildren(),
     text: (s, h) => '孫輩坐在你旁邊，耐心地一遍遍教你怎麼點那個綠色的按鈕。你按錯了三次，每次他都笑著說「沒關係」。第四次，螢幕上出現了遠方親人的臉，你忍不住把鏡頭湊得太近，大家笑成一片。',
     effects: { knowledge: +2, social: +3, happiness: +3 },
   },
@@ -673,14 +687,14 @@ export default [
     ages: [55, 82],
     weight: 1.5,
     tags: ['aging', 'work', 'regional'],
-    cond: (s, h) => !h.urban() && h.isJob('farmer', 'fisher', 'shopkeeper', 'artisan') && !h.has('farm_handed'),
-    text: (s, h) => '你的腰已不能再彎得那麼低，可是這片田（或這間店）養了你一輩子。孩子們在城市裡有自己的生活，鄰居的田有的已經荒了。你站在田埂上，想著這份產業要交給誰。',
+    cond: (s, h) => !h.urban() && ['farmer', 'fisher', 'shopkeeper', 'artisan'].includes(h.job()) && !h.has('farm_handed'),
+    text: (s, h) => `你的腰已不能再彎得那麼低，可是${['shopkeeper', 'artisan'].includes(h.job()) ? '這間店' : '這片田'}養了你一輩子。${h.hasChildren() ? '孩子們在城市裡有自己的生活' : '年輕的親戚都去了城市'}，鄰居的田有的已經荒了。你站在田埂上，想著這份產業要交給誰。`,
     choices: [
       {
-        label: '交給願意回來的孩子，在旁邊指導',
+        label: '交給願意回來的年輕人，在旁邊指導',
         effects: { social: +3, happiness: +3, wealth: -1 },
         set: ['farm_handed'],
-        result: '孩子回來的那年，你站在旁邊看他笨手笨腳，忍不住笑出聲。三年之後，他種的菜竟然比你種的還甜，你說是水土的關係。',
+        result: (s, h) => `${h.hasChildren() ? '孩子' : '姪子'}回來的那年，你站在旁邊看他笨手笨腳，忍不住笑出聲。三年之後，他種的菜竟然比你種的還甜，你說是水土的關係。`,
         ai: 1.5,
       },
       {
@@ -763,9 +777,9 @@ export default [
     cond: (s, h) => h.hasChildren(),
     text: (s, h) => h.byIncome({
       L: '節日這天，在外地工作的孩子們都趕回來了。屋子裡擠滿了人，大家端著碗，蹲在院子裡吃，笑聲傳到隔壁。你吃得不多，卻看得很飽。',
-      LM: '節日這天，孩子們帶著水果和禮盒回來，小小的客廳擠不下，大家就把桌子搬到了門口。你被推到主位，滿臉不好意思，嘴上說「我坐哪都好」，筷子卻被孫輩塞進手裡。',
+      LM: `節日這天，孩子們帶著水果和禮盒回來，小小的客廳擠不下，大家就把桌子搬到了門口。你被推到主位，滿臉不好意思，嘴上說「我坐哪都好」，筷子卻被${h.hasGrandchildren() ? '孫輩' : '小外甥小姪子'}塞進手裡。`,
       UM: '全家人好不容易湊在一起吃了一頓飯，手機都難得地放在桌子邊緣。你坐在主位，看著他們說說笑笑，覺得這大概是世上最好的聲音，連湯都比平常更鮮。',
-      H: '你的家人從各地飛回來，大家擠在長桌旁。孫輩輪流在你面前表演才藝，有人唱歌、有人表演魔術，你被逗得眼淚都笑了出來，連平常最嚴肅的親戚也笑到拍桌。',
+      H: `你的家人從各地飛回來，大家擠在長桌旁。${h.hasGrandchildren() ? '孫輩' : '家裡的小朋友'}輪流在你面前表演才藝，有人唱歌、有人表演魔術，你被逗得眼淚都笑了出來，連平常最嚴肅的親戚也笑到拍桌。`,
     }),
     effects: { happiness: +4, social: +4 },
   },
@@ -780,7 +794,7 @@ export default [
     milestone: true,
     cond: (s, h) => h.age() % 10 === 0,
     text: (s, h) => (h.stat('social') >= 45
-      ? `你滿${h.age()}歲了。家人和朋友帶著蛋糕與花擠滿了客廳，大家搶著說你年輕時的糗事，孫輩們則偷偷數蠟燭數到一半就忘了。你聽著聽著笑出眼淚，覺得這些年的路，沒有白走。`
+      ? `你滿${h.age()}歲了。家人和朋友帶著蛋糕與花擠滿了客廳，大家搶著說你年輕時的糗事，${h.hasGrandchildren() ? '孫輩們' : '年紀小的晚輩們'}則偷偷數蠟燭數到一半就忘了。你聽著聽著笑出眼淚，覺得這些年的路，沒有白走。`
       : `你滿${h.age()}歲了。這一天比平常安靜一些，但鄰居送來一碗長壽麵，電話那頭也有人祝你生日快樂。你把蠟燭一根一根吹熄，輕輕許了個願，沒有說出口。`),
     effects: (s, h) => { h.change('happiness', h.stat('social') >= 45 ? +4 : +2); h.change('social', h.stat('social') >= 45 ? +3 : +1); },
     highlight: (s, h) => (h.age() >= 80 ? `度過了${h.age()}歲生日。` : null),
@@ -798,7 +812,9 @@ export default [
         label: '寫下心願，也和家人好好談一談',
         effects: { happiness: +2, social: +3 },
         set: ['wishes_written'],
-        result: '你和孩子們圍坐在桌邊，把心願一條條念給他們聽。他們一開始不想談，後來也說出了自己的想法，那天晚上大家吃了一頓特別久的飯。',
+        result: (s, h) => (h.hasChildren()
+          ? '你和孩子們圍坐在桌邊，把心願一條條念給他們聽。他們一開始不想談，後來也說出了自己的想法，那天晚上大家吃了一頓特別久的飯。'
+          : '你把幾個最親近的人請到家裡，把心願一條條念給他們聽。他們一開始不想談，後來也說出了自己的想法，那天晚上大家吃了一頓特別久的飯。'),
         highlight: '把自己的心願與家人好好談過。',
         schedule: [{ id: 'aging_final_reflection', inYears: [2, 8] }],
         ai: 2,
@@ -843,7 +859,9 @@ export default [
         label: '把老照片一張一張慢慢看完',
         effects: { happiness: +3, social: +1 },
         set: ['final_reflection_done'],
-        result: '你翻過每一張照片，認出每一個人的名字和當時的季節。看到最後一張，你輕輕說：「那真是很好的一天。」',
+        result: (s, h) => (h.hasCondition('dementia')
+          ? '你翻過每一張照片，有些名字想不起來了，但每一張你都笑了。有人在旁邊輕聲告訴你「這是你妹妹」，看到最後一張，你輕輕說：「那真是很好的一天。」'
+          : '你翻過每一張照片，認出每一個人的名字和當時的季節。看到最後一張，你輕輕說：「那真是很好的一天。」'),
         highlight: '靜靜地看完了這一生的老照片。',
         ai: 1.8,
       },

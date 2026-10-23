@@ -33,7 +33,7 @@ function highlightsSection(sum) {
     el('h2', { id: 'sec-highlights', class: 'card-title' }, T.highlightsTitle),
     sum.highlights.length
       ? el('ol', { class: 'highlights' }, sum.highlights.map((h) => el('li', null, el('span', { class: 'hl-age' }, S.life.ageOf(h.age)), el('span', { class: 'hl-text' }, h.text))))
-      : el('p', { class: 'fine' }, T.highlightsEmpty));
+      : el('p', { class: 'fine' }, sum.age < 15 ? T.highlightsEmptyYoung : T.highlightsEmpty));
 }
 
 function statsSection(sum) {
@@ -86,7 +86,9 @@ export function renderReview(record, ctx, { mode }) {
     el('p', { class: 'eyebrow' }, T.eyebrow),
     el('h1', null, sum.name),
     el('p', { class: 'hero-years' }, T.lifespanSpan(sum.birthYear, sum.deathYear)),
-    el('p', { class: 'hero-age' }, el('span', { class: 'hero-age-pre' }, '享年'), el('span', { class: 'big' }, sum.age), el('span', { class: 'hero-age-unit' }, T.years)),
+    sum.age < 1
+      ? el('p', { class: 'hero-age' }, el('span', { class: 'big' }, '不滿一歲'))
+      : el('p', { class: 'hero-age' }, el('span', { class: 'hero-age-pre' }, '享年'), el('span', { class: 'big' }, sum.age), el('span', { class: 'hero-age-unit' }, T.years)),
     el('p', { class: 'hero-from' }, T.from(sum.homeCountry.name, sum.wealthShort, gender)),
     sum.cause ? el('p', { class: 'hero-cause' }, el('b', null, sum.cause.label), '・', sum.cause.text) : null,
   ));

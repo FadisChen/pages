@@ -36,7 +36,7 @@ export default [
     ages: [13, 15],
     tags: ['body', 'growing'],
     text: (s, h) => (h.male()
-      ? '一個暑假你長高了八公分，褲管短了一截，聲音忽高忽低，像一台收訊不好的收音機。開口說話時連你自己都被嚇到，同學笑到趴在桌上。'
+      ? `一個暑假你長高了八公分，褲管短了一截，聲音忽高忽低，像一台收訊不好的收音機。開口說話時連你自己都被嚇到，${h.inSchool() ? '同學' : '朋友'}笑到趴在桌上。`
       : '你的身體一夕之間變得陌生：衣服不合身了，鏡子裡的人有點不像自己。你學著與這個新的自己相處，有時尷尬，有時卻意外地喜歡，連走路的樣子都得重新練習。'),
     effects: { happiness: -1, health: +1, knowledge: +1 },
   },
@@ -95,7 +95,7 @@ export default [
     weight: 0.9,
     tags: ['family', 'hardship'],
     cond: (s, h) => h.siblings() >= 2 && (h.parentsAlive() < 2 || h.wealthQ() <= 2),
-    text: (s, h) => '放學後，你要先去接弟妹，煮晚飯、檢查作業，再把家裡最後一盞燈關上。你很少抱怨，因為你知道，自己是這個家裡一根小小的柱子。',
+    text: (s, h) => `${h.inSchool() ? '放學後，你要先去接弟妹，煮晚飯、檢查作業' : '每天傍晚，你要先去接弟妹，煮晚飯、盯著他們把功課寫完'}，再把家裡最後一盞燈關上。你很少抱怨，因為你知道，自己是這個家裡一根小小的柱子。`,
     effects: { health: -1, knowledge: -1, social: +2, happiness: 0 },
   },
   {
@@ -107,7 +107,7 @@ export default [
     cond: (s, h) => (h.income() === 'L' || h.income() === 'LM') && h.wealthQ() <= 2,
     text: (s, h) => (h.income() === 'L'
       ? `暑假你在${h.urban() ? '工地' : '磚窯'}幫忙。太陽曬得皮膚脫了一層，一天下來手指都伸不直。發薪日你把錢遞給大人，他說：「你長大了。」你不知道該笑還是想哭。`
-      : '暑假你在成衣廠做包裝，冷氣是別人的，你只有一台轉得吱吱響的電扇，一天站十小時。你把第一份薪水放進鐵盒裡，數了三遍，才捨得蓋上蓋子。'),
+      : `暑假你在成衣廠做包裝，${h.techReady(1975) ? '冷氣' : '涼快'}是別人的，你只有一台轉得吱吱響的電扇，一天站十小時。你把第一份薪水放進鐵盒裡，數了三遍，才捨得蓋上蓋子。`),
     effects: { wealth: +3, health: -3, knowledge: -1, happiness: -1, social: +1 },
   },
   {
@@ -116,8 +116,8 @@ export default [
     ages: [13, 19],
     weight: 0.9,
     tags: ['work', 'family'],
-    cond: (s, h) => h.urban() && (h.income() === 'LM' || h.income() === 'UM') && h.wealthQ() >= 2 && h.wealthQ() <= 4,
-    text: (s, h) => '放學後，你繫上圍裙站到家裡小店的櫃檯後面。你記得每種貨的位置、每位常客的口味，連誰會賒帳都背得出來。有人叫你「小老闆」，你嘴上抗議，心裡有點得意。',
+    cond: (s, h) => h.urban() && h.familyBusiness() && h.parentsAlive() >= 1,
+    text: (s, h) => `${h.inSchool() ? '放學後' : '收工後'}，你繫上圍裙站到家裡小店的櫃檯後面。你記得每種貨的位置、每位常客的口味，連誰會賒帳都背得出來。有人叫你「小老闆」，你嘴上抗議，心裡有點得意。`,
     effects: { wealth: +2, knowledge: +1, social: +2, health: -1 },
   },
   {
@@ -127,7 +127,7 @@ export default [
     weight: 0.9,
     tags: ['tech', 'regional'],
     cond: (s, h) => h.year() >= 2010 && (h.income() === 'L' || h.income() === 'LM') && h.wealthQ() <= 3,
-    text: (s, h) => '全家只有一支手機，你得靠「輪流」才能查功課、看影片、跟朋友聊天。你練就了一種本領：電量剩百分之十的時候，精準地決定這一刻最重要的是什麼。',
+    text: (s, h) => `全家只有一支手機，你得靠「輪流」才能${h.inSchool() ? '查功課' : '查資料'}、看影片、跟朋友聊天。你練就了一種本領：電量剩百分之十的時候，精準地決定這一刻最重要的是什麼。`,
     effects: { knowledge: +2, social: +1, happiness: 0 },
   },
   {
@@ -231,7 +231,7 @@ export default [
     ages: [16, 22],
     weight: 1.1,
     tags: ['work', 'family', 'money'],
-    cond: (s, h) => h.employed() && !h.inSchool() && (h.income() === 'L' || h.income() === 'LM'),
+    cond: (s, h) => h.wageEarner() && !h.inSchool() && (h.income() === 'L' || h.income() === 'LM'),
     text: (s, h) => '發薪日，你把一半的錢寄回家。排隊的人都和你一樣沉默，手裡握著折好的單子。留給自己的那一半，剛好夠你下個月吃飯，剛好不夠買那件你看了很久的外套。',
     effects: { wealth: -1, happiness: +2, social: +2 },
   },
@@ -378,7 +378,7 @@ export default [
     text: (s, h) => h.byIncome({
       L: '你拿著錄取通知書，全村的人都來了。有人塞給你雞蛋，有人湊了幾張皺皺的鈔票。你把它們一張張撫平，放進最貼身的口袋，彷彿那些紙鈔比整個村子還重。',
       LM: '你坐了十二個小時的車去大學報到，行李袋裡有一床新棉被和家鄉的醃菜。出站時你在人潮裡愣了好幾秒，才發現：這裡沒有人認識你。',
-      UM: '父母陪你到宿舍報到。他們幫你鋪床、整理書桌，臨走前反覆叮嚀了五次要記得吃飯。你揮手到他們看不見為止，才慢慢轉身走進宿舍。',
+      UM: `${h.parentsAlive() === 2 ? '父母' : h.parentAlive('mother') ? '母親' : h.parentAlive('father') ? '父親' : '家裡的長輩'}陪你到宿舍報到。${h.parentsAlive() === 2 ? '他們' : '對方'}幫你鋪床、整理書桌，臨走前反覆叮嚀了五次要記得吃飯。你揮手到${h.parentsAlive() === 2 ? '他們' : '對方'}看不見為止，才慢慢轉身走進宿舍。`,
       H: '搬進大學宿舍那天，房間裡只有一張床和空蕩蕩的書桌。你把家裡帶來的馬克杯放在桌角，頓時覺得有了一點家的味道，也第一次聽見自己的腳步聲，在空蕩的房間裡回響。',
     }),
     effects: { happiness: +4, knowledge: +2, social: -2 },
@@ -505,7 +505,7 @@ export default [
         label: '溫柔地說再見',
         effects: { happiness: -3, knowledge: +2, social: +1 },
         set: ['y_first_love_after'],
-        result: '你們在放學後的操場走了一圈又一圈，最後握了握手。你回到家哭了一夜，隔天卻發現天空還是藍的。',
+        result: (s, h) => `你們在${h.inSchool() ? '放學後的操場' : '河堤邊'}走了一圈又一圈，最後握了握手。你回到家哭了一夜，隔天卻發現天空還是藍的。`,
         ai: 1.5,
       },
       {
@@ -557,7 +557,7 @@ export default [
     major: true,
     weight: 0.22,
     tags: ['identity', 'love'],
-    text: (s, h) => '你開始注意到，自己心動的對象和身邊同學談論的有些不同。這份感覺很安靜，也很確定。你在夜裡想著它，白天卻把它收得很好，像把一封信折了又折。',
+    text: (s, h) => `你開始注意到，自己心動的對象和身邊${h.inSchool() ? '同學' : '同齡的人'}談論的有些不同。這份感覺很安靜，也很確定。你在夜裡想著它，白天卻把它收得很好，像把一封信折了又折。`,
     choices: [
       {
         label: '告訴一位信任的朋友',
@@ -669,18 +669,18 @@ export default [
     weight: 4,
     tags: ['family', 'hardship'],
     cond: (s, h) => h.has('c_parents_split') && h.parentsAlive() === 2,
-    text: (s, h) => '父母分開已經一段時間了。這個週末，你得決定：跟誰住，節日又要在哪個家過。你的書包擺在兩個玄關之間，不知道該放在哪一邊，連鞋子要脫在哪個玄關，都成了一件需要考慮的事。',
+    text: (s, h) => `父母分開已經一段時間了。這個週末，你得決定：跟誰住，節日又要在哪個家過。你的${h.inSchool() ? '書包' : '行李袋'}擺在兩個玄關之間，不知道該放在哪一邊，連鞋子要脫在哪個玄關，都成了一件需要考慮的事。`,
     choices: [
       {
         label: '輪流住，每邊一半',
         effects: { social: +1, happiness: -1, health: -1 },
-        result: '你有了兩張書桌、兩支牙刷，行李袋成了你的第二個書包。雖然累，你偶爾也會偷笑：同樣的作業，兩邊的零食不一樣。',
+        result: (s, h) => `你有了兩張書桌、兩支牙刷，行李袋成了你的第二個背包。雖然累，你偶爾也會偷笑：同樣的${h.inSchool() ? '作業' : '週末'}，兩邊的零食不一樣。`,
         ai: 1.5,
       },
       {
         label: '固定住在其中一個家',
         effects: { happiness: +1, social: -1 },
-        result: '你選了離學校近的那個家。另一邊每個週日的電話，是你們之間最重要的橋，你努力把話題維持得很輕鬆。',
+        result: (s, h) => `你選了${h.inSchool() ? '離學校近' : '離你日常生活圈近'}的那個家。另一邊每個週日的電話，是你們之間最重要的橋，你努力把話題維持得很輕鬆。`,
         ai: 1.5,
       },
       {
@@ -770,7 +770,7 @@ export default [
     weight: 0.8,
     tags: ['friends', 'ethics'],
     cond: (s, h) => h.urban() || h.incomeAtLeast('LM'),
-    text: (s, h) => '朋友們圍在便利商店的角落，有人小聲說：「誰敢拿一包糖走出去，今天的飲料就算他的。」所有人的目光轉向你，你的手心黏黏的，連頭皮都在發麻。',
+    text: (s, h) => `朋友們圍在${h.techReady(1985) ? '便利商店' : '雜貨店'}的角落，有人小聲說：「誰敢拿一包糖走出去，今天的飲料就算他的。」所有人的目光轉向你，你的手心黏黏的，連頭皮都在發麻。`,
     choices: [
       {
         label: '試一試，反正不會被發現',
@@ -807,14 +807,14 @@ export default [
     text: (s, h) => '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。',
     choices: [
       {
-        label: '拒絕，並找老師或家人幫忙',
+        label: '拒絕，並找信任的大人幫忙',
         effects: { happiness: -1, social: -2, knowledge: +1 },
         set: ['y_refused_gang'],
         result: '你的聲音在抖，但說得很清楚。那天以後，上學的路改了，朋友換了一批。你很孤單，卻比誰都清楚自己是誰。',
         ai: 2,
       },
       {
-        label: '婉拒，把時間放在學校與社區活動上',
+        label: '婉拒，把時間放在書本與社區活動上',
         effects: { knowledge: +2, social: -1 },
         result: '你說想念書。他們笑你天真，但沒有強迫。你開始把更多時間花在圖書館和社區中心裡，那裡的燈比街角更亮。',
         ai: 1.5,
@@ -941,7 +941,7 @@ export default [
     weight: 2,
     tags: ['school', 'work'],
     cond: (s, h) => !h.inSchool() && h.eduYears() < 13 && h.wealthQ() <= 4 && (h.employed() || h.workStatus() === 'none' || h.unemployed()),
-    text: (s, h) => '你離開學校已經一段時間了。公布欄上貼著技職訓練班的簡章：木工、電腦、裁縫、汽車修護。費用不高，但要占用你工作的時間，你把簡章讀了三遍，還是沒辦法立刻做決定。',
+    text: (s, h) => `${h.eduYears() > 0 ? '你離開學校已經一段時間了。' : '你從來沒有好好念過書，這件事偶爾還是會在夜裡冒出來。'}公布欄上貼著技職訓練班的簡章：木工、電腦、裁縫、汽車修護。費用不高，但要占用你工作的時間，你把簡章讀了三遍，還是沒辦法立刻做決定。`,
     choices: [
       {
         label: '報名技職訓練',
@@ -954,7 +954,7 @@ export default [
       {
         label: '繼續工作，把賺錢放第一',
         effects: { wealth: +2, happiness: -1 },
-        result: '你想：書讀得再多也不能馬上換成米。你把省下的時間全拿去加班，存摺的數字慢慢往上爬。',
+        result: (s, h) => `你想：書讀得再多也不能馬上換成米。你把省下的時間全拿去${h.wageEarner() ? '加班' : '找零工'}，存摺的數字慢慢往上爬。`,
         ai: (s, h) => (h.isPoor() ? 1.5 : 0.8),
       },
       {
@@ -1028,7 +1028,7 @@ export default [
       {
         label: '先打聽清楚實情再說',
         effects: { knowledge: +1, social: +1, happiness: -1 },
-        result: '你向老師和鄰居打聽，找到一位去過的人。他搖搖頭，講了很多你從沒聽過的事。你決定先不去，這個決定讓你心裡踏實了一些。',
+        result: (s, h) => `你向${h.inSchool() ? '老師和鄰居' : '長輩和鄰居'}打聽，找到一位去過的人。他搖搖頭，講了很多你從沒聽過的事。你決定先不去，這個決定讓你心裡踏實了一些。`,
         ai: 1.5,
       },
       {
@@ -1211,7 +1211,7 @@ export default [
     major: true,
     weight: 3,
     tags: ['future', 'travel'],
-    cond: (s, h) => !h.inSchool() && h.eduAtLeast('secondary') && h.incomeAtLeast('UM') && h.wealthQ() >= 3,
+    cond: (s, h) => !h.inSchool() && h.eduYears() >= 12 && h.incomeAtLeast('UM') && h.wealthQ() >= 3,
     text: (s, h) => '高中畢業了，你面前沒有一條現成的路。朋友有的準備上大學，有的準備工作，而你的心在一個叫「先走走看」的地方徘徊，夜裡一再翻開世界地圖，看了又看。',
     choices: [
       {
@@ -1279,8 +1279,8 @@ export default [
     tags: ['tech', 'friends', 'school'],
     cond: (s, h) => h.year() >= 1982 && h.inSchool() && (h.urban() || h.incomeAtLeast('UM')),
     text: (s, h) => {
-      if (h.year() < 1998) return '電動玩具店的燈光五顏六色，你和同學把零用錢換成一枚枚代幣。老闆娘在櫃檯後翻著報紙，每次你要離開，都有人說「再一場」，於是你的零用錢，總是比你以為的消失得更快。';
-      if (h.year() < 2013) return '網咖的燈光昏暗，鍵盤聲此起彼落。你和朋友組隊打到凌晨，離考試只剩十天，你才發現時間是怎麼溜走的。';
+      if (!h.techReady(1998)) return '電動玩具店的燈光五顏六色，你和朋友把零用錢換成一枚枚代幣。老闆娘在櫃檯後翻著報紙，每次你要離開，都有人說「再一場」，於是你的零用錢，總是比你以為的消失得更快。';
+      if (!h.techReady(2013)) return '網咖的燈光昏暗，鍵盤聲此起彼落。你和朋友組隊打到凌晨，離考試只剩十天，你才發現時間是怎麼溜走的。';
       return '你和朋友的線上隊伍，每晚固定在同一個時間上線。有人說「再一場就睡」，已經說了五次。離考試還有十天。桌上的課本已經厚厚一層灰，你決定今晚再讀一下，就一下。';
     },
     choices: [
@@ -1312,7 +1312,7 @@ export default [
     weight: 1.0,
     tags: ['tech', 'family'],
     cond: (s, h) => h.year() >= 2010 && h.incomeAtLeast('LM') && h.stat('wealth') > 35 && h.parentsAlive() >= 1,
-    text: (s, h) => `你拿到人生第一${h.year() >= 2042 ? '個自己的智慧手環' : '支自己的手機'}。大人把規則寫在一張紙上貼在冰箱：晚上十點交出來、不准加陌生人、功課先做完。你看著那張紙，沒有說話。`,
+    text: (s, h) => `你拿到人生第一${h.year() >= 2042 ? '個自己的智慧手環' : '支自己的手機'}。大人把規則寫在一張紙上貼在冰箱：晚上十點交出來、不准加陌生人、${h.inSchool() ? '功課先做完' : '該做的事先做完'}。你看著那張紙，沒有說話。`,
     choices: [
       {
         label: '接受規則，準時交出',
@@ -1331,7 +1331,7 @@ export default [
       {
         label: '跟大人談條件，一起改規則',
         effects: { happiness: +1, social: +1, knowledge: +1 },
-        result: '你們坐下來談了半個小時。最後的規則是：吃飯時不看、考試週交出、週末彈性。你第一次覺得自己被當成能談判的大人。',
+        result: (s, h) => `你們坐下來談了半個小時。最後的規則是：吃飯時不看、${h.inSchool() ? '考試週交出' : '忙的時候交出'}、週末彈性。你第一次覺得自己被當成能談判的大人。`,
         ai: 1.5,
       },
     ],
@@ -1469,13 +1469,13 @@ export default [
     weight: 5,
     tags: ['identity', 'migration', 'chain'],
     cond: (s, h) => h.has('c_bilingual_home') || h.isMigrant(),
-    text: (s, h) => '在學校，你說的是一種語言、吃的是另一種便當；回到家，剛好相反。有時你覺得自己像兩邊的借住客人：在這裡被問「你從哪裡來」，在那裡被說「你都不像我們了」。',
+    text: (s, h) => `${h.inSchool() ? '在學校' : '在外面'}，你說的是一種語言、吃的是另一種便當；回到家，剛好相反。有時你覺得自己像兩邊的借住客人：在這裡被問「你從哪裡來」，在那裡被說「你都不像我們了」。`,
     choices: [
       {
         label: '兩邊都珍惜，當兩邊的橋',
         effects: { social: +3, knowledge: +2, happiness: +1 },
         set: ['y_bridge'],
-        result: '你開始替家人翻譯信件，也教同學說幾句家裡的話。「你怎麼這麼厲害？」有人這麼問。你想了想，說：「因為我有兩個家。」',
+        result: '你開始替家人翻譯信件，也教身邊的朋友說幾句家裡的話。「你怎麼這麼厲害？」有人這麼問。你想了想，說：「因為我有兩個家。」',
         schedule: [{ id: 'youth_return_visit', inYears: [3, 6] }],
         ai: 2,
       },
@@ -1516,7 +1516,7 @@ export default [
       {
         label: '走進亮著燈的店，打電話請人來接',
         effects: { health: +1, happiness: -1, knowledge: +1 },
-        result: '你推開便利商店的門，假裝在挑飲料。店員看了你一眼，輕聲說：「需要幫忙嗎？」那句話讓你鼻子一酸。',
+        result: (s, h) => `你推開${h.techReady(1985) ? '便利商店' : '雜貨店'}的門，假裝在挑飲料。店員看了你一眼，輕聲說：「需要幫忙嗎？」那句話讓你鼻子一酸。`,
         ai: 2,
       },
       {
@@ -1540,7 +1540,7 @@ export default [
         label: '告訴一個你信任的人',
         effects: { happiness: +3, social: +2 },
         set: ['y_told_someone'],
-        result: (s, h) => `你在${h.inSchool() ? '放學後' : '下班後'}留下，對導師、朋友或家人說出那些很難說的話。對方沒有急著說「想開點」，只是點頭，說：「我在。」`,
+        result: (s, h) => `你在${h.inSchool() ? '放學後' : h.wageEarner() ? '下班後' : '晚飯後'}留下，對${h.inSchool() ? '導師、朋友或家人' : '朋友或家人'}說出那些很難說的話。對方沒有急著說「想開點」，只是點頭，說：「我在。」`,
         schedule: [{ id: 'youth_gray_after', inYears: [1, 2] }],
         ai: (s, h) => (h.stat('social') > 45 ? 2 : 1),
       },
@@ -1606,12 +1606,13 @@ export default [
   },
   {
     id: 'youth_city_job_aftermath',
+    followCond: (s, h) => h.wageEarner(),
     title: '城裡的日子',
     ages: [14, 24],
     weight: 0,
     tags: ['followup', 'work', 'migration'],
     text: (s, h) => (h.has('y_city_job_bad')
-      ? '工廠欠了你們兩個月的薪水，宿舍是十二人一間的鐵架床。你和幾個同鄉一起去找主管理論，最後拿回了大部分工錢。你學會了：簽名前，要把每一行字讀完。'
+      ? `${h.isJob('factory', 'laborer') ? '工廠' : '雇主'}欠了你們兩個月的薪水，宿舍是十二人一間的鐵架床。你和幾個同鄉一起去找主管理論，最後拿回了大部分工錢。你學會了：簽名前，要把每一行字讀完。`
       : '你學會了操作機器，也交到第一批外地朋友。每個月你把一半的工資匯回家，大人回電話時，聲音總是特別高，像是在掩飾自己有多驕傲，也有多想念你。'),
     effects: (s, h) => {
       if (h.has('y_city_job_bad')) { h.change('wealth', +1); h.change('health', -3); h.change('happiness', -3); h.change('knowledge', +2); h.change('social', +2); }
@@ -1621,6 +1622,7 @@ export default [
   },
   {
     id: 'youth_scholarship_result',
+    followCond: (s, h) => h.inSchool(),
     title: '信封',
     ages: [15, 22],
     weight: 0,
@@ -1635,6 +1637,7 @@ export default [
   },
   {
     id: 'youth_major_doubt',
+    followCond: (s, h) => h.inTertiary(),
     title: '大二的疑問',
     ages: [18, 27],
     weight: 0,
@@ -1655,10 +1658,11 @@ export default [
     title: '補校的畢業證書',
     ages: [17, 28],
     weight: 0,
+    followCond: (s, h) => h.employed(),
     tags: ['followup', 'school', 'work'],
     text: (s, h) => (h.has('y_night_class')
       ? '你拿到了補校的畢業證書。看見自己的名字印在紙上，原來這麼好看。老闆看過之後，把你的工作從搬運換成了管帳，你連續三天走路都像在飄。'
-      : '同事拿到補校畢業證書的那天，你在台下鼓掌。你默默想：也許明年。你把這個念頭收好，像收一張還沒用過的車票，也提醒自己：這一次，不再把它丟進抽屜。'),
+      : `${h.wageEarner() ? '同事' : '同班的人'}拿到補校畢業證書的那天，你在台下鼓掌。你默默想：也許明年。你把這個念頭收好，像收一張還沒用過的車票，也提醒自己：這一次，不再把它丟進抽屜。`),
     effects: (s, h) => {
       if (h.has('y_night_class')) { h.change('knowledge', +3); h.change('wealth', +3); h.change('happiness', +4); h.highlight('下班後念夜校，拿到畢業證書。'); }
       else { h.change('knowledge', +1); }
@@ -1693,6 +1697,7 @@ export default [
   },
   {
     id: 'youth_ai_exam_check',
+    followCond: (s, h) => h.inSchool(),
     title: '沒有工具的考試',
     ages: [14, 23],
     weight: 0,
@@ -1736,6 +1741,7 @@ export default [
     title: '補習班的燈',
     ages: [12, 20],
     weight: 0,
+    followCond: (s, h) => h.inSchool(),
     tags: ['followup', 'school', 'health'],
     text: (s, h) => '補習班的燈光、考卷上的橡皮擦屑、一包又一包的咖啡。這學期你開始在課堂上打瞌睡，心跳偶爾會亂拍。老師看了你一眼，沒說什麼，在聯絡簿上寫了一行小字：「你有在睡覺嗎？」',
     effects: { health: -3, happiness: -3, knowledge: +1 },

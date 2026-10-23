@@ -32,8 +32,8 @@ export default [
     text: (s, h) => `這一年你說出了第一個詞。${h.byIncome({
       L: '那時家裡正好有人在院子裡忙著，大家同時抬頭，然後都笑了。',
       LM: '全家人圍著你，爭論那到底是在叫誰。',
-      UM: '媽媽急著拿手機想錄下來，你卻又不肯再說第二次。',
-      H: '爸爸媽媽輪流把你說的話寫進成長日記，字跡都有點興奮。',
+      UM: `${h.parentsLabel()}急著拿${h.year() >= 2005 ? '手機' : '相機'}想錄下來，你卻又不肯再說第二次。`,
+      H: `${h.parentsLabel()}把你說的話一句句寫進成長日記，字跡都有點興奮。`,
     })}`,
     effects: { happiness: +2, social: +1, knowledge: +2 },
   },
@@ -48,8 +48,8 @@ export default [
     tags: ['health', 'childhood'],
     text: (s, h) => `你燒了好幾天，渾身發燙。${h.byIncome({
       L: '家人輪流用濕布替你擦身體，走了半天的路才找到診所，藥錢是向鄰居借的。',
-      LM: '媽媽背著你去了衛生所，護理師說再晚一點就麻煩了。',
-      UM: '爸媽輪流請假帶你看醫生，打了針後燒總算退了。',
+      LM: `${h.parentsLabel()}背著你去了衛生所，護理師說再晚一點就麻煩了。`,
+      UM: `${h.parentsLabel()}輪流請假帶你看醫生，打了針後燒總算退了。`,
       H: '家庭醫師很快替你做了檢查，開了藥，也叮嚀要多喝水、好好休息。',
     })}`,
     effects: (s, h) => {
@@ -82,16 +82,20 @@ export default [
   },
   {
     id: 'seed_chores_or_play',
-    title: '放學後的選擇',
+    title: '下午的選擇',
     ages: [8, 12],
     tags: ['childhood', 'family'],
     major: true,
     cond: (s, h) => h.wealthQ() <= 4,
     text: (s, h) => h.byIncome({
-      L: '放學後，家人需要你去田裡或市集幫忙，但巷口的孩子們在踢一顆破舊的球，喊著你的名字。',
-      LM: '店裡正忙，爸媽沒說要你留下，但你知道他們需要人手。外面的朋友在叫你去玩。',
-      UM: '作業還沒寫完，補習班快要遲到了，窗外朋友在喊你去球場。你看看時鐘，又看看書包。',
-      H: '你的行事曆排滿了才藝課與作業，而朋友邀你去公園。你只剩下一個下午。',
+      L: `${h.inSchool() ? '放學後' : '這個下午'}，家人需要你去田裡或市集幫忙，但巷口的孩子們在踢一顆破舊的球，喊著你的名字。`,
+      LM: `店裡正忙，${h.parentsLabel()}沒說要你留下，但你知道他們需要人手。外面的朋友在叫你去玩。`,
+      UM: h.inSchool()
+        ? '作業還沒寫完，補習班快要遲到了，窗外朋友在喊你去球場。你看看時鐘，又看看書包。'
+        : '家裡交代的事還沒做完，課後的才藝班快要遲到了，窗外朋友在喊你去球場。你看看時鐘，又看看門口。',
+      H: h.inSchool()
+        ? '你的行事曆排滿了才藝課與作業，而朋友邀你去公園。你只剩下一個下午。'
+        : '你的行事曆排滿了才藝課與家教，而朋友邀你去公園。你只剩下一個下午。',
     }),
     choices: [
       {
@@ -131,7 +135,7 @@ export default [
         result: (s, h) => h.byIncome({
           L: '老師把兩人叫過去，說了幾句，事情被壓了下來，雖然不算解決，但至少不再那麼頻繁。',
           LM: '老師把兩人叫過去，說了幾句，事情被壓了下來，雖然不算解決，但至少不再那麼頻繁。',
-          UM: '學校找了雙方家長談話，對方道了歉。你不太確定那算不算誠意，但日子好過多了。',
+          UM: `學校找了雙方${h.parentsLabel() === '身邊的大人' ? '的監護人' : '家長'}談話，對方道了歉。你不太確定那算不算誠意，但日子好過多了。`,
           H: '學校的輔導老師介入，安排了調解。你終於說出口，也終於有人認真聽。',
         }),
         ai: 2,
@@ -146,7 +150,7 @@ export default [
       {
         label: '反擊',
         effects: { happiness: +1, social: -2, health: -2 },
-        result: (s, h) => '你在放學路上和對方打了起來，雙方都掛了彩，也都被叫了家長。之後再也沒有人敢搶你的東西，但你也學到了拳頭不是什麼好答案。',
+        result: (s, h) => '你在放學路上和對方打了起來，雙方都掛了彩，也都被叫去了辦公室，' + (h.parentsLabel() === '身邊的大人' ? '照顧你的人' : '家長') + '被請到學校。之後再也沒有人敢搶你的東西，但你也學到了拳頭不是什麼好答案。',
         ai: 0.8,
       },
     ],
@@ -196,6 +200,7 @@ export default [
   },
   {
     id: 'seed_exam_result',
+    followCond: (s, h) => h.inSchool() || h.eduYears() >= 11 || h.age() >= 19, // not for someone who left school long ago
     title: '放榜的日子',
     ages: [16, 21],
     weight: 0, // follow-up only: reached through schedule, never drawn at random
@@ -219,7 +224,7 @@ export default [
     tags: ['youth', 'health'],
     major: true,
     cond: (s, h) => !h.isSmoker(),
-    text: (s, h) => '放學後，朋友們躲在後巷。有人遞過來一根菸，笑著說：「試一下嘛，大家都有。」所有人的眼睛都在看你。',
+    text: (s, h) => `${h.inSchool() ? '放學後' : '天黑後'}，朋友們躲在後巷。有人遞過來一根菸，笑著說：「試一下嘛，大家都有。」所有人的眼睛都在看你。`,
     choices: [
       {
         label: '接過來試試',
@@ -251,8 +256,10 @@ export default [
     cond: (s, h) => !h.hasPartner() && h.stat('happiness') > 25 && !h.married(),
     text: (s, h) => h.byIncome({
       L: '市集上、水井旁、放牛的路上，你總會遇見同一個人。每次擦身而過，你的心跳都亂了拍。',
-      LM: '你總在放學的路上遇見同一個人。每次擦身而過，你的心跳都亂了拍，連回家的路也變短了。',
-      UM: '同班的那個人，不知從什麼時候起，成為你上課時最常偷看的方向。',
+      LM: `你總在${h.inSchool() ? '放學' : '回家'}的路上遇見同一個人。每次擦身而過，你的心跳都亂了拍，連回家的路也變短了。`,
+      UM: h.inSchool()
+        ? '同班的那個人，不知從什麼時候起，成為你上課時最常偷看的方向。'
+        : '住在附近的那個人，不知從什麼時候起，成為你路過時最常偷看的方向。',
       H: '社團活動結束後，那個人和你一起收拾場地。月光把兩人的影子拉得很長，誰也沒有先開口。',
     }),
     choices: [
@@ -296,7 +303,7 @@ export default [
         set: ['left_home'],
         unset: ['stayed_home'],
         result: (s, h) => `你搭上了出發的車。車窗外的田野與房子一一退去，你把額頭抵在玻璃上，第一次覺得自己是個大人。`,
-        highlight: true,
+        highlight: '第一次離開家鄉，到外地生活。',
         ai: (s, h) => (h.isPoor() ? 2 : 1.3),
       },
       {
@@ -332,7 +339,11 @@ export default [
       },
       {
         label: '先去工作存錢',
-        effects: { wealth: +3, knowledge: -1, happiness: -1 },
+        effects: (s, h) => {
+          h.change('wealth', +3); h.change('knowledge', -1); h.change('happiness', -1);
+          h.dropOut();
+          if (!h.employed()) h.startJob(h.pick(['clerk', 'sales', 'technician', 'factory']));
+        },
         result: (s, h) => '你放下書本，找了一份工作。第一個月薪水交給家裡一半，剩下的存了起來。念書的事，被你暫時鎖進抽屜。',
         set: ['skipped_college'],
         ai: (s, h) => (h.isPoor() ? 2 : 0.8),
@@ -356,7 +367,7 @@ export default [
     cond: (s, h) => h.inSchool() && h.incomeAtLeast('LM') && !h.employed(),
     text: (s, h) => h.byIncome({
       LM: '週末你在市場幫忙搬貨，老闆娘在你的口袋裡塞了兩顆橘子。那是你第一次用自己的力氣換到錢。',
-      UM: '寒暑假你去便利商店當店員，學到的不只是結帳，還有怎麼對陌生人保持耐心。',
+      UM: `寒暑假你去${h.techReady(1985) ? '便利商店' : '雜貨店'}當店員，學到的不只是結帳，還有怎麼對陌生人保持耐心。`,
       H: '你在附近的咖啡店找到打工，第一次領薪水的當天就花掉一半，剩下的一半很快也花光了。',
     }),
     effects: { wealth: +2, social: +2, health: -1, knowledge: +1 },
@@ -380,7 +391,7 @@ export default [
     weight: 0.7,
     tags: ['social'],
     cond: (s, h) => h.incomeAtLeast('UM') || h.urban(),
-    text: (s, h) => '朋友的朋友辦了一場派對，音樂太大聲，你在陽台跟一個陌生人聊了一整晚。第二天頭很痛，但手機裡多了一個之後會聯絡很多年的名字。',
+    text: (s, h) => `朋友的朋友辦了一場派對，音樂太大聲，你在陽台跟一個陌生人聊了一整晚。第二天頭很痛，但${h.year() >= 2005 ? '手機' : '通訊錄'}裡多了一個之後會聯絡很多年的名字。`,
     effects: { social: +4, happiness: +2, health: -1 },
   },
 
@@ -393,7 +404,7 @@ export default [
     ages: [24, 45],
     tags: ['work'],
     major: true,
-    cond: (s, h) => h.employed() && h.eduAtLeast('secondary') && !h.has('recent_job_offer'),
+    cond: (s, h) => h.wageEarner() && h.eduAtLeast('secondary') && !h.has('recent_job_offer'),
     text: (s, h) => `有人私下找你：「${h.jobName() || '現在的職位'}做這麼多年，要不要來我們這裡？」薪水高一些，但要搬去另一個地方，一切都得重來。`,
     choices: [
       {
@@ -401,7 +412,7 @@ export default [
         effects: (s, h) => { h.change('wealth', +4); h.change('social', -3); h.change('happiness', h.chance(0.55) ? +4 : -3); },
         set: ['changed_career'],
         result: '你遞出了辭呈。新環境一開始讓你喘不過氣，半年後，你才慢慢在新的辦公桌前找到自己的位置。',
-        highlight: true,
+        highlight: '換了一份工作，搬到新的地方重新開始。',
         ai: (s, h) => (h.stat('happiness') < 50 ? 2 : 1),
       },
       {
@@ -427,7 +438,8 @@ export default [
     once: false,
     cooldown: 2,
     tags: ['work', 'followup'],
-    cond: (s, h) => h.unemployed(),
+    cond: (s, h) => h.unemployed() && !h.inSchool(),
+    followCond: (s, h) => (h.unemployed() || h.workStatus() === 'none') && !h.inSchool(),
     text: (s, h) => '投出的履歷像石沉大海，面試時被問得最多的是「你的經驗」。第三個月，總算有一通電話打來，要你下週一去上班。',
     effects: (s, h) => {
       const ids = h.eduAtLeast('tertiary') ? ['clerk', 'teacher', 'engineer', 'accountant', 'manager', 'sales'] : h.eduAtLeast('secondary') ? ['clerk', 'sales', 'technician', 'factory', 'driver', 'cook'] : ['laborer', 'street_vendor', 'farmer', 'domestic', 'construction'];
@@ -446,7 +458,7 @@ export default [
     cooldown: 6,
     tags: ['work', 'milestone'],
     milestone: true,
-    cond: (s, h) => h.employed() && h.eduAtLeast('secondary') && h.stat('knowledge') > 30,
+    cond: (s, h) => h.wageEarner() && h.eduAtLeast('secondary') && h.stat('knowledge') > 30,
     text: (s, h) => `主管把你叫進辦公室，說你這幾年的表現大家有目共睹，要把更多責任交給你。你嘴上說謝謝，心裡想的是回家要怎麼說。`,
     effects: { wealth: +5, happiness: +4, social: +2 },
     highlight: '得到一次升遷。',
@@ -461,8 +473,8 @@ export default [
     text: (s, h) => h.byIncome({
       L: '你一直看著鎮上那家小店的生意。你手上有一點存款，也有一個點子：在路口擺個攤子。',
       LM: '你存了一筆錢，也想好了要賣什麼。朋友說門面租金只會越來越貴，現在不做以後更難。',
-      UM: '你盤算著把這幾年存下的錢拿來開一家自己的店。每次下班想到這件事，都讓你睡不著。',
-      H: '你的筆電裡躺著一份創業計畫。你已經看了無數遍，知道風險，也知道自己會後悔沒試。',
+      UM: `你盤算著把這幾年存下的錢拿來開一家自己的店。每次${h.wageEarner() ? '下班' : '忙完手邊的事'}想到這件事，都讓你睡不著。`,
+      H: `你的${h.techReady(1995) ? '筆電裡' : '抽屜裡'}躺著一份創業計畫。你已經看了無數遍，知道風險，也知道自己會後悔沒試。`,
     }),
     choices: [
       {
@@ -479,7 +491,7 @@ export default [
         ai: (s, h) => (h.stat('wealth') > 50 ? 1.4 : 0.6),
       },
       {
-        label: '先利用下班時間試水溫',
+        label: '先利用空檔試水溫',
         effects: (s, h) => { h.set('tried_business'); h.change('health', -3); h.change('wealth', h.chance(0.5) ? +3 : -1); },
         result: '你把生意當成副業。累是真的累，但風險小得多，你一點一點確認這條路走不走得通。',
         ai: 2,
@@ -503,7 +515,7 @@ export default [
     text: (s, h) => h.byIncome({
       L: '家裡有人生病、收成不好，你向鄰居與放貸的人借了錢。利息一個月一個月滾下去，數字比你的工資跑得快。',
       LM: '一場意外讓家裡欠下了一筆錢。債主開始上門，鄰居的眼神也變得小心翼翼。',
-      UM: '信用卡帳單與貸款堆在一起，你每個月只能還最低金額。夜裡你常盯著天花板計算。',
+      UM: `${h.techReady(1980) ? '信用卡帳單' : '各種欠款'}與貸款堆在一起，你每個月只能還最低金額。夜裡你常盯著天花板計算。`,
       H: '房貸、卡費與一次失敗的投資，讓帳戶只剩下個位數。你把帳單攤在桌上，第一次承認自己撐不下去了。',
     }),
     choices: [
@@ -649,7 +661,7 @@ export default [
     cond: (s, h) => (s.family.mother.alive && s.family.mother.age >= 62) || (s.family.father.alive && s.family.father.age >= 62),
     text: (s, h) => {
       const who = s.family.mother.alive && s.family.mother.age >= 62 ? s.family.mother.name : s.family.father.name;
-      return `${who}突然病倒了。醫生說需要長期照顧，電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。`;
+      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 0 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
     },
     choices: [
       {
@@ -668,6 +680,7 @@ export default [
       },
       {
         label: '與手足輪流分擔',
+        cond: (s, h) => h.siblings() > 0,
         effects: { happiness: -1, health: -2, social: +1 },
         result: '你和手足排出輪值表。吵過幾次架，也在病房外一起吃過便當。那是這些年裡你們最常聚在一起的時光。',
         ai: 2,
@@ -723,7 +736,7 @@ export default [
     cooldown: 6,
     tags: ['migration', 'followup'],
     cond: (s, h) => h.isMigrant(),
-    text: (s, h) => `${h.countryName()}的冬天特別長。你在廚房煮了一鍋家鄉的湯，一口喝下去，眼淚就掉在碗裡。同事問你怎麼了，你說：「沒事，辣椒太辣。」`,
+    text: (s, h) => `${h.countryName()}的冬天特別長。你在廚房煮了一鍋家鄉的湯，一口喝下去，眼淚就掉在碗裡。${h.wageEarner() ? '同事' : '鄰居'}問你怎麼了，你說：「沒事，辣椒太辣。」`,
     effects: { happiness: -3, social: -1 },
   },
 
@@ -786,7 +799,12 @@ export default [
     cooldown: 8,
     weight: 0.35,
     tags: ['health', 'accident'],
-    text: (s, h) => `${h.byIncome({
+    text: (s, h) => s.age < 18 ? h.byLiving({
+      L: '你在路上跑著跑著被一輛摩托車擦撞，腿腫得像饅頭。家人用板車把你送到最近的診所，醫藥費是向鄰居借的。',
+      LM: '你在路上被一輛違規的車擦撞，骨折躺了好幾週，家裡為了醫藥費和你的接送傷透腦筋。',
+      UM: '你騎腳踏車時摔了一跤，手臂骨折。打上石膏的那幾週，' + (h.inSchool() ? '同學們' : '鄰居的孩子們') + '搶著在上面簽名。',
+      H: '你在樓梯上踩空，腳踝骨折。醫療處理得很順利，但漫長的復健和不能去玩的日子讓你很不耐煩。',
+    }) : `${h.byIncome({
       L: '你從工作的地方摔了下來，沒有保險，也沒有人賠償。是同伴們湊了錢才把你送到醫院。',
       LM: '你在路上被一輛違規的車擦撞，骨折躺了好幾週，這期間沒有工作就沒有收入。',
       UM: '你騎車時摔了一跤，手臂骨折。保險賠了一部分，剩下的假得自己想辦法補。',
@@ -816,7 +834,7 @@ export default [
     ages: [10, 70],
     chance: 0.5,
     tags: ['world', 'tech'],
-    cond: (s, h) => h.yearIn(2009, 2014) && h.incomeAtLeast('LM') && h.stat('wealth') > 30,
+    cond: (s, h) => h.yearIn(2009, 2024) && h.techReady(2009) && !h.techReady(2015) && h.incomeAtLeast('LM') && h.stat('wealth') > 30 && !h.has('has_smartphone'),
     text: (s, h) => `你拿到了第一支能上網的手機。起初你只是拿來查路線與傳訊息，沒多久，你就發現自己每天都會在睡前滑上半小時，直到眼皮沉重。`,
     effects: { knowledge: +2, social: +3, happiness: +1, health: -1 },
     set: ['has_smartphone'],
@@ -840,6 +858,16 @@ export default [
       h.change('wealth', h.byIncome({ L: -4, LM: -3, UM: -1, H: 0 }));
       if (h.age() >= 60 && h.chance(0.04)) h.addRisk(2.2, 1);
     },
+    // The aftermath is told through follow-ups of this event (each checks in its followCond that it still fits), so
+    // nobody meets "the vaccine queue" or "the reopening" in a life where the pandemic never happened.
+    schedule: [
+      { id: 'world_pandemic_remote_school', inYears: [0, 1], p: 0.8 },
+      { id: 'world_pandemic_work', inYears: [0, 1], p: 0.7 },
+      { id: 'world_pandemic_vaccine', inYears: [1, 2], p: 0.8 },
+      { id: 'world_pandemic_bereavement', inYears: [0, 2], p: 0.25 },
+      { id: 'world_pandemic_long', inYears: [1, 4], p: 0.12 },
+      { id: 'world_pandemic_reopening', inYears: [2, 3], p: 0.6 },
+    ],
   },
 
   // =====================================================================================
@@ -851,7 +879,7 @@ export default [
     ages: [57, 68],
     tags: ['work', 'aging'],
     major: true,
-    cond: (s, h) => h.employed() && !h.has('retirement_decided'),
+    cond: (s, h) => h.wageEarner() && !h.has('retirement_decided'),
     text: (s, h) => h.byIncome({
       L: '你的身體越來越吃力。可是沒有退休金，不工作的話，餐桌上的飯就是一個問題。',
       LM: '同事們陸續辦理退休，你的腰也不如從前。可是你的存款加退休金，可能不夠撐太久。',
@@ -887,11 +915,11 @@ export default [
     id: 'seed_grandchild',
     title: '當了祖父母',
     ages: [45, 85],
-    chance: 0.07,
+    chance: 0.12,
     tags: ['family', 'milestone'],
     milestone: true,
-    cond: (s, h) => h.hasChildren() && !h.has('grandparent') && s.children.some((c) => c.alive && s.year - c.birthYear >= 22),
-    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「爸媽，我要當爸媽了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
+    cond: (s, h) => h.hasChildren() && !h.has('grandparent') && h.expectedGrandchildren() > 0,
+    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「${h.hasPartner() ? '爸媽' : h.male() ? '爸' : '媽'}，我要當${h.hasPartner() ? '爸媽' : h.male() ? '爸爸' : '媽媽'}了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
     effects: { happiness: +8, social: +4 },
     set: ['grandparent'],
     highlight: '抱起了第一個孫輩。',

@@ -175,6 +175,8 @@ const inConflict = (s, h) => {
 };
 
 const working = (h) => h.employed();
+/** The kind of job a recruiter or an informal channel finds for somebody without a trade. */
+const abroadJob = (h) => (h.female() ? h.pick(['domestic', 'caregiver', 'factory']) : h.pick(['construction', 'laborer', 'factory']));
 
 export default [
   // =====================================================================================
@@ -203,7 +205,7 @@ export default [
           h.change('social', -3); h.change('wealth', +2); h.change('knowledge', +2); h.change('happiness', +1);
         },
         set: ['m_city'],
-        result: (s, h) => `你搬進了${h.city()}的一間小房間，窗外就是另一棟樓的牆。第一個晚上你覺得這個地方太吵，第三個晚上你已經習慣了冷氣機的嗡嗡聲。`,
+        result: (s, h) => `你搬進了${h.city()}的一間小房間，窗外就是另一棟樓的牆。第一個晚上你覺得這個地方太吵，第三個晚上你已經習慣了街上的喧鬧聲。`,
         highlight: (s, h) => `從鄉下搬到了${h.city()}。`,
         schedule: [{ id: 'migration_city_first_year', inYears: [1, 2] }],
         ai: (s, h) => (h.isPoor() ? 1.8 : 1.1),
@@ -232,9 +234,9 @@ export default [
     tags: ['migration', 'internal', 'followup'],
     text: (s, h) => h.byIncome({
       L: '城裡的房租貴得嚇人，你和四個人擠在一間屋子。最難的是學會看紅綠燈和認路，最容易的是想家。夜裡你聽著室友的鼾聲，慢慢睡著了。',
-      LM: '你在城裡的第一年學了很多：搭哪一班車比較便宜、哪個市場的菜最新鮮、怎麼避開仲介。你的口音，也慢慢變了一點，某天打電話回家，母親說：「你講話怎麼不一樣了？」',
+      LM: `你在城裡的第一年學了很多：搭哪一班車比較便宜、哪個市場的菜最新鮮、怎麼避開仲介。你的口音，也慢慢變了一點，某天打電話回家，${h.parentAlive('mother') ? '母親' : '家裡的長輩'}說：「你講話怎麼不一樣了？」`,
       UM: '搬進城的第一年，你的通勤時間是家鄉的五倍，擠在車廂裡你學會了站著睡覺。你開始懂得「週末」兩個字的價值，也懂得它有多短。',
-      H: '搬到大城市的第一年，你的薪水漲了，房間縮小了。你學會在咖啡店寫工作、在窗邊看夜景，也學會了一個人吃飯不覺得尷尬。週末你坐在窗邊，看對面大樓一格一格亮起燈。',
+      H: `搬到大城市的第一年，你的${h.wageEarner() ? '薪水' : '開銷'}漲了，房間縮小了。你學會在咖啡店寫工作、在窗邊看夜景，也學會了一個人吃飯不覺得尷尬。週末你坐在窗邊，看對面大樓一格一格亮起燈。`,
     }),
     effects: { knowledge: +3, social: -2, happiness: -1, wealth: +1 },
   },
@@ -254,7 +256,7 @@ export default [
       {
         label: '透過合法仲介，借錢付費用',
         effects: (s, h) => {
-          moveTo(s, h, pickDest(s, h, 'work'));
+          if (moveTo(s, h, pickDest(s, h, 'work')) && !h.employed()) h.startJob(abroadJob(h));
           h.set('m_contract'); h.change('wealth', -3); h.change('social', -5); h.change('happiness', -1);
         },
         set: ['m_abroad_decided'],
@@ -269,7 +271,7 @@ export default [
         label: '找費用較低的非正式管道',
         effects: (s, h) => {
           if (h.chance(0.4)) { h.change('wealth', -6); h.change('happiness', -5); h.set('m_scammed'); }
-          else { h.unset('m_scammed'); moveTo(s, h, pickDest(s, h, 'work')); h.set('m_irregular'); h.change('wealth', -2); h.change('social', -5); h.addRisk(1.05, 3); }
+          else { h.unset('m_scammed'); if (moveTo(s, h, pickDest(s, h, 'work')) && !h.employed()) h.startJob(abroadJob(h)); h.set('m_irregular'); h.change('wealth', -2); h.change('social', -5); h.addRisk(1.05, 3); }
         },
         set: ['m_abroad_decided'],
         result: (s, h) => (h.has('m_scammed')
@@ -290,6 +292,7 @@ export default [
   },
   {
     id: 'migration_contract_life',
+    followCond: (s, h) => !h.isMigrant(),
     title: '宿舍與工作之間',
     ages: [20, 52],
     weight: 0,
@@ -301,6 +304,7 @@ export default [
   },
   {
     id: 'migration_contract_end',
+    followCond: (s, h) => h.isMigrant(),
     title: '契約到期',
     ages: [21, 58],
     weight: 0,
@@ -343,9 +347,9 @@ export default [
     tags: ['migration', 'education', 'chain'],
     cond: (s, h) => !h.isMigrant() && h.eduAtLeast('secondary') && !h.has('m_study_decided'),
     text: (s, h) => h.byIncome({
-      L: '學校公告了海外獎學金的申請。名額很少，申請文件要用外語寫，但你的老師說：「你至少該試一次。」那天走回家的路，你的腳步特別輕。',
+      L: `學校公告了海外獎學金的申請。名額很少，申請文件要用外語寫，但${h.inSchool() ? '你的老師' : '以前教過你的老師'}說：「你至少該試一次。」那天走回家的路，你的腳步特別輕。`,
       LM: '你的成績足夠申請海外的學校。獎學金很競爭，自費太貴，申請文件堆滿了整張書桌，每一份都需要翻譯、公證，和一點運氣。',
-      UM: '同學一個個準備出國念書，補習班、語言考試、推薦信、財力證明。你在排行榜上看了又看，不知道自己想去哪裡，寄出申請前一晚你整夜沒睡。',
+      UM: `${h.inSchool() ? '同學' : '同齡的朋友'}一個個準備出國念書，補習班、語言考試、推薦信、財力證明。你在排行榜上看了又看，不知道自己想去哪裡，寄出申請前一晚你整夜沒睡。`,
       H: '你收到海外交換或碩士班的邀請。學費不低，也意味著離開熟悉的一切一兩年，甚至更久。你把信看了三遍，才敢告訴家人，結果家人比你還高興，也比你還擔心。',
     }),
     choices: [
@@ -353,7 +357,7 @@ export default [
         label: '申請獎學金出國',
         effects: (s, h) => {
           const p = h.byIncome({ L: 0.4, LM: 0.45, UM: 0.55, H: 0.6 });
-          if (h.chance(p)) { moveTo(s, h, pickDest(s, h, 'study')); h.set('m_student'); h.change('knowledge', +6); h.change('social', -5); h.change('wealth', -2); h.change('happiness', +1); }
+          if (h.chance(p)) { if (moveTo(s, h, pickDest(s, h, 'study'))) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +6); h.change('social', -5); h.change('wealth', -2); h.change('happiness', +1); }
           else { h.change('happiness', -2); h.change('knowledge', +2); }
         },
         set: ['m_study_decided'],
@@ -367,7 +371,7 @@ export default [
       {
         label: '自費出國，用家裡的積蓄',
         cond: (s, h) => h.incomeAtLeast('UM') || h.stat('wealth') >= 40,
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'study')); h.set('m_student'); h.change('knowledge', +5); h.change('wealth', -5); h.change('social', -4); },
+        effects: (s, h) => { if (moveTo(s, h, pickDest(s, h, 'study'))) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +5); h.change('wealth', -5); h.change('social', -4); },
         set: ['m_study_decided'],
         result: (s, h) => `家人把積蓄一點一點湊出來。你抵達${h.countryName()}那天，行李箱裡塞滿了家鄉的零食，一半在海關被拿走了。`,
         schedule: [{ id: 'migration_after_graduation', inYears: [3, 5] }],
@@ -377,7 +381,7 @@ export default [
         label: '留在本地升學或就業',
         effects: { social: +2, happiness: +1, wealth: +1 },
         set: ['m_study_decided'],
-        result: '你把申請資料收進檔案夾，轉身報了本地的學校。你偶爾會想像另一個版本的自己，但你也知道，現在的路上有你熟悉的臉。',
+        result: '你把申請資料收進檔案夾，決定先在這裡把路走穩。你偶爾會想像另一個版本的自己，但你也知道，現在的路上有你熟悉的臉。',
         ai: 1.8,
       },
     ],
@@ -387,8 +391,9 @@ export default [
     title: '畢業之後去哪裡',
     ages: [21, 40],
     weight: 0,
+    followCond: (s, h) => h.has('m_student') && h.isMigrant(), // the application may have been turned down
     tags: ['migration', 'education', 'followup'],
-    text: (s, h) => `畢業典禮上你和同學互相拍著肩膀。簽證快到期了，面試通知與家人的電話幾乎在同一天來到。你在${h.countryName()}的日子，很快就要有一個新的答案。`,
+    text: (s, h) => `${h.eduAtLeast('tertiary') ? '畢業典禮上你和同學互相拍著肩膀。' : '身邊的同學一個個畢業、離開，你的學業卻還沒有結束。'}簽證快到期了，面試通知與家人的電話幾乎在同一天來到。你在${h.countryName()}的日子，很快就要有一個新的答案。`,
     choices: [
       {
         label: '申請工作簽證，留下來',
@@ -458,7 +463,7 @@ export default [
         label: '把心力放在本地的發展',
         effects: { social: +2, happiness: +1 },
         set: ['m_points'],
-        result: '你把網頁關了。也許沒有出國，但你的事業與人脈在這裡慢慢長出了根。',
+        result: (s, h) => `你把${h.techReady(1995) ? '網頁' : '簡章'}關了。也許沒有出國，但你的事業與人脈在這裡慢慢長出了根。`,
         ai: 1.2,
       },
     ],
@@ -518,6 +523,7 @@ export default [
   },
   {
     id: 'migration_expat_life',
+    followCond: (s, h) => h.isMigrant(),
     title: '外派生活的另一面',
     ages: [29, 58],
     weight: 0,
@@ -781,7 +787,7 @@ export default [
     ages: [18, 62],
     weight: 1.4,
     tags: ['migration', 'adjustment'],
-    cond: (s, h) => h.isMigrant(),
+    cond: (s, h) => h.isMigrant() && h.yearsAbroad() <= 1,
     text: (s, h) => h.byIncome({
       L: '你到了一個語言、氣味、食物都不一樣的地方。在路邊攤蹲著吃飯時，旁邊的人看了你一眼，把一碟調味料推過來。你們什麼都沒說，但你覺得這裡也許能待下去。',
       LM: '市場裡的菜名你一半不會唸，攤販耐心地比手畫腳。你買回一樣不知道怎麼煮的東西，鄰居教你煮，味道出乎意料地好，你把這道菜的名字寫在手心。',
@@ -797,7 +803,7 @@ export default [
     weight: 1,
     tags: ['migration', 'adjustment', 'language'],
     cond: (s, h) => h.isMigrant() && !h.has('m_lang'),
-    text: (s, h) => '會議室裡大家笑成一團，你只聽見每個詞都懂，合起來卻不懂。你點頭、微笑，等到所有人散場才發現，笑話其實是和你有關的。你決定，不能再這樣下去。',
+    text: (s, h) => (h.officeJob() ? '會議室裡' : '午休時的休息區裡') + '大家笑成一團，你只聽見每個詞都懂，合起來卻不懂。你點頭、微笑，等到所有人散場才發現，笑話其實是和你有關的。你決定，不能再這樣下去。',
     choices: [
       {
         label: '報名語言課，系統地學',
@@ -807,10 +813,10 @@ export default [
         ai: 1.6,
       },
       {
-        label: '邊工作邊學，請同事多聊天',
+        label: '邊工作邊學，請身邊的人多聊天',
         effects: { knowledge: +3, social: +3, happiness: 0 },
         set: ['m_lang'],
-        result: '你讓同事糾正你每一個發音。有人笑你，有人幫你，你學得很快，也出了不少糗，但這些糗事後來變成了你和同事間的暗號。',
+        result: (s, h) => `你讓${h.wageEarner() ? '同事' : '鄰居'}糾正你每一個發音。有人笑你，有人幫你，你學得很快，也出了不少糗，但這些糗事後來變成了你和${h.wageEarner() ? '同事' : '鄰居'}間的暗號。`,
         ai: 1.8,
       },
       {
@@ -865,7 +871,7 @@ export default [
     weight: 0,
     tags: ['migration', 'work', 'followup'],
     text: (s, h) => (h.has('m_cred_ok')
-      ? '成績單上的「通過」兩個字，你看了三次。你拿著證書走進以前拒絕過你的那間辦公室，櫃檯人員對你微笑：「歡迎。」那一刻你很想大喊，但還是優雅地道謝。'
+      ? '成績單上的「通過」兩個字，你看了三次。你拿著證書走進以前拒絕過你的那間窗口，櫃檯人員對你微笑：「歡迎。」那一刻你很想大喊，但還是優雅地道謝。'
       : '考試沒能通過，證書又離你遠了一些。你坐在公園的長椅上吃便當，看一群孩子在草地上追球。你知道自己會再試一次，只是需要先喘口氣。'),
     effects: (s, h) => {
       if (h.has('m_cred_ok')) { h.startJob(h.eduAtLeast('graduate') ? 'researcher' : h.pick(['engineer', 'accountant', 'teacher', 'nurse'])); h.change('wealth', +4); h.change('happiness', +5); h.highlight('在異鄉重新取得專業資格。'); }
@@ -975,12 +981,13 @@ export default [
     ages: [23, 66],
     weight: 0,
     tags: ['migration', 'money', 'followup'],
-    text: (s, h) => '家人寄來一張照片：新蓋好的房子，門口站著所有人，笑得很用力。你把照片看了又看，眼眶發熱。那些加班與孤單的夜晚，在這一刻有了形狀。',
+    text: (s, h) => '家人寄來一張照片：新蓋好的房子，門口站著所有人，笑得很用力。你把照片看了又看，眼眶發熱。那些漫長而孤單的夜晚，在這一刻有了形狀。',
     effects: { happiness: +4, social: +3 },
     highlight: '寄回去的錢，在家鄉蓋起了新的家。',
   },
   {
     id: 'migration_family_joins',
+    followCond: (s, h) => h.isMigrant(),
     title: '機場的出口',
     ages: [23, 66],
     weight: 0,
@@ -1029,7 +1036,7 @@ export default [
     weight: 1,
     tags: ['migration', 'community'],
     cond: (s, h) => h.isMigrant() && !h.has('m_community'),
-    text: (s, h) => '有天你路過一家掛著熟悉文字的小店，推門進去，聞到熟悉的氣味。老闆說週末有聚會，大家會帶菜、談工作、介紹彼此的親戚。你鼓起勇氣去了，結果連續去了好幾年。',
+    text: (s, h) => '有天你路過一家掛著熟悉文字的小店，推門進去，聞到熟悉的氣味。店老闆說週末有聚會，大家會帶菜、談工作、介紹彼此的親戚。你鼓起勇氣去了，結果連續去了好幾年。',
     effects: { social: +5, happiness: +3 },
     set: ['m_community'],
   },
@@ -1116,7 +1123,7 @@ export default [
     weight: 0.7,
     tags: ['migration', 'homesick'],
     cond: (s, h) => h.isMigrant() && (h.siblings() > 0 || h.parentsAlive() > 0),
-    text: (s, h) => `你隔了好幾年才回${homeName(s)}。巷口的店換了招牌，認識的人老了，連你記得的路都改了。親戚們把你當客人，招待得周到，也有一點生疏。你在老家的屋頂下睡了幾晚，才慢慢找回口音。`,
+    text: (s, h) => `你隔了${h.yearsAbroad() >= 3 ? '好幾年' : '一陣子'}才回${homeName(s)}。巷口的店換了招牌，認識的人老了，連你記得的路都改了。親戚們把你當客人，招待得周到，也有一點生疏。你在老家的屋頂下睡了幾晚，才慢慢找回口音。`,
     effects: { happiness: +2, social: +2, wealth: -2 },
   },
   {
@@ -1165,6 +1172,7 @@ export default [
   },
   {
     id: 'migration_return_readjust',
+    followCond: (s, h) => !h.isMigrant(),
     title: '回來之後的陌生感',
     ages: [24, 70],
     weight: 0,
@@ -1174,6 +1182,7 @@ export default [
   },
   {
     id: 'migration_return_business',
+    followCond: (s, h) => !h.isMigrant(),
     title: '帶回來的積蓄',
     ages: [24, 70],
     weight: 0,

@@ -16,6 +16,9 @@ const PHYSICAL_JOBS = ['farmer', 'fisher', 'laborer', 'miner', 'factory', 'const
 const roadWeight = (h) => Math.max(0.2, Math.min(2.5, (h.stats().road || 10) / 12));
 const clinicName = (h) => h.byIncome({ L: '衛生所', LM: '診所', UM: '醫院', H: '診所' });
 
+/** '她' or '他' for the parent who has just died (the grief events follow the death entry). */
+const heOf = (h) => (h.recentLog('母親過世', 1) ? '她' : '他');
+
 export default [
   // =====================================================================================
   // 日常疾病與就醫可近性
@@ -48,7 +51,7 @@ export default [
     cooldown: 6,
     weight: 0.6,
     tags: ['health', 'illness', 'regional'],
-    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'OCE'),
+    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'OCE') && h.yearsSince('childhood_mosquito_season') > 6,
     text: (s, h) => `雨季裡蚊子特別多，你突然高燒，骨頭像被拆開又裝回去一樣痛。${h.byIncome({
       L: '鄰居合力把你抬去診所，護理人員只能叫你多喝水，並一直盯著你的血小板。',
       LM: '診所替你驗了血，叮嚀你多喝水、別亂吃退燒藥，一週之後你才慢慢有了力氣。',
@@ -335,7 +338,7 @@ export default [
     text: (s, h) => `${h.lastChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
     choices: [
       {
-        label: '把心裡的話告訴伴侶或家人',
+        label: '把心裡的話告訴身邊的人',
         effects: { happiness: +3, social: +3 },
         result: (s, h) => `你終於開口。${h.hasPartner() ? h.partnerName() : '家人'}沒有急著講道理，只是靜靜聽完，然後說「這幾個晚上換我來」。`,
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
@@ -446,9 +449,9 @@ export default [
     ages: [24, 58],
     once: false,
     cooldown: 10,
-    weight: (s, h) => 0.4 + (h.employed() ? 0.5 : 0) + (h.stat('happiness') < 50 ? 0.3 : 0),
+    weight: (s, h) => 0.4 + (h.wageEarner() ? 0.5 : 0) + (h.stat('happiness') < 50 ? 0.3 : 0),
     tags: ['health', 'mental', 'work'],
-    cond: (s, h) => h.employed(),
+    cond: (s, h) => h.wageEarner(),
     text: (s, h) => '連續幾個月的趕工之後，你在週一早上站在公司或工地門口，雙腳怎麼也邁不開。身體還在，人卻像被抽乾了，連最簡單的一封信都寫不下去，只想把自己縮進被子裡。',
     choices: [
       {
@@ -511,12 +514,12 @@ export default [
     weight: (s, h) => (h.recentLog(['母親過世', '父親過世'], 1) ? 4 : 0),
     tags: ['health', 'mental', 'grief'],
     cond: (s, h) => h.recentLog(['母親過世', '父親過世'], 1),
-    text: (s, h) => '喪事辦完了，親友各自回到自己的生活，屋子忽然安靜得讓人不習慣。吃飯時你還是不小心照著他的習慣，多拿了一副碗筷，才想起來他不會來了。',
+    text: (s, h) => `喪事辦完了，親友各自回到自己的生活，屋子忽然安靜得讓人不習慣。吃飯時你還是不小心照著${heOf(h)}的習慣，多拿了一副碗筷，才想起來${heOf(h)}不會來了。`,
     choices: [
       {
         label: '和家人一起悼念、輪流說起回憶',
         effects: { happiness: +3, social: +3 },
-        result: '你們在飯桌上輪流說他的糗事，說著說著笑了，笑完又紅了眼眶。那個晚上，你覺得他好像也坐在椅子上聽。',
+        result: (s, h) => `你們在飯桌上輪流說${heOf(h)}的糗事，說著說著笑了，笑完又紅了眼眶。那個晚上，你覺得${heOf(h)}好像也坐在椅子上聽。`,
         ai: 2,
       },
       {
@@ -528,7 +531,7 @@ export default [
       {
         label: '先把眼前的事做完，悲傷放後面',
         effects: (s, h) => { h.change('happiness', -3); h.change('wealth', +1); if (h.chance(0.08)) h.addCondition('depression'); },
-        result: '你照常上班、煮飯、處理手續，把自己填得滿滿的。直到某天在超市裡看到他愛吃的東西，才在走道上蹲下來哭了。',
+        result: (s, h) => `你照常${h.wageEarner() ? '上班' : h.age() < 14 ? '幫忙家務' : '出門做事'}、煮飯、處理手續，把自己填得滿滿的。直到某天在${h.techReady(1985) && h.urban() ? '超市' : '市場'}裡看到${heOf(h)}愛吃的東西，才在走道上蹲下來哭了。`,
         ai: 1,
       },
     ],
@@ -625,7 +628,7 @@ export default [
     weight: 0.8,
     tags: ['health', 'addiction'],
     cond: (s, h) => h.isRegion('NAM') && h.yearIn(1998, 2035),
-    text: (s, h) => '手術後醫師開了強效止痛藥。傷口早就好了，你卻發現自己不吃就睡不著、心慌，連藥罐快空了都會緊張，那種身不由己的感覺，讓你在夜裡盯著天花板，有點害怕。',
+    text: (s, h) => '上次受傷之後，醫師開了強效止痛藥。傷口早就好了，你卻發現自己不吃就睡不著、心慌，連藥罐快空了都會緊張，那種身不由己的感覺，讓你在夜裡盯著天花板，有點害怕。',
     choices: [
       {
         label: '和醫師談逐步減量',
@@ -665,7 +668,7 @@ export default [
       L: '診所說你需要長期吃藥、控制飲食，但藥時有時缺，你不確定下一次領藥時還有沒有。',
       LM: '你得定期量血糖、吃藥，可是試紙很貴，你只好隔幾天才量一次，其餘時間只能靠身體的感覺去猜。',
       UM: '你得定期回診、控制飲食。可是生活太忙，總是外食，血糖紀錄本空了大半，每次回診前才臨時補上幾筆。',
-      H: '醫師替你設定了血糖監測與飲食計畫，手機會準時提醒你。你卻發現最難的是對甜點說不。',
+      H: `醫師替你設定了血糖監測與飲食計畫，${h.techReady(1995) ? '手機' : '血糖儀的提示音'}會準時提醒你。你卻發現最難的是對甜點說不。`,
     })}`,
     choices: [
       {
@@ -912,13 +915,18 @@ export default [
   },
   {
     id: 'health_dental',
-    title: '牙痛不是病',
+    title: '牙齒的事',
     ages: [10, 80],
     once: false,
     cooldown: 12,
     weight: 0.35,
     tags: ['health'],
-    text: (s, h) => h.byIncome({
+    text: (s, h) => s.age < 14 ? h.byLiving({
+      L: '一顆蛀牙痛了好幾個月，你用鹽水漱口、咬著濕布忍耐。最近的牙醫在遠遠的鎮上，大人一直說等哪天趕集時順路帶你去，可是賣完東西之後，總是累得誰也走不動。',
+      LM: '半夜牙痛得你哭了起來。隔天大人帶你在診所排了一個多小時的隊，牙醫直接把牙拔了。你含著棉花回家，大人買了一支冰棒給你，說這是勇敢的獎勵。',
+      UM: '牙痛讓你的臉腫了一邊。大人請了半天假帶你去補牙，牙醫邊鑽邊問你今天有沒有刷牙，你張著嘴、含著棉花，含糊地說「有」，連自己都不信。',
+      H: '牙醫檢查完你的牙齒，發現有兩顆小蛀牙。你躺在椅子上盯著天花板上的貼紙，從頭到尾沒有出聲，走出診間時拿到一支玩具，驕傲得像剛打贏一場仗。',
+    }) : h.byIncome({
       L: '一顆蛀牙痛了好幾個月，你用鹽水漱口、咬著濕布忍耐。最近的牙醫在遠遠的鎮上，你一直等著哪天趕集時能順路去看看，可是賣完東西之後，錢總是已經有了別的用途。',
       LM: '半夜牙痛得睡不著。隔天你在診所排了一個多小時的隊，請牙醫直接把牙拔了。帳單比想像中便宜，卻仍讓你心疼地想了很久，回家路上你用沒麻的那一邊嘴巴吃了碗熱粥。',
       UM: '牙痛讓你的臉腫了一邊。你請了半天假去補牙，牙醫邊鑽邊問你要不要順便洗牙，你張著嘴、含著棉花，含糊地說「下次吧」，連自己都不信。',
@@ -935,7 +943,7 @@ export default [
     cond: (s, h) => h.inSchool() || h.incomeAtLeast('UM'),
     text: (s, h) => h.byIncome({
       L: '黑板上的字你一直覺得是模糊的，只好靠耳朵聽、靠同桌抄。有一天，巡迴義診的人替你戴上一副試戴的眼鏡，你第一次看見遠處樹上的每一片葉子。',
-      LM: '老師發現你上課時總是瞇著眼。家人存了一陣子錢替你配了第一副眼鏡，你戴上去，才發現原來黑板上的字是有邊邊的，樹葉也不是一整團綠色。',
+      LM: `${h.inSchool() ? '老師發現你上課時總是瞇著眼' : '大人發現你看東西時總是瞇著眼'}。家人存了一陣子錢替你配了第一副眼鏡，你戴上去，才發現原來${h.inSchool() ? '黑板上的字' : '遠處的招牌'}是有邊邊的，樹葉也不是一整團綠色。`,
       UM: '你第一次戴上眼鏡，走出店門，覺得整個世界像是換了一個解析度。你連路邊的招牌都忍不住一個字一個字念出來，家人在旁邊偷笑，說你像個剛學會認字的小孩。',
       H: '驗光師替你調好新眼鏡的度數。你走在街上，看見遠方的招牌和每一片樹葉，才知道原來之前整個世界都是一團霧，而你一直以為大家看到的都一樣。',
     }),
@@ -965,7 +973,7 @@ export default [
       {
         label: '習慣了，不想麻煩',
         effects: { health: -2, happiness: -2 },
-        result: '你說這樣也過得去。但你開始不敢單獨出門，也看不清孫輩們傳來的照片，漸漸少說了很多話。',
+        result: (s, h) => `你說這樣也過得去。但你開始不敢單獨出門，也看不清${h.hasGrandchildren() ? '孫輩們' : h.hasChildren() ? '孩子們' : '親友們'}傳來的照片，漸漸少說了很多話。`,
         ai: 0.5,
       },
     ],
@@ -1145,7 +1153,7 @@ export default [
     weight: (s, h) => 0.3 + (h.incomeAtLeast('UM') ? 0.3 : 0) + (h.isRegion('NAM', 'OCE', 'MENA', 'LAC') ? 0.3 : 0),
     tags: ['health', 'lifestyle'],
     cond: (s, h) => h.incomeAtLeast('UM') || (h.incomeAtLeast('LM') && h.urban()),
-    text: (s, h) => '你在試衣間裡發現，去年的褲子怎麼也拉不上來。外送、加班、沙發，這些詞一個接一個浮上腦海，你對鏡子苦笑了一下，決定今天不要先責怪任何人。',
+    text: (s, h) => `你在試衣間裡發現，去年的褲子怎麼也拉不上來。${h.techReady(2012) ? '外送' : '外食'}、${h.employed() ? '加班' : '久坐'}、沙發，這些詞一個接一個浮上腦海，你對鏡子苦笑了一下，決定今天不要先責怪任何人。`,
     choices: [
       {
         label: '約朋友一起散步、慢慢調整飲食',
@@ -1155,7 +1163,7 @@ export default [
       },
       {
         label: '報名健身房、買運動課程',
-        cond: (s, h) => h.incomeAtLeast('UM'),
+        cond: (s, h) => h.incomeAtLeast('UM') && h.techReady(1985),
         effects: { health: +2, wealth: -2 },
         result: '前兩個月你天天報到，教練叫得出你的名字。第三個月你偶爾缺席，第四個月你開始懷念沙發。',
         ai: 1.2,

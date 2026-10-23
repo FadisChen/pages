@@ -190,6 +190,7 @@ export default [
   },
   {
     id: 'family_propose',
+    followCond: (s, h) => h.hasPartner(),
     title: '那句話',
     ages: [20, 55],
     weight: 0,
@@ -333,9 +334,10 @@ export default [
     title: '婚禮留下的帳',
     ages: [20, 48],
     weight: 0,
+    followCond: (s, h) => !!s.partner,
     tags: ['family', 'money', 'followup'],
     text: (s, h) => (h.has('f_wedding_debt')
-      ? '婚禮的錢，一部分是借來的。每個月初你和伴侶都會對著帳本沉默一陣子，然後同時說「沒關係，慢慢還」。這句話像是兩個人共同的口頭禪。'
+      ? `婚禮的錢，一部分是借來的。每個月初你和${h.partnerName()}都會對著帳本沉默一陣子，然後同時說「沒關係，慢慢還」。這句話像是兩個人共同的口頭禪。`
       : '婚禮的開銷早已成了過去式。你們偶爾還是會翻出那天的照片，笑著數那一桌又一桌的賓客與紅包袋，也慶幸當初沒有為了面子借下太多錢。'),
     effects: (s, h) => {
       if (h.has('f_wedding_debt')) { h.change('wealth', -2); h.change('happiness', -1); h.change('social', +1); }
@@ -507,6 +509,7 @@ export default [
   },
   {
     id: 'family_crossroads',
+    followCond: (s, h) => !!s.partner && (s.partner.status === 'married' || s.partner.status === 'dating'),
     title: '一年後的決定',
     ages: [27, 62],
     weight: 0,
@@ -539,12 +542,12 @@ export default [
   },
   {
     id: 'family_midlife_marriage',
-    title: '孩子們都不在的晚餐桌',
+    title: '剩下兩個人的餐桌',
     ages: [42, 62],
     weight: 0.7,
     tags: ['family', 'marriage', 'midlife'],
     cond: (s, h) => h.married() && h.yearsMarried() >= 15 && (!h.hasChildren() || h.youngestChildAge() >= 18),
-    text: (s, h) => `餐桌上只剩下你和${h.partnerName()}兩個人，電視的聲音是唯一的對話。你們都發現，原來這麼多年來，孩子和家務塞滿了所有的空隙。筷子碰到碗的聲音，突然變得很清楚。`,
+    text: (s, h) => `餐桌上只剩下你和${h.partnerName()}兩個人，電視的聲音是唯一的對話。你們都發現，原來這麼多年來，${h.hasChildren() ? '孩子和家務' : '工作和家務'}塞滿了所有的空隙。筷子碰到碗的聲音，突然變得很清楚。`,
     choices: [
       {
         label: '重新約會，像剛認識時那樣',
@@ -691,6 +694,7 @@ export default [
   },
   {
     id: 'family_new_companion',
+    followCond: (s, h) => h.hasPartner(),
     title: '又有人一起吃晚飯',
     ages: [31, 70],
     weight: 0,
@@ -748,7 +752,7 @@ export default [
     ages: [20, 44],
     weight: 1.2,
     tags: ['family', 'children', 'work'],
-    cond: (s, h) => h.youngestChildAge() === 0 && working(h) && !h.has('f_leave_done'),
+    cond: (s, h) => h.youngestChildAge() === 0 && h.wageEarner() && !h.has('f_leave_done'),
     text: (s, h) => h.byIncome({
       L: `${h.lastChildName()}才幾週大，你就在想什麼時候回去幹活。沒有任何人的規定說你可以休息，只有自己的身體和家人的幫手，粥就放在手邊，還冒著熱氣。`,
       LM: `${h.lastChildName()}出生後，公司只准你請幾天假。你一邊看著小小的臉，一邊盤算著下個月的帳單，孩子打了個哈欠，你的心軟得一塌糊塗。`,
@@ -787,7 +791,7 @@ export default [
     weight: 1,
     tags: ['family', 'children', 'work'],
     cond: (s, h) => hasKid(s, 1, 4) && (working(h) || h.workStatus() === 'homemaker') && !h.has('f_childcare'),
-    text: (s, h) => `${kidName(s, 1, 4)}會走路了，每天早上都想往門外跑。你得決定上班時孩子要待在哪裡。每一個選項，都有人說你做得不夠好。夜裡你把利弊寫滿了半本便條紙。`,
+    text: (s, h) => `${kidName(s, 1, 4)}會走路了，每天早上都想往門外跑。${h.wageEarner() ? '你得決定上班時孩子要待在哪裡' : h.employed() ? '你得決定忙活的時候孩子要待在哪裡' : '你得決定要不要出去工作，孩子又要待在哪裡'}。每一個選項，都有人說你做得不夠好。夜裡你把利弊寫滿了半本便條紙。`,
     choices: [
       {
         label: '請祖父母或親戚幫忙',
@@ -809,7 +813,7 @@ export default [
         label: '家裡其中一人暫停工作，自己帶',
         effects: { wealth: -3, happiness: +3, health: -1, social: -1 },
         set: ['f_childcare'],
-        result: '你們把開銷重新排過，少了一份收入，多了一份陪伴。你說不清這個決定是對是錯，只知道孩子第一次叫「爸爸（媽媽）」時，你剛好在場。',
+        result: (s, h) => `你們把開銷重新排過，少了一份收入，多了一份陪伴。你說不清這個決定是對是錯，只知道孩子第一次叫「${h.male() ? '爸爸' : '媽媽'}」時，你剛好在場。`,
         ai: 1,
       },
     ],
@@ -999,7 +1003,7 @@ export default [
     ages: [48, 68],
     weight: 0.7,
     tags: ['family', 'children'],
-    cond: (s, h) => hasKid(s, 22, 40) && !h.has('f_child_partner'),
+    cond: (s, h) => hasKid(s, 22, 40) && !h.has('f_child_partner') && !h.hasGrandchildren(),
     text: (s, h) => `${kidName(s, 22, 40)}說週末要帶一個人回家吃飯。你把圍裙換了三次，把客廳整理了又整理。對方的名字、背景、個性，你都還不知道，只知道孩子說起這個人時，眼睛是亮的。`,
     choices: [
       {
@@ -1302,7 +1306,7 @@ export default [
     cooldown: 10,
     weight: 0.45,
     tags: ['family', 'friends'],
-    text: (s, h) => '有人突然打電話來提議聚會。你本來想推託，最後還是去了。一進門，大家都胖了、禿了、白了，卻在笑聲響起的瞬間，同時回到了十六歲的教室。',
+    text: (s, h) => `有人突然打電話來提議聚會。你本來想推託，最後還是去了。一進門，大家都胖了、禿了、白了，卻在笑聲響起的瞬間，同時回到了${h.eduYears() >= 9 ? '十六歲的教室' : '年輕時一起放牛、打水的那個年紀'}。`,
     effects: { social: +4, happiness: +3 },
   },
   {
@@ -1351,12 +1355,12 @@ export default [
   },
   {
     id: 'family_community_group',
-    title: '不只是下班回家',
+    title: '不只是工作和家',
     ages: [26, 62],
     weight: 0.7,
     tags: ['family', 'friends', 'community'],
     cond: (s, h) => !h.has('f_community') && h.stat('social') < 70,
-    text: (s, h) => '你發現自己的生活只剩下工作和家。鄰居邀你加入社區的活動，同事說公司附近有人在組球隊，教會、廟宇或清真寺有個志工小組缺人。你有點心動，也有點怕麻煩。',
+    text: (s, h) => `你發現自己的生活只剩下${h.employed() ? '工作和家' : '家裡的瑣事'}。鄰居邀你加入社區的活動，${h.wageEarner() ? '同事說公司附近有人在組球隊' : '朋友說附近有人在組球隊'}，教會、廟宇或清真寺有個志工小組缺人。你有點心動，也有點怕麻煩。`,
     choices: [
       {
         label: '加入志工或社區服務團體',
@@ -1391,7 +1395,7 @@ export default [
     tags: ['family', 'community'],
     text: (s, h) => h.byIncome({
       L: '你家屋頂被風掀了一角，隔壁鄰居不等你開口就拿著梯子來了。半天後屋頂補好，主人家連一杯茶都沒讓你泡就走了，你站在補好的屋頂下，抬頭笑了很久。',
-      LM: '你生病那週，鄰居幫忙接送孩子、送來了熱湯。你想還禮，對方只擺擺手說：「下次換我有事，換你。」那碗湯，你喝得特別慢。',
+      LM: `你生病那週，鄰居${h.hasChildren() && h.youngestChildAge() <= 12 ? '幫忙接送孩子' : '幫忙跑腿買藥'}、送來了熱湯。你想還禮，對方只擺擺手說：「下次換我有事，換你。」那碗湯，你喝得特別慢。`,
       UM: '你的車在雨中拋錨，路過的鄰居二話不說停下來幫忙。這是你住進這個社區以來，第一次和對方說上這麼多話。後來你們成了會互相借醬油的人。',
       H: `社區的${h.yearIn(2008, 3000) ? '群組' : '佈告欄'}裡常常有人互相幫忙：找貓、借工具、送多出來的菜。你原本不太參與，卻在某個週末被一句「你有空嗎？」拉進了熱鬧裡。`,
     }),

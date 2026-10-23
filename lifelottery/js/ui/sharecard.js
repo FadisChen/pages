@@ -224,14 +224,15 @@ export function drawShareCard(canvas, record) {
   // age block
   g.fillStyle = C.muted;
   g.font = `34px ${SANS}`;
-  g.fillText('享年', x0, 548);
+  const infant = sum.age < 1;
+  if (!infant) g.fillText('享年', x0, 548);
   g.fillStyle = C.accent;
-  g.font = `800 176px ${SERIF}`;
-  const ageStr = String(sum.age);
-  g.fillText(ageStr, x0 + 84, 580);
+  g.font = `800 ${infant ? 120 : 176}px ${SERIF}`;
+  const ageStr = infant ? '不滿一歲' : String(sum.age);
+  g.fillText(ageStr, infant ? x0 : x0 + 84, 580);
   const ageW = g.measureText(ageStr).width;
   g.font = `700 54px ${SERIF}`;
-  g.fillText(T.years, x0 + 84 + ageW + 10, 580);
+  if (!infant) g.fillText(T.years, x0 + 84 + ageW + 10, 580);
 
   // cause stamp
   if (sum.cause) {
@@ -305,7 +306,7 @@ export function drawShareCard(canvas, record) {
   // highlight + message
   let ty = 1062;
   g.textAlign = 'left';
-  const top = sum.highlights[0];
+  const top = sum.featuredHighlight || sum.highlights[0];
   if (top) {
     g.fillStyle = C.ink2;
     g.font = `28px ${SANS}`;

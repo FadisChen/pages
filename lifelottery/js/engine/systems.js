@@ -55,6 +55,18 @@ export function pushLog(s, kind, title, text, delta) {
   return e;
 }
 
+/**
+ * A system line that can happen several times in one life ("layoff", "diagnosis" ...) must not say the same thing
+ * twice: `variants` are used in order, one per occurrence (the count lives in the private flag `_sv`).
+ */
+export function variant(s, key, variants, overflow) {
+  const used = (s.flags._sv ||= {});
+  const n = used[key] || 0;
+  used[key] = n + 1;
+  if (n >= variants.length && overflow) return overflow(n + 1);
+  return variants[n % variants.length];
+}
+
 /** Add a "highlight" (important moment shown in the summary). */
 export function addHighlight(s, text) {
   s.highlights.push({ age: s.age, year: s.year, text });
@@ -159,6 +171,11 @@ function jobWeights(s, ctx, candidates) {
     if (lvl > j.min) w *= Math.pow(0.28, lvl - j.min);
     w *= s.urban ? (j.u ?? 1) : (j.r ?? (j.u && j.u > 1 ? 0.35 : 1));
     if (j.g) w *= j.g[s.gender] ?? 1;
+    // an office or professional job needs more than a few years of secondary school: not for a 15-year-old who left class at 14
+    if (j.min >= 2 && s.age < 18 && s.edu.years < 12) w *= 0.02;
+    // nobody becomes a soldier or goes down a mine for the first time at 45
+    if (id === 'soldier' && s.age > 32) w = 0;
+    if ((id === 'miner' || id === 'construction' || id === 'fisher') && s.age > 50) w *= 0.15;
     return w;
   });
 }
@@ -297,9 +314,14 @@ function parentDeathText(s, who, ctx) {
   const young = s.age < 18;
   const poor = s.family.wealthQ <= 2;
   if (young) {
+    if (s.age < 9) {
+      return poor
+        ? `你的${label}過世了。你還太小，只知道家裡突然變得很安靜，大人們低聲討論著接下來該怎麼辦。`
+        : `你的${label}過世了。你還太小，說不清那是什麼感覺，只是一直問${label}什麼時候回來。`;
+    }
     return poor
-      ? `你的${label}過世了。你還太小，只知道家裡突然變得很安靜，大人們低聲討論著接下來該怎麼辦。`
-      : `你的${label}過世了。你還在上學，許多事來不及問，也來不及說。`;
+      ? `你的${label}過世了。一夜之間，你覺得自己必須快點長大。家裡突然變得很安靜，大人們低聲討論著接下來該怎麼辦。`
+      : `你的${label}過世了。${s.edu.inSchool ? '你還在上學' : '你還這麼年輕'}，許多事來不及問，也來不及說。`;
   }
   return s.age < 40
     ? `你的${label}過世了，比你預期的早。你在整理遺物時，翻到一些你從來不知道的舊照片。`
@@ -475,7 +497,7 @@ function schooling(s, ctx) {
     leaveSchool(s, '你不得不離開學校。');
     return;
   }
-  if (y === 6) pushLog(s, 'milestone', '小學畢業', '你領到畢業證書，這是家裡不少人沒有的東西。', applyDelta(s, { happiness: 2, knowledge: 1 }));
+  if (y === 6) pushLog(s, 'milestone', '小學畢業', (s.family.wealthQ >= 4 || (incomeRank[inc] >= 2 && s.family.wealthQ >= 3)) ? '你領到畢業證書，在校門口和同學拍了好多張合照，下一個學期就是新的學校了。' : '你領到畢業證書，這是家裡不少人沒有的東西。', applyDelta(s, { happiness: 2, knowledge: 1 }));
   if (y < 12) {
     if (rand(s.rng) < dropoutHazard(y, s.flags._dropH ?? 0.05)) {
       const reason = s.family.wealthQ <= 2 && incomeRank[inc] <= 1
@@ -505,7 +527,9 @@ function schooling(s, ctx) {
     return;
   }
   if (y === 16) {
-    pushLog(s, 'milestone', '大學畢業', '你拿到學位。畢業典禮上，你看見父母在觀眾席裡拚命揮手。', applyDelta(s, { happiness: 4, knowledge: 2 }));
+    const { mother, father } = s.family;
+    const crowd = mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手' : father.alive ? '你看見父親在觀眾席裡拚命揮手' : '你特別想起不在現場的雙親';
+    pushLog(s, 'milestone', '大學畢業', `你拿到學位。畢業典禮上，${crowd}。`, applyDelta(s, { happiness: 4, knowledge: 2 }));
     addHighlight(s, '大學畢業。');
     if (s.flags._tertYears === 4 && incomeRank[inc] >= 2 && chance(s.rng, incomeRank[inc] === 3 ? 0.32 : 0.2)) { s.flags._tertYears = 6; return; }
     leaveSchool(s, null);
@@ -628,11 +652,12 @@ function work(s, ctx) {
     if (s.flags._lfp) {
       const id = pickJob(s);
       startJob(s, id);
+      const wage = JOBS[id].type === 'employed';
       pushLog(s, 'milestone', '第一份工作', `你成為一名${JOBS[id].name}。${byIncome(ctx.income, {
         L: '收入不多，但終於有一份屬於自己的錢。',
-        LM: '薪水不高，但你開始能自己做一些決定。',
-        UM: '你第一次領到薪水，在回家的路上算了好幾遍。',
-        H: '你第一次領到薪水，很快就學會了房租和帳單的存在。',
+        LM: wage ? '薪水不高，但你開始能自己做一些決定。' : '收入不高，但你開始能自己做一些決定。',
+        UM: wage ? '你第一次領到薪水，在回家的路上算了好幾遍。' : '你第一次靠自己賺到錢，在回家的路上算了好幾遍。',
+        H: wage ? '你第一次領到薪水，很快就學會了房租和帳單的存在。' : '你第一次賺到自己的收入，很快就學會了房租和帳單的存在。',
       })}`, applyDelta(s, { happiness: 3, social: 2, knowledge: 1 }));
     } else {
       w.status = s.gender === 'F' ? 'homemaker' : 'unemployed';
@@ -665,22 +690,27 @@ function work(s, ctx) {
     // Layoffs (salaried workers only)
     if (w.status === 'employed' && chance(s.rng, UNEMPLOY[inc] * (s.stats.health < 40 ? 1.6 : 1))) {
       loseJob(s);
-      pushLog(s, 'event', '失去工作', '公司裁員，你收到了通知。第一個晚上你睡不著，一遍遍算著存款還能撐多久。', applyDelta(s, { happiness: -6, wealth: -4, social: -1 }));
+      pushLog(s, 'event', '失去工作', variant(s, 'layoff', [
+        '公司裁員，你收到了通知。第一個晚上你睡不著，一遍遍算著存款還能撐多久。',
+        '又一次，你的名字出現在名單上。這一次你比上回平靜，只是把紙箱裝得更仔細，因為你知道，下一份工作之前，這些東西得先待在家裡。',
+        '訂單少了，位子沒了。你走出大門時沒有回頭，在路邊買了一份熱食，邊吃邊在心裡列出接下來要打的每一通電話。',
+        '消息來得很安靜，一封信、一次談話，就結束了。你花了一個週末假裝沒事，到了週一才真的開始難過。',
+      ], (n) => `這已經是第 ${n} 次被通知離開了。你沒有再問為什麼，只是安靜地收好東西，走出大門時，順手替下一個人扶住了那扇門。`), applyDelta(s, { happiness: -6, wealth: -4, social: -1 }));
       return;
     }
     // Career moves
-    if (chance(s.rng, 0.035) && s.age < ra - 2) {
+    if (chance(s.rng, 0.035) && s.age < Math.min(52, ra - 2)) {
       const id = pickJob(s);
       if (id !== w.job && JOBS[id].rank >= JOBS[w.job].rank - 0.05) {
         startJob(s, id);
-        pushLog(s, 'event', '換了工作', `你轉行成為${JOBS[id].name}。`, applyDelta(s, { happiness: 1 }));
+        pushLog(s, 'event', '換了工作', variant(s, 'jobchange', [`你轉行成為${JOBS[id].name}。`, `你又換了跑道，這次成了${JOBS[id].name}。熟悉的人說你不安分，你只說：想再試一次。`, `你換去做${JOBS[id].name}，一切從頭學起，卻比上一次更清楚自己想要什麼。`], (n) => `第 ${n} 次轉換跑道，這次是${JOBS[id].name}。你已經很熟悉新手的感覺，反而不那麼怕了。`), applyDelta(s, { happiness: 1 }));
       }
     }
     // Women leave work for young children in some regions
     if (s.gender === 'F' && w.status === 'employed' && s.children.some((c) => c.alive && s.year - c.birthYear <= 1) && chance(s.rng, QUIT_FOR_KIDS[ctx.country.region])) {
       w.status = 'homemaker';
       w.job = null;
-      pushLog(s, 'event', '暫別職場', '孩子出生後，你選擇（或被期待）留在家裡照顧他。工作的位子很快就被別人補上了。', applyDelta(s, { wealth: -3 }));
+      pushLog(s, 'event', '暫別職場', variant(s, 'leavework', ['孩子出生後，你選擇（或被期待）留在家裡照顧他。工作的位子很快就被別人補上了。', '第二個孩子出生後，你再一次把工作放下。這一次你知道，回來的路不會比上次好走，但家裡此刻更需要你。']), applyDelta(s, { wealth: -3 }));
     }
     return;
   }
@@ -688,7 +718,7 @@ function work(s, ctx) {
     if (chance(s.rng, 0.45)) {
       const id = pickJob(s);
       startJob(s, id);
-      pushLog(s, 'event', '找到新工作', `經過一段漫長的等待，你成為${JOBS[id].name}。`, applyDelta(s, { happiness: 5, wealth: 2 }));
+      pushLog(s, 'event', '找到新工作', variant(s, 'newjob', [`經過一段漫長的等待，你成為${JOBS[id].name}。`, `電話終於響了。你成為${JOBS[id].name}，第一天進門時，心裡想的是：這次要把日子過穩。`, `又找了幾個月，你被${JOBS[id].name}的工作接納了。你把消息告訴家人，語氣盡量平靜。`], (n) => `第 ${n} 份工作，${JOBS[id].name}。你已經很會自我介紹了，也學會了不把話說得太滿，只說：「我會做好。」`), applyDelta(s, { happiness: 5, wealth: 2 }));
     } else if (s.age >= RETIRE_AGE[inc] + 3 && chance(s.rng, 0.4)) retire(s);
     return;
   }
@@ -704,13 +734,22 @@ function work(s, ctx) {
 export function retire(s) {
   const ctx = ctxOf(s);
   s.work.status = 'retired';
-  const pension = byIncome(ctx.income, {
+  const job = s.work.job ? JOBS[s.work.job] : null;
+  // farmers, fishers, vendors and shopkeepers do not "hand in" anything: they hand the work on
+  const informal = !!job && job.type === 'self' && s.work.job !== 'lawyer' && s.work.job !== 'entrepreneur' && ctx.income !== 'H';
+  const pension = byIncome(ctx.income, informal ? {
+    L: '沒有退休金，但你已經看不到田地的盡頭，只能靠孩子和積蓄過日子。',
+    LM: '沒有正式的退休金，日子靠家人和一點積蓄撐著。',
+    UM: '沒有正式的退休金，你靠一點積蓄和家人的照應過日子。',
+    H: '',
+  } : {
     L: '沒有退休金，但你已經看不到田地的盡頭，只能靠孩子和積蓄過日子。',
     LM: '你的退休金很有限，勉強夠日常開銷，剩下的得靠家人和一點積蓄。',
     UM: '你領到一份不算豐厚的退休金，日子要算著過。',
     H: '你辦好退休手續，領到退休金，終於有時間做那些一直說「以後再說」的事。',
   });
-  pushLog(s, 'milestone', '退休', `你結束了${s.work.job ? JOBS[s.work.job]?.name || '工作' : '工作'}生涯。${pension}`, applyDelta(s, { happiness: 1, social: -2 }));
+  const lead = informal ? `你慢慢把${job.name}的活交給了年輕人。` : `你結束了${job ? job.name : '工作'}生涯。`;
+  pushLog(s, 'milestone', '退休', `${lead}${pension}`, applyDelta(s, { happiness: 1, social: -2 }));
   addHighlight(s, '退休。');
 }
 
@@ -742,12 +781,12 @@ function smoking(s, ctx) {
       const per = 1 - Math.pow(1 - everFrac, 1 / 11);
       if (chance(s.rng, per)) {
         s.smoker = true;
-        pushLog(s, 'event', '第一根菸', '朋友遞來一根菸，你接了過來。那時候你還不知道，戒掉比開始困難得多。', applyDelta(s, { social: 1 }));
+        pushLog(s, 'event', '第一根菸', variant(s, 'smoke', ['朋友遞來一根菸，你接了過來。那時候你還不知道，戒掉比開始困難得多。', '壓力一大，你又點起了一根菸。你告訴自己只這一次，可是你自己也不太相信。'], (n) => (n % 2 ? '你又點起了一根菸，已經不記得這是第幾次。打火機的聲音熟悉得讓人難過。' : '那根菸是別人遞來的，你猶豫了不到兩秒。有些習慣不是被戒掉，只是在等你。')), applyDelta(s, { social: 1 }));
       }
     }
   } else if (chance(s.rng, s.age > 40 ? 0.035 : 0.02)) {
     s.smoker = false;
-    pushLog(s, 'event', '戒菸成功', '你終於把最後一包菸丟進垃圾桶。第一個月難熬得要命，但你撐過來了。', applyDelta(s, { health: 3, happiness: 2 }));
+    pushLog(s, 'event', '戒菸成功', variant(s, 'quit', ['你終於把最後一包菸丟進垃圾桶。第一個月難熬得要命，但你撐過來了。', '這次你沒有宣布，也沒有立誓，只是默默把菸放下了。三個月後家人才發現，屋子裡的味道不一樣了。'], (n) => (n % 2 ? '你又一次把菸放下了。這次你不再算天數，只是一天一天地過。' : '醫師說的話你終於聽進去了，把剩下的菸送給了鄰居，然後走去散步。')), applyDelta(s, { health: 3, happiness: 2 }));
   }
 }
 
@@ -758,7 +797,7 @@ const CONDITION_TEXT = {
   copd: '你的咳嗽一直不好，呼吸越來越吃力。診斷書上寫著「慢性阻塞性肺病」。',
   cancer: '診斷書上的那個詞，讓整個診間靜了下來。你需要時間消化，也需要很多勇氣。',
   depression: '有一段時間你什麼都提不起勁，連起床都像在爬山。有人終於告訴你：這是一種病，不是你不夠努力。',
-  asthma: '一場劇烈的咳喘之後，你知道自己有氣喘。你的書包或口袋裡從此多了一支吸入器。',
+  asthma: '一場劇烈的咳喘之後，你知道自己有氣喘。你的口袋裡從此多了一支吸入器。',
   arthritis: '關節在清晨總是僵硬疼痛。醫師說這是關節炎，需要和它長期相處。',
   dementia: '你開始忘記東西放在哪裡，甚至忘了熟悉的路。家人帶你去檢查，診斷是失智症。',
   disability: '一次意外或疾病之後，你的身體不再像以前一樣。你必須重新學會許多日常的事。',
@@ -766,12 +805,21 @@ const CONDITION_TEXT = {
   alcohol: '你發現自己幾乎每天都需要喝一點才睡得著。身邊的人開始擔心，只有你還說「沒事」。',
 };
 
+/** Second and later diagnoses of a condition that can come back. */
+const CONDITION_AGAIN = {
+  depression: '那片灰色的霧又回來了。這一次你比較快認出它，也比較快知道該找誰說：「我又不太對勁了。」',
+  cancer: '複查的結果讓房間再一次安靜下來。這次你沒有那麼慌，只是握緊了陪你來的人的手，一項一項問清楚。',
+  alcohol: '你又回到了那個每晚都要喝一杯才睡得著的老路。這一次你比誰都清楚它通向哪裡。',
+};
+
 export function addCondition(s, id, silent = false) {
   if (!CONDITIONS[id] || s.conditions.includes(id)) return false;
   s.conditions.push(id);
   if (!silent) {
     const c = CONDITIONS[id];
-    pushLog(s, 'event', `確診：${c.label}`, CONDITION_TEXT[id] || `你被診斷出${c.label}。`, applyDelta(s, { health: Math.round(c.health / 2), happiness: Math.round(c.happiness / 2) }));
+    const again = CONDITION_AGAIN[id];
+    const text = (again && variant(s, `dx:${id}`, [CONDITION_TEXT[id], again], (n) => `第 ${n} 次聽到「${c.label}」這個詞。你已經不再害怕這個名字，因為你知道，上一次你也走過來了。`)) || CONDITION_TEXT[id] || `你被診斷出${c.label}。`;
+    pushLog(s, 'event', `確診：${c.label}`, text, applyDelta(s, { health: Math.round(c.health / 2), happiness: Math.round(c.happiness / 2) }));
   }
   return true;
 }
@@ -792,12 +840,12 @@ function conditions(s, ctx) {
       // Remission / recovery
       if (c.curable && chance(s.rng, id === 'depression' ? 0.15 : 0.06)) {
         removeCondition(s, id);
-        pushLog(s, 'event', `${c.label}好轉`, id === 'depression' ? '某個早晨你醒來，發現世界的顏色回來了一點。' : '你花了很大的力氣，終於走出了這個階段。', applyDelta(s, { happiness: 5, health: 3 }));
+        pushLog(s, 'event', `${c.label}好轉`, variant(s, `rec:${id}`, id === 'depression' ? ['某個早晨你醒來，發現世界的顏色回來了一點。', '這一次好轉得更安靜：你發現自己又開始注意到晚風，和路邊的貓。'] : ['你花了很大的力氣，終於走出了這個階段。', '你再一次走了出來。比上次多的，是你知道自己做得到。'], (n) => `第 ${n} 次，你又等到了雲散開的那一天。這回你什麼也沒說，只是站在窗前，讓陽光多曬了一會兒。`), applyDelta(s, { happiness: 5, health: 3 }));
       } else if (id === 'cancer') {
         const since = age - (s.flags._cancerAge ?? age);
         if (since >= 2 && chance(s.rng, 0.17 * (ctx.country.income === 'H' ? 1.3 : ctx.country.income === 'L' ? 0.5 : 0.9))) {
           removeCondition(s, 'cancer');
-          pushLog(s, 'event', '癌症緩解', '複查報告上沒有發現異常。醫師說「目前沒有看到癌細胞」，那一刻你才發現自己一直憋著氣。', applyDelta(s, { happiness: 8, health: 6 }));
+          pushLog(s, 'event', '癌症緩解', variant(s, 'remit', ['複查報告上沒有發現異常。醫師說「目前沒有看到癌細胞」，那一刻你才發現自己一直憋著氣。', '第二次聽到「目前沒有看到」這句話，你反而比較冷靜，只是走出診間後，在樓梯間坐了很久。'], (n) => `第 ${n} 次的複查報告，仍然是乾淨的。你學會了把這句話收好，像收一張不必再看、卻永遠捨不得丟的車票。`), applyDelta(s, { happiness: 8, health: 6 }));
         }
       }
       continue;
@@ -938,11 +986,16 @@ function planRemarriage(s, p) {
 }
 
 function childBirthText(s, c, first) {
-  const inc = ctxOf(s).income;
+  const order = ['L', 'LM', 'UM', 'H'];
+  let gi = order.indexOf(ctxOf(s).income);
+  if (s.stats.wealth >= 70 && gi < 3) gi++;
+  else if (s.stats.wealth <= 20 && gi > 0) gi--;
+  if (s.urban && gi === 0) gi = 1; // a city has a clinic or a hospital, not just a midwife in a dark room
+  const inc = order[gi];
   const parent = first ? '你成為了父母' : '家裡又添了一個孩子';
   const where = byIncome(inc, {
     L: '產婆在昏暗的屋子裡接生，所幸一切平安。',
-    LM: '在村裡的衛生所，孩子哭出了第一聲。',
+    LM: s.urban ? '在擠滿了人的公立醫院裡，孩子哭出了第一聲。' : '在村裡的衛生所，孩子哭出了第一聲。',
     UM: '在醫院的產房外，家人焦急地等待。',
     H: '在明亮的產房裡，護理師把包得緊緊的小小身體遞給你。',
   });
@@ -965,8 +1018,9 @@ export function addChild(s, opts = {}) {
   else father = getPool(pool).mode === 'patro' ? {} : { familyToken: s.flags._ft };
   const famToken = childFamilyToken(pool, father);
   let nm = randomName(s.rng, pool, gender, famToken);
-  // siblings do not share a name
-  for (let tries = 0; tries < 8 && s.children.some((c) => c.name === nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
+  // nobody in the household shares a full name: not with the siblings, and not with the person, the partner or the parents
+  const taken = () => new Set([...s.children.map((c) => c.name), s.name.full, s.partner && s.partner.name, s.family.mother.name, s.family.father.name]);
+  for (let tries = 0; tries < 12 && taken().has(nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
   const child = { name: nm.full, gender, birthYear: s.year, alive: true };
   s.children.push(child);
   s.flags._birthThisYear = true;
@@ -1081,7 +1135,7 @@ function loveText(s, ctx) {
   return byIncome(ctx.income, {
     L: `你認識了${pt.name}。你們常常在田埂邊、水井旁或市集的角落說上幾句話。`,
     LM: `你和${pt.name}開始走得很近。朋友們都看出來了，只有你們還裝作若無其事。`,
-    UM: `你和${pt.name}開始約會。你們常在下班後去街邊吃宵夜，聊到店家要打烊。`,
+    UM: `你和${pt.name}開始約會。你們常在${s.work.status === 'employed' ? '下班' : s.edu.inSchool ? '放學' : '收工'}後去街邊吃宵夜，聊到店家要打烊。`,
     H: `你和${pt.name}開始交往。第一次約會你緊張得換了三次衣服。`,
   });
 }
@@ -1091,7 +1145,7 @@ function doMarriage(s, ctx) {
   marry(s);
   const pt = s.partner;
   if (child) {
-    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，家人就替你決定了婚事。你嫁（娶）給比你大不少的${pt.name}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
+    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，家人就替你決定了婚事。${s.gender === 'F' ? `你嫁給了比你大不少的${pt.name}` : `你和${pt.name}成了家`}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
     addHighlight(s, '很年輕就結婚。');
   } else {
     pushLog(s, 'milestone', '結婚', byIncome(ctx.income, {
@@ -1128,6 +1182,7 @@ export function migrate(s, code) {
   s.flags._countries = s.flags._countries || [s.homeCountryCode];
   if (!s.flags._countries.includes(code)) s.flags._countries.push(code);
   s.flags.migrated = true;
+  s.flags._movedAt = s.year;
   // Where you live changes how much lives in each part of the wealth model.
   const ctx = ctxOf(s);
   s.stats.wealth = clamp(s.stats.wealth + 0.5 * (wealthTarget(s, ctx) - s.stats.wealth), 0, 100);

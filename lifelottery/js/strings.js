@@ -196,7 +196,7 @@ export const S = {
 
   death: {
     title: '離世',
-    leaves: (name, year, age) => `${name} 在 ${year} 年離開，享年 ${age} 歲。`,
+    leaves: (name, year, age) => (age < 1 ? `${name} 在 ${year} 年離開，還不滿一歲。` : `${name} 在 ${year} 年離開，享年 ${age} 歲。`),
     causeLabel: '死因',
     continue: '看人生回顧',
     quiet: '安靜的片刻',
@@ -229,6 +229,7 @@ export const S = {
     chartAxisAge: '年齡（歲）',
     highlightsTitle: '重要時刻',
     highlightsEmpty: '沒有特別轟動的時刻，但這是平凡而完整的一生。',
+    highlightsEmptyYoung: '這一生很短，沒有留下太多事件，但這個人確實來過這個世界。',
     highlightLine: (age, text) => `${age} 歲`,
     statsTitle: '一生統計',
     statLabels: {

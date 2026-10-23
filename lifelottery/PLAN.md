@@ -328,3 +328,17 @@ state = {
 - **生育率**：`planChildren` 依 TFR、未婚比例與晚婚效率反推「想要的孩子數」，非婚生育只在有計畫且未達目標時發生，計畫外生育機率降到 0.4%；模擬的平均子女數與 TFR 差在 ±15% 以內（`tests/simulation.test.mjs`）。
 - **介面**：人生畫面的浮動 +/− 數字移到狀態條下方專用的一列，不再蓋住標籤；時間軸以 `scroll-padding`（由 JS 量測固定表頭與控制列高度）讓 delta 標籤不被表頭或控制列遮住；`sw.js` 快取版本升為 `v2`。
 - **新測試**：`tests/helpers.test.mjs`、`tests/names.test.mjs`、`tests/pwa.test.mjs`；`tests/simulation.test.mjs` 新增生育率與出生年份範圍檢查。
+
+## Phase 3B notes（階段 3B：敘事一致性與最後內容檢查）
+
+- **一致性稽核器**：`tests/lib/coherence.mjs`（規則、白名單、模擬驅動）、`tests/coherence.test.mjs`（固定種子，約 20 秒）、`tools/coherence-scan.mjs`（`node tools/coherence-scan.mjs 2500 前綴 [--rule=a,b] [--samples=n] [--json=檔]`，列出矛盾）、`tools/read-life.mjs`（把一段人生印成日誌）。
+  稽核器包住所有文字函式，在「效果套用前」與「套用後」各取一次狀態快照，**兩個快照都矛盾**才算（事件本來就可能描述它即將帶來的工作或伴侶）。規則：template（`undefined`/`NaN`/殘留括號/重複標點）、work、work_self、job_noun、school、partner、partner_gone、spouse_early、spouse_gender、kids、parents_dead、grandchildren、toddler、retire、smart、phone、internet、tv、infra、hedge、univ、secondary、gender、siblings、age_adult_theme、age_old_theme，以及整段人生層級的 dup_event、dup_year、first_twice、density、quiet。規則內建例外：自己的回憶、第三人稱、哀悼、假設句、否定句。唯一的白名單在 `ALLOW`（每筆必須有 reason；整批抽樣中從未命中的項目會報為 stale，`rare: true` 除外）。
+- **成果**（3000 段人生，`tools/coherence-scan.mjs 3000 final1`）：階段 3A 的內容 68,197 筆旗標（其中重複文字 51,358、單年條目過多 2,747，其餘為文字與狀態矛盾約 14,000）→ 1 筆（單年 5 條）。固定種子測試（1300 段）要求內容規則為 0、density／dup_year 不超過 1%、4 條以上的年份 < 1%（實測約 0.1%）、成年人生平均選擇 15–45（實測約 30）、至少看到 480 種事件。
+- **修正的分類**：(1) 職業語彙：`wageEarner()`／`officeJob()` 區分受雇與自營，「同事、薪水、下班、公司、會議室」只給受雇者；(2) 年齡：嬰幼兒語氣、童年才有的場景、成人場景（酒、菸、戀愛、婚姻）依年齡收緊，兒童版本另寫；(3) 家庭狀態：伴侶、孩子、孫輩、雙親、手足依實際存歿分支（`parentsLabel()`、`childHe()`、`hasGrandchildren()` …），家裡的小店依 `familyBusiness()`；(4) 科技與設施年表：`techReady(baseYear)`（依所得與城鄉延後）管手機、智慧型手機、網路、冷氣、電視；(5) 地區與城鄉：氣候事件依城市是否近海（`INLAND_CITIES`）、颶風名單、城鄉版本（`byLiving()`）、`displaced()` 期間不發生村裡的事；(6) 事件之間：`followCond`（後續事件不再適用就丟棄，`'wait'` 則隔年再試）、新增 `schedule[].p`、`again`／`max`、旗標互斥（搬出家門、安置、移居）；(7) 敘事重複：引擎層的重複抑制與每年條目預算。
+- **引擎變更**：每年最多 3 條（系統行計入）、重複事件改寫成 `again` 文案、同一人生不重複同一段文字；`runEvents` 先處理到期的後續事件再抽籤；`entryFirst` 讓事件敘述排在它所造成的系統行之前、死亡永遠排最後；`pickYearly` 不重複用「平凡的一年」；新增 13 個 helper（共 112 個，見 `js/engine/README.md`）；`jobWeights` 不讓 18 歲以下、受教育不足的人拿到辦公室與專業職位；子女出生地點依城鄉與財富；`第一根菸`／`戒菸成功` 多次出現時不重複文字。事件 203／573 則有調整，「平凡的一年」由 95 句增至 177 句。
+- **疫情**：`seed_pandemic_2020` 現在用事件層級的 `schedule`（含機率 `p`）排入六個後續事件，各自的 `followCond` 再檢查年齡、學籍、職業；沒經歷疫情的人生不會遇到疫苗排隊或重新擁抱。
+- **回顧頁**：`getSummary().highlights` 經 `curateHighlights()` 整理（去除重複、只留最後一次生日與第一次「長大離家」、離婚與離婚事件合併、最多 12 則，保持時間順序），並新增 `featuredHighlight` 給分享圖卡；原始清單仍存在 `state.highlights`。兒童早夭的回顧頁換上較溫和的空白文字。
+- **人工閱讀**：讀了 17 段完整人生（各時代的低所得鄉村、東亞高所得、台灣、長壽、嬰兒與兒童早夭、童婚、難民、2060 年出生、海灣移工、美國富裕、巴西 1960 年代城市、奈及利亞女性等），修正了自相矛盾、重複、階層刻板印象與語氣問題。
+- **新增／更動檔案**：`README.md`、`tests/coherence.test.mjs`、`tests/lib/coherence.mjs`、`tools/coherence-scan.mjs`、`tools/read-life.mjs`；`sw.js` 的 `CACHE_VERSION` 升為 `v3`；`tests/events.test.mjs`、`tests/helpers.test.mjs` 各有小幅調整（後續事件與死亡排序的斷言配合新的排序與 `followCond`）。
+- **已知限制**：極少數年份仍有 4–5 條條目（里程碑與兩個事件同年）；受限條件下（例如同時是外籍、喪偶、無子女的人）「平凡的一年」的候選句不夠多時，會在 4 年以後重用；氣候類事件只依國家與城市粗略判斷，沒有逐城市的海拔或海岸資料；文化專屬事件（節慶、飲食）以國家與區域為單位，同一國內的少數族群未再細分。
+- **校準與驗證**：內容與系統（`jobWeights`、事件條件）改動後重跑 `node tools/calibrate-risk.mjs 30000 4`，`riskref.js` 已更新；`npm test`（78 項，約 2.5 分鐘）、`node tests/e2e.mjs`（40 項、零 console 錯誤）全數通過。

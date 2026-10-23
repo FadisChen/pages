@@ -17,7 +17,7 @@ const HOT = new Set(['SAU', 'ARE', 'QAT', 'KWT', 'BHR', 'OMN', 'IRQ', 'EGY', 'IR
 const COASTAL_FISH = new Set(['IDN', 'PHL', 'VNM', 'THA', 'MMR', 'LKA', 'BGD', 'IND', 'MDV', 'FJI', 'SLB', 'PNG', 'JPN', 'KOR', 'NOR', 'PER', 'CHL', 'SEN', 'GHA', 'MRT', 'SOM', 'MOZ', 'TZA', 'KEN', 'PRT', 'ESP', 'GRC', 'HRV', 'CPV', 'COM', 'TWN', 'CHN', 'ECU', 'MEX', 'BRA', 'CIV', 'LBR', 'SLE', 'GMB', 'GIN', 'BEN', 'TGO']);
 const PASTORAL = new Set(['MNG', 'KAZ', 'KGZ', 'NER', 'MLI', 'TCD', 'MRT', 'SOM', 'KEN', 'ETH', 'DJI', 'ERI', 'SDN', 'TKM', 'TZA', 'UGA', 'BWA', 'NAM', 'IRN', 'AFG', 'MAR']);
 const REMIT = new Set(['PHL', 'NPL', 'BGD', 'LKA', 'PAK', 'IND', 'EGY', 'MAR', 'UZB', 'TJK', 'KGZ', 'MDA', 'ALB', 'SLV', 'HND', 'GTM', 'NIC', 'HTI', 'JAM', 'DOM', 'MEX', 'COL', 'ECU', 'PER', 'BOL', 'GHA', 'NGA', 'SEN', 'KEN', 'UGA', 'ETH', 'ZWE', 'LSO', 'VNM', 'KHM', 'IDN', 'MMR', 'TUN', 'JOR', 'LBN', 'ARM', 'GEO']);
-const STORMY = new Set(['PHL', 'TWN', 'JPN', 'CHN', 'VNM', 'KOR', 'HKG', 'MAC', 'IDN', 'THA', 'BGD', 'IND', 'LKA', 'MMR', 'MDG', 'MOZ', 'USA', 'MEX', 'CUB', 'HTI', 'DOM', 'JAM', 'HND', 'NIC', 'GTM', 'SLV', 'PRI', 'FJI', 'PNG', 'SLB', 'AUS', 'CRI', 'PAN', 'TTO', 'BRA']);
+const STORMY = new Set(['PHL', 'TWN', 'JPN', 'CHN', 'VNM', 'KOR', 'HKG', 'MAC', 'IDN', 'THA', 'BGD', 'IND', 'LKA', 'MMR', 'MDG', 'MOZ', 'USA', 'MEX', 'CUB', 'HTI', 'DOM', 'JAM', 'HND', 'NIC', 'GTM', 'SLV', 'PRI', 'FJI', 'PNG', 'SLB', 'AUS', 'CRI', 'PAN', 'TTO']);
 const WILDFIRE = new Set(['AUS', 'USA', 'CAN', 'PRT', 'ESP', 'GRC', 'ITA', 'CHL', 'HRV', 'TUR', 'FRA', 'BOL', 'BRA', 'RUS']);
 const QUAKE = new Set(['JPN', 'TWN', 'CHL', 'NZL', 'TUR', 'IRN', 'NPL', 'MEX', 'IDN', 'PHL', 'PER', 'ECU', 'GRC', 'ITA', 'ALB', 'PAK', 'AFG', 'TJK', 'KGZ', 'GTM', 'SLV', 'CRI', 'COL', 'ARM', 'GEO', 'KOR']);
 const MINING = new Set(['ZAF', 'COD', 'ZMB', 'PER', 'CHL', 'MNG', 'AUS', 'CHN', 'IND', 'IDN', 'BOL', 'GHA', 'TZA', 'ZWE', 'KAZ', 'POL', 'USA', 'CAN', 'RUS', 'UKR', 'TUR', 'COL', 'MEX', 'GIN', 'BFA', 'MLI', 'NAM', 'BWA', 'SLE']);
@@ -35,7 +35,7 @@ const ZONES = {
 const inZone = (s, h) => { const z = ZONES[s.countryCode]; return !!z && h.yearIn(z[0], z[1]); };
 
 const lowInc = (h) => h.income() === 'L' || h.income() === 'LM';
-const rural = (h) => !h.urban();
+const rural = (h) => !h.urban() && !h.displaced();
 
 /** Festival name and a short, concrete description fitted to the country. */
 function festival(s, h) {
@@ -109,12 +109,32 @@ export default [
     weight: 0.7,
     tags: ['regional', 'climate'],
     cond: (s, h) => h.isRegion('SAS', 'SEA') || (h.isRegion('EAS') && ['CHN', 'TWN', 'KOR', 'JPN', 'VNM'].includes(s.countryCode)),
-    text: (s, h) => h.byIncome({
-      L: '雨季到了第三個月，田間的小路成了小河，學校連續停課好幾天。孩子們用塑膠袋當船在水裡追，大人則忙著墊高穀倉與檢查屋頂，一邊祈禱雨在播種前停下來。',
-      LM: '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。你把鞋子提在手上，一路光腳走到公車站，上班遲到也沒有人責怪，因為大家都在同一片水裡掙扎。',
-      UM: '雨季的豪雨讓路面積水，地下道封閉，捷運停駛。你在辦公室待到深夜，和同事分食便當，等雨小一點才敢出門，結果走到站口發現隔壁同事早已在那裡等車。',
-      H: '豪雨特報不斷跳出手機，市區許多路段淹水，你被困在辦公室過夜。同事們鋪好睡袋、叫了外賣，把這場雨當成一次意外的露營，凌晨還有人打起了撲克牌。',
-    }),
+    text: (s, h) => {
+      const desk = h.employed() && h.isJob('clerk', 'sales', 'technician', 'civil_servant', 'accountant', 'engineer', 'developer', 'manager', 'lawyer', 'researcher', 'teacher', 'entrepreneur');
+      const wet = h.byIncome({
+        L: '雨季到了第三個月，田間的小路成了小河，學校連續停課好幾天。孩子們用塑膠袋當船在水裡追，大人則忙著墊高穀倉與檢查屋頂，一邊祈禱雨在播種前停下來。',
+        LM: h.employed()
+          ? '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。你把鞋子提在手上，一路光腳走到公車站，上班遲到也沒有人責怪，因為大家都在同一片水裡掙扎。'
+          : h.inSchool()
+            ? '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。你把鞋子提在手上，一路光腳走到學校，老師和同學也都濕到膝蓋，上課遲到沒有人責怪，因為大家都在同一片水裡掙扎。'
+            : s.age < 14
+              ? '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。大人把你扛在肩上涉水過巷子，你覺得這比任何遊戲都好玩，路上遇到的每個人卻都皺著眉苦笑。'
+              : '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。你把鞋子提在手上，一路光腳走去辦事，路上遇到的每個人都在同一片水裡掙扎，彼此苦笑著打招呼。',
+        UM: desk
+          ? '雨季的豪雨讓路面積水，地下道封閉，捷運停駛。你在辦公室待到深夜，和同事分食便當，等雨小一點才敢出門，結果走到站口發現隔壁同事早已在那裡等車。'
+          : h.inSchool()
+            ? '雨季的豪雨讓路面積水，地下道封閉，捷運停駛。放學時你和同學擠在校門口的屋簷下，分食彼此的零食，等雨小一點才敢出門，結果走到站口發現隔壁班的人早已在那裡等車。'
+            : '雨季的豪雨讓路面積水，地下道封閉，捷運停駛。你在騎樓下和一群陌生人擠了兩個小時，有人分你半個麵包，等雨小一點才敢出門，走到站口，才發現大家早都散了。',
+        H: desk
+          ? `豪雨特報${h.techReady(2005) ? '不斷跳出手機' : '一再從廣播裡傳出來'}，市區許多路段淹水，你被困在辦公室過夜。同事們鋪好睡袋、叫了外賣，把這場雨當成一次意外的露營，凌晨還有人打起了撲克牌。`
+          : h.inSchool()
+            ? (h.age() < 18
+              ? `豪雨特報${h.techReady(2005) ? '不斷跳出手機' : '一再從廣播裡傳出來'}，市區許多路段淹水，學校宣布提早放學。你和幾個同學被困在教室裡，${h.techReady(2005) ? '用手機訂了披薩' : '請校工去巷口叫了便當'}，把這場雨當成一次意外的露營，等大人一個個來接。`
+              : `豪雨特報${h.techReady(2005) ? '不斷跳出手機' : '一再從廣播裡傳出來'}，市區許多路段淹水。你和幾個同學被困在圖書館裡，${h.techReady(2005) ? '用手機訂了披薩' : '輪流去販賣機買了熱飲'}，把這場雨當成一次意外的露營，直到水退才一個個離開。`)
+            : `豪雨特報${h.techReady(2005) ? '不斷跳出手機' : '一再從廣播裡傳出來'}，市區許多路段淹水，${h.age() < 14 ? '你跟著大人被困在咖啡店裡' : '你被困在咖啡店裡'}過了大半個夜晚。店員把剩下的點心端出來，陌生人們聊起各自的淹水往事，把這場雨當成一次意外的聚會。`,
+      });
+      return wet;
+    },
     effects: { health: -1, wealth: -1, social: +2, happiness: 0 },
   },
   {
@@ -126,7 +146,12 @@ export default [
     weight: 0.7,
     tags: ['regional', 'climate', 'storm'],
     cond: (s, h) => STORMY.has(s.countryCode),
-    text: (s, h) => `${stormName(s, h)}的警報在傍晚響起。${h.byIncome({
+    text: (s, h) => `${stormName(s, h)}的警報在傍晚響起。${s.age < 14 ? h.byIncome({
+      L: '大人把屋頂用繩子綁緊，把能搬的東西搬到最高處，你被擠在角落的草蓆上，聽著風聲與雨聲一直到天亮。鄰居也來了，大家擠在一起，誰也沒睡著，你卻因為人多而不怎麼害怕。',
+      LM: '大人把窗戶貼上膠帶，把重要證件包進塑膠袋。風雨一整夜地敲著鐵皮，你抱著枕頭縮在大人身邊，早上整條街都是倒下的樹枝與電線，你跟著鄰居的孩子們去撿樹枝。',
+      UM: '學校宣布停課，超市貨架被搶購一空。你在家喝著大人煮的熱麵，隔著窗看風把招牌吹得嘩啦嘩啦響，興奮得睡不著。',
+      H: '學校宣布停課，大人在家囤好了食物與電池。你在客廳搭了一座被單堡壘，聽著窗外的風聲，覺得這是個難得的意外假期。',
+    }) : h.byIncome({
       L: '你和家人把屋頂用繩子綁緊，把能搬的東西搬到最高處，鄰居也來幫忙，大家一起守著風聲與雨聲到天亮，誰也沒睡著，卻沒有人覺得孤單。',
       LM: '你把窗戶貼上膠帶，把重要證件包進塑膠袋。風雨一整夜地敲著鐵皮，早上整條街都是倒下的樹枝與電線，鄰居們拿著掃把走出來，彼此點頭打招呼。',
       UM: '公司宣布停班，超市貨架被搶購一空。你在家煮了一鍋熱麵，隔著窗看風把招牌吹得嘩啦嘩啦響，心裡默默祈禱這次它別掉下來。',
@@ -262,7 +287,7 @@ export default [
       {
         label: '搬到另一個較遠的社區',
         effects: { wealth: -3, social: -3, happiness: -2 },
-        result: '你收拾好家當，搬到更遠的新社區。上班的路程多了一個小時，但那邊的房東答應不隨意漲租，你鬆了一口氣。',
+        result: '你收拾好家當，搬到更遠的新社區。每天往返的路程多了一個小時，但那邊的房東答應不隨意漲租，你鬆了一口氣。',
         ai: 1,
       },
       {
@@ -282,7 +307,7 @@ export default [
     weight: 0.6,
     tags: ['regional', 'energy'],
     cond: (s, h) => (lowInc(h) || h.income() === 'UM') && h.isRegion('SSA', 'SAS', 'MENA', 'LAC', 'CAS', 'SEA'),
-    text: (s, h) => '電表又停了，整條街一瞬間陷入黑暗。冰箱裡的東西開始悶悶地融化，電風扇在你頭頂慢慢停下來。鄰居拿著蠟燭走出門，笑說今晚又是「全街聚會」。',
+    text: (s, h) => `電表又停了，整條街一瞬間陷入黑暗。${h.techReady(1965) ? '冰箱裡的東西開始悶悶地融化，' : '煤油燈和蠟燭一盞盞被翻出來，'}電風扇在你頭頂慢慢停下來。鄰居拿著蠟燭走出門，笑說今晚又是「全街聚會」。`,
     choices: [
       {
         label: '買一組太陽能燈或發電機',
@@ -298,9 +323,9 @@ export default [
         ai: 2,
       },
       {
-        label: '去咖啡店、網咖或朋友家借電',
+        label: '去有發電機的店或朋友家借電',
         effects: { knowledge: +2, wealth: -1, social: +1 },
-        result: '你抱著作業或手機趕去有發電機的店。老闆說隨便坐，點杯茶就好，你在角落窩了一整晚，寫完了該寫的所有東西。',
+        result: (s, h) => `你抱著${h.inSchool() ? '作業' : h.year() >= 2005 ? '手機和筆電' : '帳本和一疊要整理的東西'}趕去有發電機的店。老闆說隨便坐，點杯茶就好，你在角落窩了一整晚，做完了該做的所有事。`,
         ai: 1.2,
       },
     ],
@@ -312,7 +337,7 @@ export default [
     weight: 1.5,
     tags: ['regional', 'money', 'work'],
     cond: (s, h) => lowInc(h) && h.yearIn(1985, 2060) && h.isRegion('SAS', 'SEA', 'SSA', 'LAC') && !h.has('microloan'),
-    text: (s, h) => '鄰居的姊妹們組成了小小的互助小組，每週聚會一次，輪流存錢，也可以借一小筆錢做生意。她們問你要不要加入：一個人借不到的錢，一群人互相擔保，就變得可以了。',
+    text: (s, h) => '鄰居們組成了小小的互助小組，每週聚會一次，輪流存錢，也可以借一小筆錢做生意。她們問你要不要加入：一個人借不到的錢，一群人互相擔保，就變得可以了。',
     choices: [
       {
         label: '加入並借款，買羊、縫紉機或進貨',
@@ -375,8 +400,10 @@ export default [
     cooldown: 8,
     weight: 0.6,
     tags: ['regional', 'money', 'family'],
-    cond: (s, h) => !h.incomeAtLeast('H') && h.wealthQ() <= 3 && CASH_TRANSFER.has(s.countryCode) && h.yearIn(1998, 2100) && h.hasChildren(),
-    text: (s, h) => '每個月，你的手機會收到一則簡訊：這個月的補助匯進去了。條件是孩子要按時上學、定期打疫苗。金額不大，但足以讓冰箱多一排雞蛋，也讓你不必為了學費半夜睡不著。',
+    cond: (s, h) => !h.incomeAtLeast('H') && h.wealthQ() <= 3 && CASH_TRANSFER.has(s.countryCode) && h.yearIn(1998, 2100) && h.hasChildren() && h.youngestChildAge() <= 17,
+    text: (s, h) => (h.year() >= 2010
+      ? '每個月，你的手機會收到一則簡訊：這個月的補助匯進去了。條件是孩子要按時上學、定期打疫苗。金額不大，但足以讓冰箱多一排雞蛋，也讓你不必為了學費半夜睡不著。'
+      : '每個月，你到鎮上的郵局或銀行窗口排隊，領回一個薄薄的信封：這個月的補助。條件是孩子要按時上學、定期打疫苗。金額不大，但足以讓家裡多一排雞蛋，也讓你不必為了學費半夜睡不著。'),
     effects: { wealth: +3, knowledge: +1, happiness: +2, health: +1 },
   },
   {
@@ -388,12 +415,13 @@ export default [
     weight: 0.7,
     tags: ['regional', 'money', 'migration'],
     cond: (s, h) => lowInc(h) && REMIT.has(s.countryCode) && h.yearIn(1980, 2100) && (h.siblings() > 0 || h.hasChildren() || h.parentsAlive() > 0),
-    text: (s, h) => '月底，手機跳出一則匯款通知：在國外工作的家人又把一部分薪水寄了回來。你看著那個數字，知道它背後是對方在異地一個個疲倦的夜班。全家人圍著，討論這筆錢該怎麼用。',
+    text: (s, h) => `月底，${h.year() >= 2008 ? '手機跳出一則匯款通知' : '郵局的人把一張匯款單送到門口'}：在國外工作的家人又把一部分薪水寄了回來。你看著那個數字，知道它背後是對方在異地一個個疲倦的夜班。全家人圍著，討論這筆錢該怎麼用。`,
     choices: [
       {
         label: '拿來付學費、買書與制服',
+        cond: (s, h) => h.hasChildren() || h.siblings() > 0,
         effects: { knowledge: +3, wealth: -1, happiness: +2 },
-        result: '你把學費繳清，剩下的買了新書包與兩雙鞋。孩子在學校的筆記本上畫了一個國旗，旁邊寫了遠方那個人的名字。',
+        result: (s, h) => `你把學費繳清，剩下的給家裡的小孩買了新書包與兩雙鞋。${h.hasChildren() ? '孩子' : '弟妹'}在學校的筆記本上畫了一個國旗，旁邊寫了遠方那個人的名字。`,
         schedule: [{ id: 'regional_remittance_result', inYears: [2, 4] }],
         ai: 2.2,
       },
@@ -430,7 +458,7 @@ export default [
     cooldown: 8,
     weight: 1.5,
     tags: ['regional', 'work', 'safety'],
-    cond: (s, h) => MINING.has(s.countryCode) && (h.isJob('miner') || (rural(h) && !h.incomeAtLeast('H') && h.employed())),
+    cond: (s, h) => MINING.has(s.countryCode) && h.isJob('miner'),
     text: (s, h) => '早班下井前，領班把大家集合在一起。前幾天隔壁礦場出了意外，今天他的語氣特別嚴肅。他要大家再檢查一次通風、支架和逃生路線，不要為了趕進度冒險。',
     choices: [
       {
@@ -461,7 +489,7 @@ export default [
     cooldown: 8,
     weight: 0.8,
     tags: ['regional', 'work', 'sea'],
-    cond: (s, h) => COASTAL_FISH.has(s.countryCode) && (h.isJob('fisher') || (rural(h) && !h.incomeAtLeast('H') && h.employed())),
+    cond: (s, h) => COASTAL_FISH.has(s.countryCode) && h.isJob('fisher'),
     text: (s, h) => '天還沒亮，你和同伴們已經把船推進海裡。這幾年網裡的魚越來越少，魚的個頭也越來越小。老漁民望著海平線嘆氣，說祖父輩出海時，一網下去，船都要沉。',
     choices: [
       {
@@ -490,13 +518,13 @@ export default [
     ages: [8, 80],
     weight: 0.8,
     tags: ['regional', 'pastoral', 'family'],
-    cond: (s, h) => PASTORAL.has(s.countryCode) && rural(h) && !h.incomeAtLeast('H'),
+    cond: (s, h) => PASTORAL.has(s.countryCode) && rural(h) && !h.incomeAtLeast('H') && !h.isJob('farmer', 'fisher', 'street_vendor', 'shopkeeper'),
     text: (s, h) => '草場一年比一年短，今年的雨又來得晚。家人在營地圍著火，討論下一個季節要往哪裡去，畜群的哪一隻最瘦、孩子們是不是要留在城裡的學校。夜很長，星星很近。',
     choices: [
       {
         label: '全家跟著畜群繼續遷徙',
         effects: { social: +3, health: -1, knowledge: -1, happiness: +1 },
-        result: '你們拆下帳篷，裝上牲口，沿著熟悉的路線出發。夜裡坐在新的營地，長輩教你辨認星星與風向，那是任何學校都教不到的知識。',
+        result: '你們拆下帳篷，裝上牲口，沿著熟悉的路線出發。夜裡坐在新的營地，長輩教你辨認星星與風向，那是書本裡教不到的知識。',
         ai: 1.2,
       },
       {
@@ -562,13 +590,13 @@ export default [
     choices: [
       {
         label: '投靠相對安全地區的親戚',
-        effects: (s, h) => { h.change('wealth', -4); h.change('happiness', -3); h.change('social', -2); h.set('displaced'); },
+        effects: (s, h) => { h.change('wealth', -4); h.change('happiness', -3); h.change('social', -2); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你們擠上一輛塞滿行李的客運，在另一座城市的親戚家落腳。十幾個人睡在同一間屋子，卻沒有人抱怨。',
         ai: 1.8,
       },
       {
         label: '前往邊境的難民營或收容中心',
-        effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('health', -2); h.set('displaced'); },
+        effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('health', -2); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你們走了好幾天，才抵達邊境的營地。登記、領毯子、領號碼牌……一排排白色帳篷在風裡微微起伏，你第一次覺得，原來「安全」是這麼樸素的事。',
         schedule: [{ id: 'regional_camp_life', inYears: [1, 3] }],
         ai: 1.6,
@@ -576,7 +604,7 @@ export default [
       {
         label: '留在家鄉，與鄰居互相照應',
         effects: (s, h) => { h.change('happiness', -3); h.change('health', -3); h.change('social', +3); h.set('war'); h.addRisk(1.25, 2); },
-        result: '你們留了下來，把地下室整理成共用的避難處，大家輪流守夜、分享食物。警報聲響起時，你抓緊孩子的手，一遍遍告訴他：「我們在一起。」',
+        result: (s, h) => `你們留了下來，把地下室整理成共用的避難處，大家輪流守夜、分享食物。警報聲響起時，${h.age() < 16 ? '大人緊緊抓住你的手，一遍遍告訴你' : h.hasChildren() && h.youngestChildAge() <= 14 ? '你抓緊孩子的手，一遍遍告訴孩子' : '你抓緊身旁人的手，一遍遍告訴對方'}：「我們在一起。」`,
         schedule: [{ id: 'regional_after_the_fighting', inYears: [2, 5] }],
         ai: 1,
       },
@@ -618,14 +646,16 @@ export default [
       },
       {
         label: '在收容的地方安頓下來，重新工作',
-        effects: (s, h) => { h.unset('war'); h.change('wealth', +2); h.change('happiness', +1); h.change('social', -1); h.change('knowledge', +2); },
-        result: '你開始學當地的語言，找了第一份正式的工作。薪水不高，但每個月都能自己決定怎麼用，這件事讓你覺得久違地像個完整的人。',
+        effects: (s, h) => { h.unset('war'); h.unset('displaced'); if (h.age() >= 18 && h.age() < 65 && !h.employed()) h.startJob('laborer'); else if (h.age() < 18 && !h.inSchool()) h.enroll(h.age() < 12 ? 'primary' : 'secondary', { quiet: true }); h.change('wealth', +2); h.change('happiness', +1); h.change('social', -1); h.change('knowledge', +2); },
+        result: (s, h) => (h.age() < 18
+          ? '你開始學當地的語言，進了附近的學校。起初你聽不懂老師在說什麼，但你每天都早到，坐在最前排，這件事讓你覺得久違地像個完整的人。'
+          : '你開始學當地的語言，找了第一份正式的工作。薪水不高，但每個月都能自己決定怎麼用，這件事讓你覺得久違地像個完整的人。'),
         ai: 1.6,
       },
       {
         label: '申請到第三國重新安置',
         cond: (s, h) => !h.isMigrant() && h.age() < 60,
-        effects: (s, h) => { h.unset('war'); h.migrate(h.pick(['DEU', 'CAN', 'SWE', 'AUS', 'USA', 'NOR', 'GBR', 'NLD', 'NZL'])); h.change('wealth', +2); h.change('social', -5); h.change('happiness', +1); },
+        effects: (s, h) => { h.unset('war'); h.unset('displaced'); h.migrate(h.pick(['DEU', 'CAN', 'SWE', 'AUS', 'USA', 'NOR', 'GBR', 'NLD', 'NZL'])); h.change('wealth', +2); h.change('social', -5); h.change('happiness', +1); },
         result: (s, h) => `漫長的審查之後，你們終於收到了通知。飛機降落在${h.countryName()}，第一個冬天很冷，志工遞給你一件厚外套，你穿上時眼眶發熱。`,
         highlight: (s, h) => `輾轉重新安置到${h.countryName()}。`,
         ai: 1.2,
@@ -645,12 +675,12 @@ export default [
     weight: (s, h) => (h.stat('social') < 55 ? 1.4 : 0.3),
     tags: ['regional', 'urban', 'mental'],
     cond: (s, h) => h.incomeAtLeast('UM') && h.urban() && !h.married(),
-    text: (s, h) => '你住在擁有一千萬人的城市裡，卻發現已經三天沒有和任何人真正說過話。外送員把餐點掛在門把上，你們隔著門板互相說了一句「謝謝」，那是整天最像對話的時刻。',
+    text: (s, h) => `你住在擁有一千萬人的城市裡，卻發現已經三天沒有和任何人真正說過話。${h.techReady(2012) ? '外送員把餐點掛在門把上' : '隔壁的阿姨把一碗湯放在門口，敲了敲門就走'}，你們隔著門板互相說了一句「謝謝」，那是整天最像對話的時刻。`,
     choices: [
       {
         label: '報名社團、課程或志工活動',
         effects: { social: +5, happiness: +3, wealth: -1 },
-        result: '你選了每週一次的陶藝課，手裡的泥土總是變形，旁邊的人笑得比你還大聲。三個月後，你在手機裡有了一個只屬於這門課的群組。',
+        result: '你選了每週一次的陶藝課，手裡的泥土總是變形，旁邊的人笑得比你還大聲。三個月後，你有了一群只屬於這門課的朋友，下課後常一起去吃宵夜。',
         ai: 2,
       },
       {
@@ -675,7 +705,7 @@ export default [
     cooldown: 8,
     weight: 0.8,
     tags: ['regional', 'work', 'health'],
-    cond: (s, h) => h.employed() && h.incomeAtLeast('UM') && (h.isRegion('EAS', 'SEA') || ['USA', 'ARE', 'SAU', 'TUR', 'MEX'].includes(s.countryCode)),
+    cond: (s, h) => h.officeJob() && h.incomeAtLeast('UM') && (h.isRegion('EAS', 'SEA') || ['USA', 'ARE', 'SAU', 'TUR', 'MEX'].includes(s.countryCode)),
     text: (s, h) => '晚上十點，整層樓的燈還亮著，沒有人先離開。主管沒說什麼，但大家都懂：誰先走，誰就不夠拚。你看著桌上冷掉的便當，想起已經很久沒有和家人一起吃晚飯了。',
     choices: [
       {
@@ -759,8 +789,8 @@ export default [
     text: (s, h) => h.byIncome({
       L: '午後氣溫超過四十度，田裡的活全改在清晨和傍晚。中午整村的人躲在樹蔭下，女人們分著一壺水，孩子們在乾涸的河床上，追著影子玩。',
       LM: '夏天最熱的那幾週，路面像煎鍋一樣冒著熱氣，工地的工人黎明前就開工，中午全員停工。你用濕布蓋在頭上，對著風扇吹，仍然流汗。',
-      UM: '氣象局發布高溫警報，戶外活動被限制在清晨。商場裡擠滿了不想回家的人，冷氣開到最強，連長輩都披上了薄外套，嘴上抱怨著天氣，眼睛卻捨不得離開店裡的小吃。',
-      H: '高溫連續好幾週，大型室內冷氣商場成了避暑勝地。你在人造的涼爽裡閒逛，走出大門時熱浪撲面，有一種剛出爐的麵包被放進烤箱的恍惚，不知道該笑還是該逃。',
+      UM: h.year() < 1985 ? '高溫連續好幾週，人們躲進騎樓、河邊和戲院裡乘涼，大人搖著蒲扇，孩子泡在水裡不肯上岸。夜裡全家把涼蓆搬到屋外，數著星星等風來。' : '氣象局發布高溫警報，戶外活動被限制在清晨。商場裡擠滿了不想回家的人，空調開到最強，連長輩都披上了薄外套，嘴上抱怨著天氣，眼睛卻捨不得離開店裡的小吃。',
+      H: h.year() < 1985 ? '高溫連續好幾週，人們躲進騎樓、河邊和戲院裡乘涼，大人搖著蒲扇，孩子泡在水裡不肯上岸。夜裡全家把涼蓆搬到屋外，數著星星等風來。' : '高溫連續好幾週，大型室內冷氣商場成了避暑勝地。你在人造的涼爽裡閒逛，走出大門時熱浪撲面，有一種剛出爐的麵包被放進烤箱的恍惚，不知道該笑還是該逃。',
     }),
     effects: (s, h) => { h.change('health', h.byIncome({ L: -3, LM: -3, UM: -2, H: -1 })); h.change('happiness', -1); h.change('wealth', h.income() === 'H' ? 0 : -1); },
   },
@@ -785,7 +815,7 @@ export default [
     weight: 0.35,
     tags: ['regional', 'climate', 'disaster'],
     cond: (s, h) => WILDFIRE.has(s.countryCode) && h.yearIn(1990, 2200),
-    text: (s, h) => '空氣裡的煙味愈來愈濃，山的那一頭一片橘紅。警報簡訊一則接一則跳出來，說你住的區域可能需要撤離。你站在門口，看著車子，不知道該帶走哪些東西。',
+    text: (s, h) => `空氣裡的煙味愈來愈濃，山的那一頭一片橘紅。${h.year() >= 2008 ? '警報簡訊一則接一則跳出來' : '廣播一遍又一遍地播送'}，說你住的區域可能需要撤離。你站在門口，看著車子，不知道該帶走哪些東西。`,
     choices: [
       {
         label: '提早撤離，帶上寵物與重要文件',
@@ -803,7 +833,7 @@ export default [
       {
         label: '先觀望風向，再決定',
         effects: (s, h) => { h.change('health', -3); h.change('happiness', -3); h.addRisk(1.15, 1); },
-        result: '你不斷更新著手機上的火場地圖，直到風向忽然轉變。你匆匆上車，一路上咳嗽不停，鏡子裡的眼睛通紅，事後想起仍覺得有點僥倖。',
+        result: (s, h) => `你不斷${h.year() >= 2008 ? '更新著手機上的火場地圖' : '轉著收音機找最新的火勢消息'}，直到風向忽然轉變。你匆匆上車，一路上咳嗽不停，鏡子裡的眼睛通紅，事後想起仍覺得有點僥倖。`,
         ai: 0.8,
       },
     ],
@@ -816,8 +846,8 @@ export default [
     cooldown: 4,
     weight: 0.4,
     tags: ['regional', 'safety'],
-    cond: (s, h) => QUAKE.has(s.countryCode) && (h.inSchool() || h.employed()),
-    text: (s, h) => '警報聲響起，所有人迅速鑽到桌子底下，一手抱頭、一手抓住桌腳。老師或主管拿著碼表倒數，結束後你們魚貫走到操場或廣場集合，大家一邊拍掉衣服上的灰，一邊小聲討論下午的點心。',
+    cond: (s, h) => QUAKE.has(s.countryCode) && (h.inSchool() || h.wageEarner()),
+    text: (s, h) => `警報聲響起，所有人迅速鑽到桌子底下，一手抱頭、一手抓住桌腳。${h.inSchool() ? '老師拿著碼表倒數，結束後你們魚貫走到操場集合' : '主管拿著碼表倒數，結束後你們魚貫走到樓下的廣場集合'}，大家一邊拍掉衣服上的灰，一邊小聲討論下午的點心。`,
     effects: { knowledge: +1, health: +1, social: +1 },
   },
   {
@@ -849,7 +879,7 @@ export default [
     ages: [22, 45],
     weight: 3,
     tags: ['regional', 'family', 'work'],
-    cond: (s, h) => h.isRegion('EUR') && h.incomeAtLeast('UM') && h.hasChildren() && h.youngestChildAge() === 1 && ['SWE', 'NOR', 'FIN', 'DNK', 'DEU', 'AUT', 'NLD', 'ISL', 'EST', 'CZE', 'SVN', 'POL', 'LTU', 'LVA', 'FRA', 'ESP', 'PRT'].includes(s.countryCode),
+    cond: (s, h) => h.employed() && h.isRegion('EUR') && h.incomeAtLeast('UM') && h.hasChildren() && h.youngestChildAge() === 1 && ['SWE', 'NOR', 'FIN', 'DNK', 'DEU', 'AUT', 'NLD', 'ISL', 'EST', 'CZE', 'SVN', 'POL', 'LTU', 'LVA', 'FRA', 'ESP', 'PRT'].includes(s.countryCode),
     text: (s, h) => `你按照制度請了育嬰假，每個早晨推著嬰兒車去公園，學會了怎麼一邊沖奶一邊接電話。${h.lastChildName()}笑起來的樣子，你以前上班時根本看不到。`,
     effects: { happiness: +4, health: +1, wealth: -1, social: +2 },
   },

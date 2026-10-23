@@ -7,8 +7,9 @@ is pure ES modules with **no DOM access**; it runs in browsers and in Node 22.
 js/engine/  rng · birth · mortality · systems · events · helpers · life · summary
 js/data/    countries (generated) · eras · names · causes · conditions · yearly · riskref (generated)
             events/ index · seed · childhood · youth · adult_work · adult_family · migration · health · aging · world · regional
-tools/      fetch-raw · build-data (→ countries.js) · calibrate-risk (→ riskref.js)
-tests/      data.test.mjs · names.test.mjs · helpers.test.mjs · events.test.mjs · simulation.test.mjs · e2e.mjs
+tools/      fetch-raw · build-data (→ countries.js) · calibrate-risk (→ riskref.js) · coherence-scan · read-life
+tests/      data.test.mjs · names.test.mjs · helpers.test.mjs · events.test.mjs · simulation.test.mjs · coherence.test.mjs · pwa.test.mjs · e2e.mjs
+            lib/coherence.mjs (the text-vs-state auditor used by coherence.test.mjs and tools/coherence-scan.mjs)
 ```
 
 ## 1. Quick start
@@ -72,15 +73,19 @@ kept in `state.settings.eraSetting`.
 
 `getSummary(state)` → name, ages/years, `cause { id, label, text }`, `suicide` (show help resources when true),
 `lifespan { age, countryLe, worldLe, vsCountry, vsWorld }`, `education`, `jobs`, `partner`, `marriages/divorces`,
-`children { total, alive, names }`, `countriesLived`, `highlights`, `counts { choices, events, milestones, years }`,
-per-stat `stats { peak, peakAge, mean, final }` and `statHistory`. `STAT_LABELS`, `EDU_LABELS` are exported.
+`children { total, alive, names }`, `countriesLived`, `highlights` (curated: no repeats, one birthday, one "left home", at most `MAX_HIGHLIGHTS` = 12, still chronological), `featuredHighlight` (the most telling one, used by the share card), `counts { choices, events, milestones, years }`,
+per-stat `stats { peak, peakAge, mean, final }` and `statHistory`. `STAT_LABELS`, `EDU_LABELS`, `curateHighlights(raw, max?)`, `featuredHighlight(list)` are exported. The life state keeps the raw highlight list (`state.highlights`); only the summary is curated.
 
 ### Other exports worth knowing
 
 * `eras.js`: `eraView(country, year)` (era-adjusted statistics), `worldView(year)`, `ERA_LABELS`, `presentYear()`.
 * `mortality.js`: `lifeTable(country, sex, year)` (`.q[age]`, `.e0`), `remainingLife(table, age)`, `causeLabel(id)`.
 * `systems.js`: `JOBS` (id → `{ name, … }`), `EDU_LEVELS`, `STAT_KEYS`.
-* `events.js`: `EVENTS`, `getEvent(id)`, `validateEvents(list)`, `TUNING` (majorRate, regularCounts, nullWeight, …).
+* `events.js`: `EVENTS`, `getEvent(id)`, `validateEvents(list)`, `TUNING` (majorRate, regularCounts, maxEntriesPerYear, maxRepeats, nullWeight, …).
+
+### Feed shaping (events.js)
+
+`runEvents` keeps the log readable: at most `TUNING.maxEntriesPerYear` (3) entries per calendar year (system lines count, a choice's result does not); a repeatable event never tells the same text twice in a life (`again` text, then short echoes), fires at most `max` / `TUNING.maxRepeats` times; "平凡的一年" lines are not reused while an unused one fits the life state. `tests/coherence.test.mjs` measures the result.
 
 ## 3. One tick (`advanceYear`)
 
@@ -124,8 +129,13 @@ health `health_`, aging `aging_`, world `world_`, regional `regional_`. Start fr
   text: (s, h) => string | string,    // 60–160 chars, second person, zh-Hant
   effects: { happiness: -3 } | (s, h) => void,     // keys: health happiness knowledge wealth social
   set: ['flag'], unset: ['flag'],
-  schedule: [{ id: 'other_event', inYears: [0, 2] }],   // follow-ups, fire regardless of cond/ages. On an event with `choices`
-                                       // this is queued when the choice is resolved (together with the chosen option's own `schedule`)
+  schedule: [{ id: 'other_event', inYears: [0, 2], p: 0.8 }],   // follow-ups, fire regardless of cond/ages; optional `p` = probability that it
+                                       // is queued at all. On an event with `choices` this is queued when the choice is resolved
+                                       // (together with the chosen option's own `schedule`)
+  followCond: (s, h) => true | false | 'wait',   // on the FOLLOW-UP event: checked when it comes due. false = drop it silently (the child
+                                       // left school meanwhile), 'wait' = try again next year (a treatment that exists from year X)
+  again: 'text' | (s, h) => text,     // used instead of `text` when a repeatable event would repeat its text word for word
+  max: 3,                             // a repeatable event fires at most this often per life (default TUNING.maxRepeats)
   highlight: true | 'text' | (s, h) => text,       // end-of-life "重要時刻"
   choices: [{                          // 2–3 options
     label, hint?,
@@ -146,7 +156,7 @@ if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `t
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 99)
+### Helpers (`h`, all 112)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
@@ -164,6 +174,14 @@ Call helpers as methods: `h.chance(0.3)`, never destructure.
     Use it instead of scanning `s.log` in `cond`/`weight`.
   * `stable(key, p = 0.5)`: a deterministic per-life coin flip. The same life and `key` always give the same answer, and **no random numbers are consumed**, so it is safe
     in `cond` and several events can agree on "was this person affected by the 2004 tsunami" (use one key per question). `p <= 0` is always `false`, `p >= 1` always `true`.
+* **Consistency helpers (Phase 3B)**: events must not contradict each other or the state, so prefer these over writing the assumption into the text.
+  * `wageEarner()`: employed by someone else (`work.status === 'employed'`); `employed()` also covers the self-employed. Use it for 同事／上司／薪水／下班／公司。 `officeJob()`: a desk job (會議室、辦公室).
+  * `familyBusiness()`: does the family run a shop/stall (decided once per life, only quintiles 2–4, about a third of them)? Gate "家裡的小店" on it.
+  * `parentsLabel()`: `'爸媽' | '媽媽' | '爸爸' | '身邊的大人'` for whoever is alive; `partnerHe()` / `childHe(i)` give 他／她 (the child form falls back to `'孩子'`).
+  * `grandchildren()` / `hasGrandchildren()` / `expectedGrandchildren()`: number of grandchildren (0 until the milestone 「當了祖父母」), so "孫輩" is only written once they exist.
+  * `techReady(baseYear)`: has a technology that appeared in the rich countries in `baseYear` (smartphone 2008, mobile phone 1995, web 1995 …) reached this person? Later for poorer countries and the countryside (`techLag` in helpers.js; the auditor uses the same function).
+  * `yearsAbroad()`: years since the last move to another country (`Infinity` if never). `displaced()`: currently displaced by war or disaster (flag `displaced` set by the "leave home" events, lapses after 6 years or when they return/resettle).
+  * `byLiving({ L, LM, UM, H })`: like `byIncome`, for **narration only** (never for effects, so the calibration is unaffected): one group up for a rich household (quintile 5 as a child, wealth ≥ 75 as an adult), one down for a poor one, never the village (`L`) version for a city dweller.
 * **Changes**: `set(flag, v=true) unset(flag) inc(flag, n=1) change(stat, delta) addWealth(d) addCondition(id) removeCondition(id) startJob(id) loseJob() retire() dropOut() enroll(level?) reenroll() startSmoking() quitSmoking() setPartner({name,gender,age,status}) newPartner({gender?,status?,age?}) endRelationship(years?) marry() divorce() addChild({gender}) migrate(code) addRisk(mult, years?) log(text, title?) highlight(text) die(causeId)`.
   * `newPartner({ gender?, status: 'dating' | 'married' = 'dating', age? })`: creates the partner (name from the person's own culture group; migrants and multi-group countries
     sometimes pair across groups; age near the person's; `gender` defaults to the usual mix incl. a small same-sex share) and returns the record. If the person already has an active partner

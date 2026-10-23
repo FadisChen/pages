@@ -19,8 +19,9 @@ export const EFFECT_KEYS = STAT_KEYS;
 export const TUNING = {
   majorRate: 0.42,          // base probability of a major event in a year with candidates
   regularCounts: [0.28, 0.47, 0.25], // P(0), P(1), P(2) regular events in a year
-  maxEntriesPerYear: 4,
-  yearlyRepeatGap: 6,       // do not reuse a "平凡的一年" line within this many years
+  maxEntriesPerYear: 3,     // log entries per calendar year (system lines included; a choice's result line is not counted)
+  maxRepeats: 3,            // a repeatable event (once:false) fires at most this many times per life (event.max overrides)
+  yearlyRepeatGap: Infinity, // a "平凡的一年" line is never reused in a life while an unused one exists
   nullWeight: 2.5,          // weight of "nothing happens" in each regular draw: keeps a thin pool from firing constantly
 };
 
@@ -78,6 +79,7 @@ export function validateEvents(list, byId = null) {
       if (!has(it.id)) errors.push(`${where}: schedule target "${it.id}" does not exist`);
       const y = it.inYears;
       if (!Array.isArray(y) || y.length !== 2 || !(y[0] >= 0) || !(y[1] >= y[0])) errors.push(`${where}: schedule "${it.id}" needs inYears [min,max]`);
+      if (it.p !== undefined && !(it.p >= 0 && it.p <= 1)) errors.push(`${where}: schedule "${it.id}" has p outside 0..1`);
     }
   };
   const checkFlags = (where, arr, name) => {
@@ -98,8 +100,11 @@ export function validateEvents(list, byId = null) {
     if (ev.weight !== undefined && typeof ev.weight !== 'function' && !(typeof ev.weight === 'number' && ev.weight >= 0)) errors.push(`${w}: weight must be a non-negative number or function`);
     if (ev.chance !== undefined && !(typeof ev.chance === 'number' && ev.chance > 0 && ev.chance <= 1)) errors.push(`${w}: chance must be in (0,1]`);
     if (ev.cond !== undefined && typeof ev.cond !== 'function') errors.push(`${w}: cond must be a function`);
+    if (ev.followCond !== undefined && typeof ev.followCond !== 'function') errors.push(`${w}: followCond must be a function`);
     if (typeof ev.text !== 'function' && typeof ev.text !== 'string') errors.push(`${w}: text must be a string or function`);
     if (ev.once !== undefined && typeof ev.once !== 'boolean') errors.push(`${w}: once must be boolean`);
+    if (ev.again !== undefined && typeof ev.again !== 'string' && typeof ev.again !== 'function') errors.push(`${w}: again must be a string or function`);
+    if (ev.max !== undefined && !(Number.isInteger(ev.max) && ev.max >= 1)) errors.push(`${w}: max must be a positive integer`);
     if (ev.cooldown !== undefined && !(Number.isInteger(ev.cooldown) && ev.cooldown >= 0)) errors.push(`${w}: cooldown must be a non-negative integer`);
     if (ev.once === false && ev.chance === undefined && ev.cooldown === undefined) { /* allowed: repeatable with no cooldown */ }
     checkEffects(w, ev.effects);
@@ -135,6 +140,8 @@ export function isEligible(s, h, ev) {
   if (seen !== undefined) {
     if (ev.once !== false) return false;
     if (ev.cooldown && s.age - seen < ev.cooldown) return false;
+    const shown = s.flags._rt && s.flags._rt[ev.id];
+    if (shown && shown.length >= (ev.max ?? TUNING.maxRepeats)) return false;
   }
   if (ev.cond) {
     try { if (!ev.cond(s, h)) return false; } catch (e) { return false; }
@@ -206,6 +213,7 @@ function scheduleFollowUps(s, list) {
   if (!list) return;
   for (const it of list) {
     const [a, b] = it.inYears;
+    if (it.p !== undefined && !chance(s.rng, it.p)) continue; // optional `p`: probability that the follow-up happens at all
     s.pending.push({ id: it.id, atAge: s.age + randInt(s.rng, a, b) });
   }
 }
@@ -233,16 +241,78 @@ function deathLast(s, from) {
   s.log.push(...rest, ...deaths);
 }
 
-/** Fire a non-choice event. Returns the log entry. */
+/** Short stable hash of a rendered text (used to remember what an event has already said in this life). */
+function textHash(t) {
+  let x = 2166136261;
+  for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); }
+  return x >>> 0;
+}
+
+/** First firing: remember the text only for repeatable events (once-only events never need the history). */
+function recordFirst(s, ev, text) {
+  if (ev.once === false) ((s.flags._rt ||= {})[ev.id] ||= []).push(textHash(text));
+  return text;
+}
+
+/**
+ * The text this firing of `ev` shows, or null when the event has nothing new to say: a repeatable event never
+ * repeats a text word for word within one life. A repeat uses the event's `again` text (string or function) when it
+ * has one; otherwise it is skipped (its cooldown still starts).
+ */
+function freshText(s, h, ev) {
+  const hist = (s.flags._rt ||= {});
+  const shown = (hist[ev.id] ||= []);
+  let text = str(ev.text, s, h);
+  let hash = textHash(text);
+  if (shown.includes(hash) && ev.again !== undefined) {
+    text = str(ev.again, s, h);
+    hash = textHash(text);
+  }
+  if (shown.includes(hash)) return null;
+  shown.push(hash);
+  return text;
+}
+
+/** Short echoes appended when a repeatable event's choice leads to the very same outcome text again. */
+const ECHOES = [
+  '這樣的選擇，你不是第一次做了。',
+  '你想起上一次，笑了一下。',
+  '這一次，你比上回更清楚自己為什麼這樣選。',
+  '日子照著你熟悉的節奏繼續。',
+  '有些事，你大概一輩子都會這樣處理。',
+];
+
+/** A choice of a repeatable event that ends exactly as last time says so, instead of printing the same paragraph twice. */
+function freshResult(s, ev, optIndex, text) {
+  if (ev.once !== false || !text) return text;
+  const hist = ((s.flags._rt ||= {})[`${ev.id}#${optIndex}`] ||= []);
+  const n = hist.length;
+  hist.push(1);
+  return n === 0 ? text : `${text}${ECHOES[(n - 1) % ECHOES.length]}`;
+}
+
+/**
+ * Lines the effects wrote on their own (a diagnosis, a job change ...) land in the log before the event's own entry,
+ * because the entry is only pushed once the effects have run. The story reads better the other way round.
+ */
+function entryFirst(s, from, entry) {
+  const i = s.log.lastIndexOf(entry);
+  if (i > from) { s.log.splice(i, 1); s.log.splice(from, 0, entry); }
+}
+
+/** Fire a non-choice event. Returns the log entry, or null when a repeat had nothing new to say. */
 function fireRegular(s, h, ev) {
+  const again = s.seen[ev.id] !== undefined;
+  const text = again ? freshText(s, h, ev) : (recordFirst(s, ev, str(ev.text, s, h)));
   markSeen(s, ev);
-  const text = str(ev.text, s, h);
+  if (text === null) return null;
   const from = s.log.length;
   const delta = applyEffects(s, h, ev.effects);
   applyFlags(s, ev);
   scheduleFollowUps(s, ev.schedule);
   addHighlightFrom(s, h, ev, text);
   const entry = pushLog(s, ev.milestone ? 'milestone' : 'event', ev.title, text, delta);
+  entryFirst(s, from, entry);
   deathLast(s, from); // a death caused by the effects reads after the event's own narrative
   return entry;
 }
@@ -260,12 +330,15 @@ function presentChoice(s, h, ev) {
     if (ok) options.push({ index: i, label: c.label, hint: c.hint });
   });
   if (options.length === 0) return null;
+  const again = s.seen[ev.id] !== undefined;
+  const text = again ? freshText(s, h, ev) : recordFirst(s, ev, str(ev.text, s, h));
   markSeen(s, ev);
-  const text = str(ev.text, s, h);
+  if (text === null) return null;
   const from = s.log.length;
   const delta = applyEffects(s, h, ev.effects);
   applyFlags(s, ev);
   const entry = pushLog(s, 'event', ev.title, text, delta);
+  entryFirst(s, from, entry);
   deathLast(s, from);
   if (s.alive) s.flags._choice = { eventId: ev.id, title: ev.title, text, options };
   return entry;
@@ -293,10 +366,11 @@ export function resolveChoice(s, h, optionIndex) {
   applyFlags(s, ch);
   scheduleFollowUps(s, ch.schedule);
   scheduleFollowUps(s, ev.schedule); // event-level follow-ups of a choice event
-  const result = ch.result === undefined ? '' : str(ch.result, s, h);
+  const result = ch.result === undefined ? '' : freshResult(s, ev, opt.index, str(ch.result, s, h));
   addHighlightFrom(s, h, ch, result || ch.label);
   if (!ch.highlight) addHighlightFrom(s, h, ev, result || ev.title);
   const entry = pushLog(s, 'choice', ch.label, result, delta);
+  entryFirst(s, from, entry);
   deathLast(s, from); // a death caused by the choice reads after its result text
   return entry;
 }
@@ -329,13 +403,17 @@ function pickYearly(s, h) {
     if (t.cond) { try { if (!t.cond(s, h)) continue; } catch (e) { continue; } }
     pool.push(i);
   }
-  const fresh = pool.filter((i) => {
-    const last = s.seen[`yearly:${i}`];
-    return last === undefined || s.age - last >= TUNING.yearlyRepeatGap;
-  });
-  const use = fresh.length ? fresh : pool;
+  // Never repeat a line within a life while an unused one exists; once the pool is used up, take the oldest ones.
+  const lastUsed = (i) => s.seen[`yearly:${i}`];
+  let use = pool.filter((i) => lastUsed(i) === undefined || s.age - lastUsed(i) >= TUNING.yearlyRepeatGap);
+  if (!use.length) {
+    const oldest = Math.min(...pool.map((i) => lastUsed(i)));
+    use = pool.filter((i) => lastUsed(i) <= oldest + 4);
+  }
   if (!use.length) return null;
-  const idx = use[weightedIndex(s.rng, use.map((i) => YEARLY[i].weight ?? 1))];
+  // Narrow lines first: a line that fits only a few ages is used while it fits, broad ones are kept for later years.
+  const narrow = (i) => { const [a, b] = YEARLY[i].ages || [0, 120]; return 1 + 40 / (Math.min(b, 105) - a + 1); };
+  const idx = use[weightedIndex(s.rng, use.map((i) => (YEARLY[i].weight ?? 1) * narrow(i)))];
   s.seen[`yearly:${idx}`] = s.age;
   return YEARLY[idx];
 }
@@ -367,8 +445,10 @@ function majorRateFor(age) {
  * Returns true if a choice is now pending.
  */
 export function runEvents(s, h) {
-  let entries = 0;
   const cap = TUNING.maxEntriesPerYear;
+  // Entries already written this year by the yearly systems (school, marriage, a parent's death ...) use up the budget.
+  let entries = 0;
+  for (let i = s.log.length - 1; i >= 0 && s.log[i].year === s.year; i--) if (s.log[i].kind !== 'choice') entries++;
   let choiceEvent = null;
 
   // 1. Due follow-ups
@@ -382,10 +462,20 @@ export function runEvents(s, h) {
       const ev = BY_ID.get(p.id);
       if (!ev) continue;
       if (ev.once !== false && s.seen[ev.id] !== undefined) continue;
+      // `followCond`: the follow-up is dropped silently when it no longer fits (e.g. the child has left school meanwhile);
+      // returning 'wait' keeps it for next year instead (e.g. a treatment that only exists from a certain year on)
+      if (ev.followCond) {
+        let ok = false;
+        try { ok = ev.followCond(s, h); } catch (e) { ok = false; }
+        if (ok === 'wait') { if (s.age < 90) s.pending.push({ id: p.id, atAge: s.age + 1 }); continue; }
+        if (!ok) continue;
+      }
       if (isMajor(ev)) {
-        if (choiceEvent) { s.pending.push({ id: p.id, atAge: s.age + 1 }); continue; }
+        if (choiceEvent || entries >= cap) { s.pending.push({ id: p.id, atAge: s.age + 1 }); continue; }
         choiceEvent = ev;
-      } else if (entries < cap + 2) { fireRegular(s, h, ev); entries++; } else s.pending.push({ id: p.id, atAge: s.age + 1 });
+        entries++; // reserve its slot
+      } else if (entries < cap) { if (fireRegular(s, h, ev)) entries++; } else s.pending.push({ id: p.id, atAge: s.age + 1 });
+      if (!s.alive) return false;
     }
   }
 
@@ -395,36 +485,45 @@ export function runEvents(s, h) {
   for (const ev of el.chance) {
     if (entries >= cap) break;
     if (!chance(s.rng, ev.chance)) continue;
+    if (!isEligible(s, h, ev)) continue; // an earlier event of this pass may have changed the state
     if (isMajor(ev)) {
-      if (!choiceEvent) choiceEvent = ev; else s.pending.push({ id: ev.id, atAge: s.age + 1 });
-    } else { fireRegular(s, h, ev); entries++; }
+      if (!choiceEvent) { choiceEvent = ev; entries++; } else s.pending.push({ id: ev.id, atAge: s.age + 1 });
+    } else if (fireRegular(s, h, ev)) entries++;
+    if (!s.alive) return false;
   }
 
-  // 3. Regular weighted events
+  // 3. Decide on the major (choice) event first so that regular events leave room for it
+  let wantMajor = !choiceEvent && s.alive && el.major.length > 0 && chance(s.rng, TUNING.majorRate * majorRateFor(s.age));
+  if (wantMajor && entries >= cap) wantMajor = false;
+
+  // 4. Regular weighted events
   let n = drawRegularCount(s);
   const pool = el.regular.slice();
-  while (n > 0 && pool.length && entries < cap) {
+  while (n > 0 && pool.length && entries + (wantMajor ? 1 : 0) < cap) {
     const ev = pickWeighted(s, h, pool, TUNING.nullWeight);
     if (!ev) { n--; continue; }
     pool.splice(pool.indexOf(ev), 1);
     if (!isEligible(s, h, ev)) continue; // state may have changed after a previous event
-    fireRegular(s, h, ev);
-    entries++;
-    n--;
+    if (fireRegular(s, h, ev)) { entries++; n--; }
     if (!s.alive) return false;
   }
 
-  // 4. Major event
-  if (!choiceEvent && s.alive && el.major.length && chance(s.rng, TUNING.majorRate * majorRateFor(s.age))) {
+  // 5. The major event
+  if (wantMajor && s.alive) {
     const cands = el.major.filter((ev) => isEligible(s, h, ev));
-    choiceEvent = pickWeighted(s, h, cands);
-  }
-  if (choiceEvent && s.alive) {
-    if (presentChoice(s, h, choiceEvent)) entries++;
-    else choiceEvent = null;
+    // a repeat with nothing new to say is skipped: try another candidate
+    while (cands.length && !choiceEvent) {
+      const ev = pickWeighted(s, h, cands);
+      if (!ev) break;
+      cands.splice(cands.indexOf(ev), 1);
+      if (presentChoice(s, h, ev)) choiceEvent = ev;
+      if (!s.alive) return false;
+    }
+  } else if (choiceEvent && s.alive) {
+    if (!presentChoice(s, h, choiceEvent)) choiceEvent = null;
   }
 
-  // 5. Ordinary year
+  // 6. Ordinary year
   if (!s.alive) return false;
   let notable = false;
   for (let i = s.log.length - 1; i >= 0 && s.log[i].year === s.year; i--) {
