@@ -1,5 +1,1201 @@
-// Events about illness, accidents, body and mind at any age.
-// Stub: filled in by the health/world content agent (see engine/README.md for the event API).
-// Ids must start with `health_`.
+// Events about illness, accidents, body and mind at any age. Ids start with `health_`.
+//
+// Themes: illness and care access by income, injuries, chronic conditions, mental health (with support
+// options, never self-harm as a choice), addiction, pregnancy and birth, disability, vaccines, costs, recovery.
+//
+// Risk effects are deliberately small and two-sided: careless choices raise the death risk for a few years,
+// good care (screening, treatment, quitting) lowers it. Condition ids come from data/conditions.js.
+// Follow-up chains (schedule):
+//   health_tb_cough -> health_tb_followup            health_surgery_bill -> health_recovery
+//   health_road_crash -> health_rehab                health_birth_complication -> health_postpartum_low
+//   health_cancer_screening -> health_cancer_treatment
+//   health_depression_signs / health_postpartum_low / health_burnout -> health_support_pays_off
 
-export default [];
+const lowAccess = (h) => h.income() === 'L' || h.income() === 'LM';
+const PHYSICAL_JOBS = ['farmer', 'fisher', 'laborer', 'miner', 'factory', 'construction', 'driver', 'cook', 'domestic', 'caregiver'];
+const roadWeight = (h) => Math.max(0.2, Math.min(2.5, (h.stats().road || 10) / 12));
+const recentLoss = (s, titles, within) => s.log.some((e) => titles.includes(e.title) && s.age - e.age <= within);
+const clinicName = (h) => h.byIncome({ L: '衛生所', LM: '診所', UM: '醫院', H: '診所' });
+
+export default [
+  // =====================================================================================
+  // 日常疾病與就醫可近性
+  // =====================================================================================
+  {
+    id: 'health_flu_season',
+    title: '流感季',
+    ages: [3, 90],
+    once: false,
+    cooldown: 10,
+    weight: 0.5,
+    tags: ['health', 'illness'],
+    text: (s, h) => h.byIncome({
+      L: '雨季過後，家裡一個傳一個地咳嗽。你燒了兩天，靠熱湯和睡覺撐過去，沒有人想花錢跑一趟診所，大人們都說「睡一覺就好了」，也果真每次都好了。',
+      LM: '換季時流感在街坊間傳開。你在家發燒兩天，藥房老闆很有耐心地教你，哪一種退燒藥該配多少水，順便還推薦了一種維他命，說吃了保證有精神。',
+      UM: '流感季來了，身邊的人一個接一個倒下，最後輪到了你。你燒了三天，躺著把積欠已久的連續劇全部補完，嘴裡嚷著再也不要生病，卻覺得這一點休息也算是一種收穫。',
+      H: '流感季，診所的候診室擠滿了戴口罩的人。你領了藥回家睡了整整三天，醒來時第一次覺得空氣這麼好聞，連自己的枕頭都顯得格外可愛。',
+    }),
+    effects: (s, h) => {
+      h.change('health', h.byIncome({ L: -4, LM: -3, UM: -2, H: -2 }));
+      h.change('happiness', -1);
+      if (lowAccess(h)) h.change('wealth', -1);
+    },
+  },
+  {
+    id: 'health_dengue_fever',
+    title: '蚊子的雨季',
+    ages: [3, 70],
+    once: false,
+    cooldown: 6,
+    weight: 0.6,
+    tags: ['health', 'illness', 'regional'],
+    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'OCE'),
+    text: (s, h) => `雨季裡蚊子特別多，你突然高燒，骨頭像被拆開又裝回去一樣痛。${h.byIncome({
+      L: '鄰居合力把你抬去診所，護理人員只能叫你多喝水，並一直盯著你的血小板。',
+      LM: '診所替你驗了血，叮嚀你多喝水、別亂吃退燒藥，一週之後你才慢慢有了力氣。',
+      UM: '醫院替你抽血追蹤，社區也派人來巡查積水。你躺了十天，瘦了兩公斤。',
+      H: '醫院替你抽血追蹤，幾天後燒退了，只是疲倦感拖了好幾週才散去，你這才知道原來「小病」也會讓人覺得生活全亂了套。',
+    })}`,
+    effects: (s, h) => {
+      h.change('health', h.byIncome({ L: -6, LM: -5, UM: -4, H: -3 }));
+      h.change('wealth', -1);
+      if (lowAccess(h) && h.chance(0.08)) h.addRisk(1.2, 1);
+    },
+  },
+  {
+    id: 'health_tb_cough',
+    title: '拖不好的咳嗽',
+    ages: [15, 65],
+    weight: 0.5,
+    tags: ['health', 'illness', 'tb'],
+    cond: (s, h) => lowAccess(h) || (h.income() === 'UM' && h.yearIn(1970, 2000)),
+    text: (s, h) => `你的咳嗽拖了快一個月，夜裡盜汗，體重一直往下掉，連爬一層樓梯都會喘。${h.byIncome({
+      L: '有人說這可能是肺病，但衛生所很遠，一來一回要花掉一整天的工。',
+      LM: '鄰居都勸你去檢查，可你怕被貼標籤，也怕請假少一天薪水。',
+      UM: '家人一直催你去照X光，你說太忙，直到咳出血絲才真的被嚇到。',
+      H: '家庭醫師聽完症狀，立刻皺起眉頭，當天就安排了胸部X光和痰液檢驗，還細心叮嚀你要戴好口罩。',
+    })}`,
+    choices: [
+      {
+        label: '去檢查，領藥按時吃',
+        effects: { health: -2, wealth: -1 },
+        result: (s, h) => `檢查確認是結核病。${clinicName(h)}的護理人員說要連續吃藥六個月，你每天準時服藥，一次也不敢漏。`,
+        schedule: [{ id: 'health_tb_followup', inYears: [1, 1] }],
+        ai: 3,
+      },
+      {
+        label: '請社區衛生員到家裡看看',
+        cond: (s, h) => !h.urban() || lowAccess(h),
+        effects: { health: -1, social: +1 },
+        result: '衛生員帶著痰盒來到家門口，教你怎麼採檢、怎麼戴口罩，還每週來看你吃藥。你覺得自己沒有被丟下。',
+        schedule: [{ id: 'health_tb_followup', inYears: [1, 1] }],
+        ai: 1.5,
+      },
+      {
+        label: '先吃咳嗽藥，等忙完再說',
+        effects: (s, h) => { h.change('health', -4); h.addRisk(1.5, 3); },
+        result: '你照常工作，咳嗽時好時壞。家人開始悄悄地戴起口罩，大家都有默契地不提那個字。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'health_tb_followup',
+    title: '剩下的兩個月藥',
+    ages: [15, 70],
+    weight: 0,
+    tags: ['health', 'followup'],
+    text: (s, h) => '咳嗽停了，體重也回來了一些。可是藥袋裡還剩下兩個月的份量，領藥的路途又遠又累，農忙的季節也快到了。你看著那一小袋藥發呆，不知道該怎麼辦。',
+    choices: [
+      {
+        label: '把剩下的藥吃完',
+        effects: { health: +4, happiness: +2 },
+        result: '最後一次領藥那天，護理人員在你的卡片上蓋了章。你走出門口，覺得肺裡的空氣前所未有地乾淨。',
+        ai: 3,
+      },
+      {
+        label: '覺得好多了，不吃了',
+        effects: (s, h) => { h.change('health', +2); h.addRisk(1.5, 3); },
+        result: '你省下了往返的時間。幾個月後夜裡的咳嗽又回來了，你這才明白當初他們為什麼那麼堅持。',
+        ai: 0.5,
+      },
+    ],
+  },
+  {
+    id: 'health_clinic_far',
+    title: '半夜的高燒',
+    ages: [1, 80],
+    once: false,
+    cooldown: 6,
+    weight: 0.8,
+    tags: ['health', 'access'],
+    cond: (s, h) => !h.urban() && !h.incomeAtLeast('H'),
+    text: (s, h) => '半夜裡你燒得滿臉通紅，家人摸著你滾燙的額頭。最近的診所要翻過一座山，天色還很黑，路上沒有半盞燈，連雞都還沒有醒，你不知道該不該現在就出發。',
+    choices: [
+      {
+        label: '立刻動身，借車送去',
+        effects: { wealth: -2, health: +1 },
+        result: '鄰居把摩托車借了出來。天亮前趕到診所，醫護人員說再晚一點就麻煩了，你的燒在點滴裡慢慢退下去。',
+        ai: 2,
+      },
+      {
+        label: '請社區衛生員或助產士過來',
+        cond: (s, h) => lowAccess(h),
+        effects: { health: -1, social: +1 },
+        result: '衛生員拎著藥箱走了半個鐘頭的路趕來。她量了體溫、餵你吃藥，說明天一早還會再來看你。',
+        ai: 1.5,
+      },
+      {
+        label: '先用土法退燒，等天亮再走',
+        effects: (s, h) => { h.change('health', -3); h.addRisk(1.25, 1); },
+        result: '你用濕毛巾一遍遍擦身體，一夜沒睡。天亮時燒退了一點，可是整個人虛得像剛打完一場仗。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_surgery_bill',
+    title: '醫生說要開刀',
+    ages: [20, 80],
+    once: false,
+    cooldown: 15,
+    weight: 0.4,
+    tags: ['health', 'money'],
+    text: (s, h) => `腹痛了好幾天，你越來越吃不下飯，臉色也一天比一天難看。醫生看了報告，說需要開刀。${h.byIncome({
+      L: '你盤算著家裡有哪些東西可以變賣，護理人員說越拖越危險，費用卻是你一整年的收入。',
+      LM: '醫院要你先繳一筆保證金，家人湊了一晚上，還差了一截。',
+      UM: '保險能報銷一部分，但等候排程要兩個月，而你的肚子等不了那麼久。',
+      H: '保險會給付大部分費用，只是你得先安排好請假，把家裡的事交代清楚。',
+    })}`,
+    choices: [
+      {
+        label: '馬上手術',
+        effects: (s, h) => { h.change('wealth', h.byIncome({ L: -8, LM: -6, UM: -3, H: -1 })); h.change('health', +3); },
+        result: (s, h) => h.byIncome({
+          L: '你賣掉了家裡的牲口，又向親戚借了一點。手術很順利，但你在病床上一直想著這筆債要還幾年。',
+          LM: '家人把積蓄和借來的錢都拿了出來。手術很順利，出院那天，大家都鬆了一口氣。',
+          UM: '你選了自費快一點的排程。手術順利，帳單比想像中重，但你睡得很安穩。',
+          H: '手術順利，一週後出院。帳單上最大的數字被保險吃掉了，你只需要負擔掛號與病房差額。',
+        }),
+        schedule: [{ id: 'health_recovery', inYears: [0, 1] }],
+        ai: (s, h) => (h.isPoor() ? 1.2 : 3),
+      },
+      {
+        label: '排公立醫院，等候安排',
+        cond: (s, h) => h.incomeAtLeast('LM'),
+        effects: (s, h) => { h.change('wealth', -2); h.change('health', -2); h.addRisk(1.15, 1); },
+        result: '你在候補名單上等了兩個月，每次疼起來就吃止痛藥撐著。終於輪到那天，主刀醫師說「剛好趕上」。',
+        schedule: [{ id: 'health_recovery', inYears: [0, 1] }],
+        ai: 1.2,
+      },
+      {
+        label: '拖著，用止痛藥撐',
+        effects: (s, h) => { h.change('health', -4); h.addRisk(1.3, 2); },
+        result: '你每天算著藥量，也算著存款。疼痛有時退去，有時又狠狠咬上來，你一邊工作一邊祈禱它自己好起來。',
+        ai: (s, h) => (h.isPoor() ? 1.5 : 0.4),
+      },
+    ],
+  },
+  {
+    id: 'health_recovery',
+    title: '復原的日子',
+    ages: [15, 95],
+    weight: 0,
+    tags: ['health', 'followup'],
+    text: (s, h) => '術後第二個禮拜，你第一次自己走到窗邊，看見樓下的小孩在追一隻貓，陽光落在你的手背上，暖暖的。那一刻你覺得，活著原來可以這麼輕。',
+    effects: { health: +4, happiness: +3, social: +1 },
+  },
+  {
+    id: 'health_catastrophic_cost',
+    title: '一場病，一家人的積蓄',
+    ages: [22, 68],
+    once: false,
+    cooldown: 15,
+    weight: 0.5,
+    tags: ['health', 'money'],
+    cond: (s, h) => lowAccess(h) && h.wealthQ() <= 4 && !h.retired(),
+    text: (s, h) => '家裡有人突然病重，必須住院。醫院開出的費用，是你們全家一整年也存不下來的數字。大家圍坐在昏黃的燈下，把能想到的親戚和存款都數了一遍，沒人願意先開口說出那個最難的決定。',
+    choices: [
+      {
+        label: '賣掉土地或牲口',
+        effects: { wealth: -7, happiness: -2 },
+        result: '你把最值錢的東西賣掉，換來病人的平安。日子變得更緊，但家裡人說，人在比什麼都重要。',
+        ai: 1,
+      },
+      {
+        label: '向親友與放貸的人借',
+        effects: { wealth: -4, social: -1 },
+        set: ['in_debt'],
+        result: '你借遍了能借的人。病人康復了，債務卻像一道長長的影子，接下來好幾年的收入都要一點一點還。',
+        ai: 1,
+      },
+      {
+        label: '請鄰里與宗親一起想辦法',
+        effects: { wealth: -2, social: +4, happiness: +1 },
+        result: '鄰居湊了錢，有人送來米和菜，村裡的長輩替你們和醫院講了價。你這輩子都會記得這些人的名字。',
+        ai: 1.6,
+      },
+    ],
+  },
+  {
+    id: 'health_work_injury',
+    title: '工作中受傷',
+    ages: [16, 62],
+    once: false,
+    cooldown: 8,
+    weight: 0.7,
+    tags: ['health', 'work', 'accident'],
+    cond: (s, h) => h.employed() && h.isJob(...PHYSICAL_JOBS),
+    text: (s, h) => '你在工作時手滑了一下，傷口很深，血流了一地。旁邊的人遞來一條毛巾，問你還能不能撐到收工，你低頭看著自己發抖的手，說「我再看看」。',
+    choices: [
+      {
+        label: '停工就醫，申請補償',
+        cond: (s, h) => h.incomeAtLeast('UM') || h.has('union_member'),
+        effects: { wealth: -2, health: -2 },
+        result: '你辦了請假，單位按規定處理了工傷。養傷時薪水少了一些，但傷口好得很乾淨。',
+        ai: 3,
+      },
+      {
+        label: '包紮一下，繼續上工',
+        effects: (s, h) => { h.change('health', -4); h.change('wealth', +1); h.addRisk(1.15, 2); },
+        result: '你咬牙做完當天的活。傷口後來發炎了一陣子，每次碰水都隱隱作痛，但這個月的薪水一毛也沒少。',
+        ai: (s, h) => (h.isPoor() ? 2 : 0.8),
+      },
+      {
+        label: '回家休息幾週，沒有收入',
+        effects: (s, h) => { h.change('health', -2); h.change('wealth', -4); if (h.chance(0.05)) h.addCondition('disability'); },
+        result: '你在家躺了三週，看著牆上的日曆一格一格劃掉。家人把菜裡的肉省了下來，讓你多吃一點。',
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'health_back_pain',
+    title: '腰痛的警告',
+    ages: [30, 65],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => 0.4 + (h.employed() && h.isJob(...PHYSICAL_JOBS) ? 0.6 : 0.1),
+    tags: ['health', 'work'],
+    text: (s, h) => '某天早上你彎腰撿東西，腰像被拔掉一根螺絲，整個人僵在原地。你這才發現，身體都記得，這些年你搬過的每一袋米、扛過的每一箱貨，現在一起來跟你收帳。',
+    choices: [
+      {
+        label: '去做復健、調整姿勢',
+        cond: (s, h) => h.incomeAtLeast('LM'),
+        effects: { wealth: -1, health: +2 },
+        result: '治療師教你幾個簡單的動作，要你每天做。你一開始嫌麻煩，三個月後居然能一路走到公車站不用停。',
+        ai: 2,
+      },
+      {
+        label: '貼藥布、吃止痛藥撐著',
+        effects: { health: -1, wealth: -1 },
+        result: '藥局的人說這幾種最常有人買。你照著吃，痛感退了，但每逢下雨天它又準時報到。',
+        ai: 1.5,
+      },
+      {
+        label: '咬牙照常工作',
+        effects: { health: -3, wealth: +1 },
+        result: '你沒有請假，也沒有多說。只是下班後坐進椅子裡，總要花很久才能再站起來。',
+        ai: (s, h) => (h.isPoor() ? 1.5 : 0.5),
+      },
+    ],
+  },
+
+  // =====================================================================================
+  // 懷孕、生產與育兒期
+  // =====================================================================================
+  {
+    id: 'health_birth_complication',
+    title: '生產那天',
+    ages: [16, 45],
+    once: false,
+    cooldown: 1,
+    chance: 0.14,
+    tags: ['health', 'pregnancy'],
+    cond: (s, h) => h.female() && h.youngestChildAge() === 0,
+    text: (s, h) => `${h.lastChildName()}出生的那天，產程比誰預料的都長，你失了不少血。${h.byIncome({
+      L: '助產士一直握著你的手，說再撐一下。轉送的車等了好久才來，三個小時的路你都在發抖。',
+      LM: '接生的人緊張地換了好幾條毛巾。最後是鄰居開車把你送到鎮上的醫院，才有人替你輸血。',
+      UM: '醫院的團隊臨時改成剖腹產。你在手術室的燈下聽見第一聲啼哭，才放聲哭了出來。',
+      H: '醫療團隊迅速處理好出血。你在恢復室裡躺了兩天，護理師每隔一小時就來看你一次。',
+    })}`,
+    effects: (s, h) => {
+      h.change('health', h.byIncome({ L: -9, LM: -7, UM: -5, H: -4 }));
+      h.change('happiness', -1);
+      if (h.income() === 'L') h.change('wealth', -2);
+    },
+    schedule: [{ id: 'health_postpartum_low', inYears: [0, 1] }],
+  },
+  {
+    id: 'health_postpartum_low',
+    title: '孩子出生之後',
+    ages: [16, 46],
+    weight: 0.3,
+    tags: ['health', 'mental', 'pregnancy'],
+    cond: (s, h) => h.female() && h.youngestChildAge() >= 0 && h.youngestChildAge() <= 1,
+    text: (s, h) => `${h.lastChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
+    choices: [
+      {
+        label: '把心裡的話告訴伴侶或家人',
+        effects: { happiness: +3, social: +3 },
+        result: (s, h) => `你終於開口。${h.hasPartner() ? h.partnerName() : '家人'}沒有急著講道理，只是靜靜聽完，然後說「這幾個晚上換我來」。`,
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2,
+      },
+      {
+        label: '去找醫師、護理師或助產士談談',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +3); h.change('health', +1); if (h.hasCondition('depression') && h.chance(0.3)) h.removeCondition('depression'); },
+        result: '醫護人員說這很常見，也是可以幫忙的。她給了你一份簡單的問卷、一個回診時間，還有一個可以隨時打的電話。',
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2.5,
+      },
+      {
+        label: '先撐著，不想麻煩別人',
+        effects: (s, h) => { h.change('happiness', -3); h.change('health', -2); if (h.chance(0.3)) h.addCondition('depression'); },
+        result: '你把眼淚擦乾，照樣餵奶、洗衣、微笑。只是那幾個月，你很少真正笑出聲，直到有人注意到你的黑眼圈。',
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'health_miscarriage',
+    title: '沒能留住的孩子',
+    ages: [18, 42],
+    once: false,
+    cooldown: 6,
+    weight: 0.5,
+    tags: ['health', 'pregnancy', 'grief'],
+    cond: (s, h) => h.female() && h.hasPartner(),
+    text: (s, h) => `你和${h.partnerName()}才剛開始期待，就在某個清晨失去了這個孩子。外人說「還年輕」「下次再來」，可是你需要的只是一點時間，讓悲傷是悲傷。`,
+    choices: [
+      {
+        label: '和伴侶一起面對、一起難過',
+        effects: { happiness: -3, social: +3 },
+        result: (s, h) => `${h.partnerName()}握著你的手，兩個人都沒說話。那個晚上，你們一起為那個還沒見面的孩子取了一個小名。`,
+        ai: 2,
+      },
+      {
+        label: '看醫師，也約好追蹤與諮商',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: { happiness: -2, health: +2, wealth: -1 },
+        result: '醫師耐心解釋原因，也說這不是你的錯。你每個月回診，慢慢發現自己已能完整說出這件事而不會哽咽。',
+        ai: 2,
+      },
+      {
+        label: '找信任的女性親友聊聊',
+        effects: { happiness: -1, social: +4 },
+        result: '姑姑、姊姊或鄰居，沒有人說多餘的話。只是留下一鍋湯，輕輕抱了你一下，說她們也曾經走過。',
+        ai: 1.5,
+      },
+    ],
+  },
+
+  // =====================================================================================
+  // 心理健康
+  // =====================================================================================
+  {
+    id: 'health_depression_signs',
+    title: '灰色的日子',
+    ages: [13, 75],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => 0.5 + (h.hasCondition('depression') ? 1.5 : 0) + (h.stat('happiness') < 35 ? 0.7 : 0),
+    tags: ['health', 'mental'],
+    text: (s, h) => '你連續好幾週提不起勁，連起床都像在爬山。以前喜歡的事變得沒味道，吃飯也像在嚼蠟，你卻對旁人說「沒事，只是累了」，笑得很用力。',
+    choices: [
+      {
+        label: '找信任的人談談',
+        effects: (s, h) => { h.change('happiness', +2); h.change('social', +3); if (h.hasCondition('depression') && h.chance(0.2)) h.removeCondition('depression'); },
+        result: '你傳了一則很長的訊息，或在廚房裡坐下開了口。對方沒有急著給建議，只是說：「我在這裡，慢慢說。」',
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2,
+      },
+      {
+        label: '去看醫師或心理師，或撥打支持專線',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +3); h.change('health', +1); if (h.hasCondition('depression') && h.chance(0.3)) h.removeCondition('depression'); },
+        result: (s, h) => `${s.countryCode === 'TWN' ? '你鼓起勇氣撥了安心專線 1925，電話那頭的人認真地聽完，並替你找了可以預約的門診。' : '你預約了門診，把這幾個月的狀況一件一件說給對方聽。對方說：「這是一種病，不是你不夠努力。」'}`,
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2.5,
+      },
+      {
+        label: '靠作息、運動與社區活動慢慢撐起來',
+        effects: { health: +2, happiness: +1, social: +2 },
+        result: '你把每天要做的事縮到最小：起床、散步、吃一頓飯。朋友邀你去市集或球場，你這次沒有拒絕。',
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'health_support_pays_off',
+    title: '顏色回來了',
+    ages: [13, 90],
+    weight: 0,
+    tags: ['health', 'mental', 'followup'],
+    text: (s, h) => '某個早晨你醒來，發現自己竟然想吃早餐。窗外的光比前陣子亮了一點，鳥叫聲也變得清楚。你想起那個伸手拉住你的人，心裡暖暖的，打算今天要說聲謝謝。',
+    effects: (s, h) => {
+      h.change('happiness', +4);
+      h.change('health', +1);
+      if (h.hasCondition('depression') && h.chance(0.4)) h.removeCondition('depression');
+    },
+  },
+  {
+    id: 'health_burnout',
+    title: '燒盡的感覺',
+    ages: [24, 58],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => 0.4 + (h.employed() ? 0.5 : 0) + (h.stat('happiness') < 50 ? 0.3 : 0),
+    tags: ['health', 'mental', 'work'],
+    cond: (s, h) => h.employed(),
+    text: (s, h) => '連續幾個月的趕工之後，你在週一早上站在公司或工地門口，雙腳怎麼也邁不開。身體還在，人卻像被抽乾了，連最簡單的一封信都寫不下去，只想把自己縮進被子裡。',
+    choices: [
+      {
+        label: '向主管請長假、減少工作量',
+        effects: { wealth: -2, happiness: +4, health: +3 },
+        result: '你鼓起勇氣說出口。主管沉默了一會兒，說他其實也有同感。你休息的那幾週，才發現自己已經很久沒有睡到自然醒。',
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 1.5,
+      },
+      {
+        label: '找諮商或同事聊聊',
+        effects: { happiness: +3, social: +2, wealth: -1 },
+        result: '你和一位值得信任的前輩吃了頓午飯，才發現原來不是只有你這樣。你們決定輪流替對方扛一些事。',
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2,
+      },
+      {
+        label: '撐下去，等放假再說',
+        effects: (s, h) => { h.change('health', -4); h.change('happiness', -4); if (h.chance(0.12)) h.addCondition('depression'); },
+        result: '你照樣準時打卡。假期到了，你卻只想躺著，哪裡也沒去。那一年的工作成績沒有掉，只是你再也笑不太出來。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'health_anxiety_attack',
+    title: '喘不過氣的那一刻',
+    ages: [15, 55],
+    weight: 0.4,
+    tags: ['health', 'mental'],
+    text: (s, h) => '在擁擠的地方，你的心臟忽然狂跳，手心全是汗，覺得自己快要昏倒。幾分鐘後一切又退去，旁邊的人什麼都沒發現，你卻從此不敢再走進同一個地方，也沒辦法向誰解釋。',
+    choices: [
+      {
+        label: '練習緩慢呼吸，慢慢回到現場',
+        effects: { happiness: +1, health: +1 },
+        result: '有人教過你：吸四秒、停四秒、吐四秒。你在人群邊緣試了幾次，那種快要失控的感覺一次比一次短。',
+        ai: 1.5,
+      },
+      {
+        label: '去看醫師或諮商',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: { happiness: +3, wealth: -1 },
+        result: '醫師檢查了心臟，說身體沒有大問題，是焦慮。他教你認識身體的警報，也告訴你這是可以被治療的。',
+        ai: 2,
+      },
+      {
+        label: '告訴朋友，請他陪你練習',
+        effects: { social: +3, happiness: +2 },
+        result: '你終於說出口，對方只是笑著說：「那下次我們坐靠走道的位子。」有人陪著，你發現世界其實沒有那麼可怕。',
+        ai: 1.5,
+      },
+    ],
+  },
+  {
+    id: 'health_grief_parent',
+    title: '失去之後的日子',
+    ages: [10, 90],
+    once: false,
+    cooldown: 3,
+    weight: (s, h) => (recentLoss(s, ['母親過世', '父親過世'], 1) ? 4 : 0),
+    tags: ['health', 'mental', 'grief'],
+    cond: (s, h) => recentLoss(s, ['母親過世', '父親過世'], 1),
+    text: (s, h) => '喪事辦完了，親友各自回到自己的生活，屋子忽然安靜得讓人不習慣。吃飯時你還是不小心照著他的習慣，多拿了一副碗筷，才想起來他不會來了。',
+    choices: [
+      {
+        label: '和家人一起悼念、輪流說起回憶',
+        effects: { happiness: +3, social: +3 },
+        result: '你們在飯桌上輪流說他的糗事，說著說著笑了，笑完又紅了眼眶。那個晚上，你覺得他好像也坐在椅子上聽。',
+        ai: 2,
+      },
+      {
+        label: '找朋友或支持團體聊聊',
+        effects: { happiness: +2, social: +3 },
+        result: '朋友什麼都沒問，只是陪你走了一大圈路。後來你加入了一個小小的聚會，大家都曾失去很重要的人。',
+        ai: 1.5,
+      },
+      {
+        label: '先把眼前的事做完，悲傷放後面',
+        effects: (s, h) => { h.change('happiness', -3); h.change('wealth', +1); if (h.chance(0.08)) h.addCondition('depression'); },
+        result: '你照常上班、煮飯、處理手續，把自己填得滿滿的。直到某天在超市裡看到他愛吃的東西，才在走道上蹲下來哭了。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_insomnia',
+    title: '睡不著的夜晚',
+    ages: [20, 70],
+    once: false,
+    cooldown: 12,
+    weight: 0.3,
+    tags: ['health', 'mental'],
+    text: (s, h) => '凌晨三點，你盯著天花板，腦袋裡的待辦清單像跑馬燈一樣停不下來。窗外偶爾有車經過，你開始懷疑，是不是只有自己在這個時間醒著。',
+    effects: { health: -2, happiness: -2 },
+  },
+  {
+    id: 'health_quit_smoking',
+    title: '想戒菸的早晨',
+    ages: [20, 80],
+    once: false,
+    cooldown: 6,
+    weight: (s, h) => (h.isSmoker() ? 1.2 : 0),
+    tags: ['health', 'addiction'],
+    cond: (s, h) => h.isSmoker(),
+    text: (s, h) => '早上被自己的咳嗽吵醒的時候，你又想起醫師說過的話。口袋裡那包菸還剩三根，你把它握在手裡，站在陽台，不知道今天要不要真的把它丟掉。',
+    choices: [
+      {
+        label: '今天就戒，扔掉整包',
+        effects: (s, h) => {
+          if (h.chance(0.5)) { h.quitSmoking(); h.change('health', +3); h.change('happiness', -1); }
+          else { h.change('happiness', -2); h.change('social', -1); }
+        },
+        result: (s, h) => (h.isSmoker()
+          ? '撐了三個星期，你在一次飯局後又點起了菸。你沒有責怪自己太久，只告訴自己：下次會更快。'
+          : '頭一個月難熬得要命，你吃了很多糖果、喝了很多水。到了第三個月，你發現爬樓梯時居然不喘了。'),
+        highlight: (s, h) => (h.isSmoker() ? null : '成功戒了菸。'),
+        ai: 2.5,
+      },
+      {
+        label: '請醫師開戒菸輔助或加入戒菸班',
+        cond: (s, h) => h.incomeAtLeast('UM') || h.urban(),
+        effects: (s, h) => {
+          h.change('wealth', -1);
+          if (h.chance(0.7)) { h.quitSmoking(); h.change('health', +3); } else h.change('happiness', -1);
+        },
+        result: (s, h) => (h.isSmoker()
+          ? '輔助貼片讓你好過了一些，但壓力一來，你還是回到了老習慣。護理師說沒關係，再試一次。'
+          : '有人教你怎麼應付嘴饞的瞬間，每週還有人替你打氣。六個月後，你領到了一枚小小的紀念章。'),
+        ai: 2,
+      },
+      {
+        label: '再說吧，現在壓力太大',
+        effects: { happiness: +1, health: -1 },
+        result: '你又點了一根。煙霧在窗邊慢慢散開，你看著它想：總有一天會的，只是不是今天。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_alcohol_problem',
+    title: '酒瓶比朋友近',
+    ages: [22, 65],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => (h.hasCondition('alcohol') ? 3 : h.male() ? 0.15 : 0.08),
+    tags: ['health', 'addiction'],
+    text: (s, h) => '家人在你的床邊發現第三個空酒瓶，也發現你最近總是遲到、忘記約好的事。他們不敢罵你，只是站在門口，輕輕地問：「你還好嗎？」',
+    choices: [
+      {
+        label: '參加互助團體或戒酒治療',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: (s, h) => { h.change('social', +4); h.change('health', +3); h.change('wealth', -1); if (h.hasCondition('alcohol') && h.chance(0.5)) h.removeCondition('alcohol'); h.addRisk(0.9, 4); },
+        result: '你坐在一圈陌生人裡，輪到你時嗓子啞了很久才說出：「我需要幫忙。」那天之後，你每週都會回到那個房間。',
+        ai: 2.5,
+      },
+      {
+        label: '自己設限，請家人陪伴監督',
+        effects: (s, h) => { h.change('social', +2); h.change('happiness', +1); if (h.hasCondition('alcohol') && h.chance(0.2)) h.removeCondition('alcohol'); },
+        result: '你把家裡的酒清了出去，還讓家人偶爾突擊檢查。有時成功，有時失敗，但至少沒有人再假裝沒看見。',
+        ai: 1.5,
+      },
+      {
+        label: '說自己沒事，繼續喝',
+        effects: (s, h) => { h.change('health', -3); h.change('social', -3); h.change('happiness', -2); },
+        result: '你說這只是壓力太大。夜裡玻璃杯碰到桌面的聲音，在寂靜的屋裡聽起來特別孤單。',
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'health_opioid_painkillers',
+    title: '止痛藥的第二個月',
+    ages: [30, 70],
+    weight: 0.8,
+    tags: ['health', 'addiction'],
+    cond: (s, h) => h.isRegion('NAM') && h.yearIn(1998, 2035),
+    text: (s, h) => '手術後醫師開了強效止痛藥。傷口早就好了，你卻發現自己不吃就睡不著、心慌，連藥罐快空了都會緊張，那種身不由己的感覺，讓你在夜裡盯著天花板，有點害怕。',
+    choices: [
+      {
+        label: '和醫師談逐步減量',
+        effects: { health: +2, happiness: +1, wealth: -1 },
+        result: '醫師沒有責備你，只是調整藥量、安排複診，還轉介你到疼痛門診。三個月後，你第一次一覺睡到天亮。',
+        ai: 2.5,
+      },
+      {
+        label: '告訴家人，請他們陪你',
+        effects: { social: +3, happiness: +2 },
+        result: '你把藥罐放在桌上，說了一句「我需要幫忙」。家人先是愣住，然後抱住了你，輪流陪你熬過那幾週。',
+        ai: 1.8,
+      },
+      {
+        label: '改做物理治療、換非藥物止痛',
+        cond: (s, h) => h.incomeAtLeast('UM'),
+        effects: { health: +1, wealth: -2 },
+        result: '治療師教你伸展、水療與冥想。痛沒有完全消失，但你學會了和它共處，而不是只靠藥片把它壓下去。',
+        ai: 1.2,
+      },
+    ],
+  },
+
+  // =====================================================================================
+  // 慢性病與長期照護
+  // =====================================================================================
+  {
+    id: 'health_diabetes_care',
+    title: '血糖的日常',
+    ages: [30, 90],
+    once: false,
+    cooldown: 8,
+    weight: (s, h) => (h.hasCondition('diabetes') ? 2 : 0),
+    tags: ['health', 'chronic'],
+    cond: (s, h) => h.hasCondition('diabetes'),
+    text: (s, h) => `醫師說你的血糖偏高，之後要長期和糖尿病相處。${h.byIncome({
+      L: '診所說你需要長期吃藥、控制飲食，但藥時有時缺，你不確定下一次領藥時還有沒有。',
+      LM: '你得定期量血糖、吃藥，可是試紙很貴，你只好隔幾天才量一次，其餘時間只能靠身體的感覺去猜。',
+      UM: '你得定期回診、控制飲食。可是生活太忙，總是外食，血糖紀錄本空了大半，每次回診前才臨時補上幾筆。',
+      H: '醫師替你設定了血糖監測與飲食計畫，手機會準時提醒你。你卻發現最難的是對甜點說不。',
+    })}`,
+    choices: [
+      {
+        label: '規律監測、調整飲食',
+        effects: (s, h) => { h.change('health', +2); h.change('wealth', -1); h.addRisk(0.9, 4); },
+        result: '你把每次的數字寫在小本子上，一天比一天有信心。回診那天，醫師笑著說：「這一頁很漂亮。」',
+        ai: 2.5,
+      },
+      {
+        label: '記得就吃藥，想不起來就算了',
+        effects: { health: -1 },
+        result: '你的藥盒常常是滿的。每當頭暈、口渴的時候，你才想起來要認真對待這件事。',
+        ai: 1.2,
+      },
+      {
+        label: '改用偏方，不想一直吃藥',
+        effects: (s, h) => { h.change('health', -3); h.addRisk(1.25, 3); },
+        result: '朋友說某種草藥和飲食療法很有效。你嘗試了幾個月，感覺不錯，直到複診時醫師皺著眉看報告。',
+        ai: 0.5,
+      },
+    ],
+  },
+  {
+    id: 'health_hypertension_care',
+    title: '不痛不癢的高血壓',
+    ages: [35, 90],
+    once: false,
+    cooldown: 8,
+    weight: (s, h) => (h.hasCondition('hypertension') ? 1.5 : 0),
+    tags: ['health', 'chronic'],
+    cond: (s, h) => h.hasCondition('hypertension'),
+    text: (s, h) => '血壓計上的數字讓你嚇了一跳，可是你一點也不覺得難受。醫師說這種病最麻煩的就是它很安靜，而你的生活習慣偏偏很吵，一碗湯都要多放兩匙鹽。',
+    choices: [
+      {
+        label: '每天吃藥、少鹽、散步',
+        effects: (s, h) => { h.change('health', +2); h.addRisk(0.92, 4); },
+        result: '你開始看食品標示，也迷上了傍晚的散步。三個月後，血壓計上的數字終於落到比較好看的地方。',
+        ai: 2.5,
+      },
+      {
+        label: '只靠運動和飲食，不吃藥',
+        effects: { health: +1, happiness: +1 },
+        result: '你每天走一小時，吃得清淡許多。回診時數字有改善但還不夠，醫師建議你再考慮配合用藥。',
+        ai: 1.2,
+      },
+      {
+        label: '不覺得難受，就不管它',
+        effects: (s, h) => { h.change('health', -2); h.addRisk(1.2, 3); },
+        result: '你照舊重口味、熬夜、少動。直到某天爬樓梯時頭暈眼花，才意識到安靜的事物有時最危險。',
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'health_heart_rehab',
+    title: '心臟的復健課',
+    ages: [40, 90],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => (h.hasCondition('heart_disease') ? 1.8 : 0),
+    tags: ['health', 'chronic'],
+    cond: (s, h) => h.hasCondition('heart_disease'),
+    text: (s, h) => '醫師說你的心臟需要重新學習怎麼好好工作。他給了你一份運動、飲食和用藥的清單，字寫得很小，你戴著老花眼鏡讀了兩遍，才慢慢相信這一切是真的。',
+    choices: [
+      {
+        label: '參加心臟復健課程',
+        cond: (s, h) => h.incomeAtLeast('LM') && (h.urban() || h.incomeAtLeast('UM')),
+        effects: (s, h) => { h.change('health', +3); h.change('wealth', -1); h.change('social', +2); h.addRisk(0.88, 4); },
+        result: '每週三天，你和一群年紀相仿的人在跑步機上慢慢走。教練在旁邊盯著心跳，大家互相取笑對方的步伐。',
+        ai: 2.5,
+      },
+      {
+        label: '照醫囑吃藥，自己慢慢散步',
+        effects: (s, h) => { h.change('health', +1); h.addRisk(0.95, 3); },
+        result: '你每天傍晚繞社區走一圈，碰到熟人就聊兩句。不快，但每一步都讓你更相信自己還能走很遠。',
+        ai: 2,
+      },
+      {
+        label: '照舊生活，不想被病拖住',
+        effects: (s, h) => { h.change('happiness', +1); h.change('health', -2); h.addRisk(1.2, 2); },
+        result: '你不想成為一個病人，所以什麼都照舊。直到某個冬天早晨，胸口那股熟悉的悶痛再度提醒了你。',
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'health_cancer_screening',
+    title: '篩檢通知單',
+    ages: [40, 72],
+    once: false,
+    cooldown: 6,
+    weight: 0.7,
+    tags: ['health', 'screening'],
+    cond: (s, h) => !h.hasCondition('cancer') && (h.incomeAtLeast('UM') || (h.incomeAtLeast('LM') && h.urban())),
+    text: (s, h) => `信箱裡躺著一張篩檢通知單，上面印著你的名字和預約方式。${h.byIncome({ LM: '衛生單位辦了免費的篩檢日，名額有限，要早點去排。', UM: '你所在的縣市提供半價的健康篩檢，只要預約就可以。', H: '健保與公衛單位寄來邀請，說你到了建議接受篩檢的年齡。' })}你把它放在餐桌上，又拿起來看了一遍。`,
+    choices: [
+      {
+        label: '預約並完成篩檢',
+        effects: (s, h) => {
+          h.change('wealth', -1);
+          if (h.chance(0.05)) { h.addCondition('cancer'); h.set('cancer_found_early'); } else h.change('happiness', +2);
+        },
+        result: (s, h) => (h.has('cancer_found_early')
+          ? '報告出來，醫師說發現得很早，治療的選擇還很多。你坐在診間外的長椅上，腦中一片空白，卻也慶幸自己沒有拖。'
+          : '報告寄到家裡，上面寫著「未見異常」。你拿著它在廚房裡轉了一圈，決定晚上加菜。'),
+        schedule: [{ id: 'health_cancer_treatment', inYears: [0, 1] }],
+        ai: 2.5,
+      },
+      {
+        label: '等有症狀再說',
+        effects: { happiness: +1 },
+        result: '你把通知單放進抽屜。日子照常運轉，只是每逢看到相關新聞，你總是下意識地摸摸肚子。',
+        ai: 1,
+      },
+      {
+        label: '先問問家庭醫師有沒有必要',
+        effects: { wealth: -1, happiness: +1 },
+        result: '醫師耐心解釋了篩檢的利弊，並依你的家族史建議了合適的項目。你帶著清楚的方向離開，心裡踏實多了。',
+        ai: 1.5,
+      },
+    ],
+  },
+  {
+    id: 'health_cancer_treatment',
+    title: '治療的選擇',
+    ages: [30, 95],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => (h.hasCondition('cancer') ? 3 : 0),
+    tags: ['health', 'cancer'],
+    cond: (s, h) => h.hasCondition('cancer'),
+    text: (s, h) => `醫師把檢查結果攤在桌上，語氣很慢很輕，你聽見自己的心跳比他的聲音還大。${h.byIncome({
+      L: '治療需要到遠方的大城市，家人已經在算路費與住宿費。',
+      LM: '治療要花很多錢，家人湊了一晚上，彼此都不敢看對方的眼睛。',
+      UM: '醫院給了你好幾種治療選項，每一項後面都寫著風險與費用。',
+      H: '腫瘤團隊替你列出了幾個治療方案，並說明每一個的好處與代價。',
+    })}`,
+    choices: [
+      {
+        label: '接受完整治療（手術、化療等）',
+        effects: (s, h) => { h.change('health', -5); h.change('wealth', h.byIncome({ L: -8, LM: -6, UM: -4, H: -2 })); h.change('happiness', -2); h.addRisk(0.75, 4); },
+        result: '治療的日子很長，掉髮、嘔吐、疲倦都來了。但你身邊總有人替你提著保溫瓶，說：「今天先吃一口就好。」',
+        ai: 2.5,
+      },
+      {
+        label: '再問一位醫師，聽聽第二意見',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +1); h.addRisk(0.9, 3); },
+        result: '第二位醫師的看法和第一位大致相同，但提供了更溫和的方案。你覺得自己終於不是只能被動接受的那個人。',
+        ai: 1.5,
+      },
+      {
+        label: '以舒緩與生活品質為重',
+        effects: { happiness: +3, social: +3, health: -2 },
+        result: '你和家人好好談了談，決定把剩下的力氣用在重要的事上：陪孫子畫畫、回老家吃一碗麵、把想說的話都說完。',
+        ai: (s, h) => (h.age() >= 70 ? 1.5 : 0.5),
+      },
+    ],
+  },
+  {
+    id: 'health_air_quality',
+    title: '灰濛濛的天空',
+    ages: [5, 85],
+    once: false,
+    cooldown: 6,
+    weight: (s, h) => (h.urban() ? 0.5 : 0.1) + (h.hasCondition('asthma') ? 0.8 : 0) + (h.isRegion('SAS', 'EAS', 'MENA') ? 0.3 : 0),
+    tags: ['health', 'environment'],
+    cond: (s, h) => h.urban() && (h.isRegion('SAS', 'EAS', 'MENA', 'SEA', 'SSA') || h.hasCondition('asthma')),
+    text: (s, h) => '冬天的早晨，城市被一層灰色的霧罩住，太陽只剩下一個淡淡的白點。新聞說今天空氣品質不良，你的喉嚨已先發出抗議，出門前你在口罩和圍巾之間猶豫了很久。',
+    choices: [
+      {
+        label: '戴口罩、少出門、有條件就買濾淨機',
+        effects: (s, h) => { h.change('health', +1); h.change('wealth', h.isRich() ? 0 : -1); },
+        result: '你把口罩放進包包，把窗關緊。出門時像戴上一層安全的殼，雖然有點悶，但夜裡咳嗽少了。',
+        ai: 2,
+      },
+      {
+        label: '照常生活，習慣了',
+        effects: { health: -2 },
+        result: '你說都吸了這麼多年了。那天晚上，你的咳嗽卻比平常久了一點點。',
+        ai: 1.5,
+      },
+      {
+        label: '週末帶家人去郊外透透氣',
+        effects: { health: +1, happiness: +2, social: +2, wealth: -1 },
+        result: '走出城市一小時，天空忽然變成藍色。孩子們在草地上奔跑，你站在原地深呼吸，吸得很深很深。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_vaccine_adult',
+    title: '該打疫苗了',
+    ages: [50, 90],
+    once: false,
+    cooldown: 6,
+    weight: 0.6,
+    tags: ['health', 'vaccine'],
+    cond: (s, h) => h.yearIn(1990, 2200) && (h.incomeAtLeast('UM') || (h.incomeAtLeast('LM') && h.urban())),
+    text: (s, h) => '診所貼出公告：流感、肺炎鏈球菌或帶狀疱疹疫苗開打了。你看著海報上的文字，想起前陣子某位老朋友住院的事，心裡猶豫著要不要排隊。',
+    choices: [
+      {
+        label: '去打疫苗',
+        effects: (s, h) => { h.change('health', +1); h.change('wealth', -1); h.addRisk(0.95, 2); },
+        result: '護理師輕輕一針，你的手臂痠了兩天。你看到身邊排隊的老鄰居們互相笑著說「年年來報到」。',
+        ai: 2.5,
+      },
+      {
+        label: '問問醫師哪些真的需要',
+        effects: { happiness: +1, wealth: -1 },
+        result: '醫師依你的狀況和病史挑出兩種建議接種。他說得很清楚，你也問得很放心。',
+        ai: 1.5,
+      },
+      {
+        label: '再看看，不急',
+        effects: { happiness: 0 },
+        result: '你說冬天還沒到，先忙手邊的事。公告慢慢被新的海報蓋住，這件事也跟著被你放到了明年。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_vaccination_day',
+    title: '疫苗日',
+    ages: [1, 7],
+    weight: 0.8,
+    tags: ['health', 'childhood', 'vaccine'],
+    cond: (s, h) => h.yearIn(1975, 2060) && (lowAccess(h) || h.income() === 'UM'),
+    text: (s, h) => '村口或學校的院子裡擠滿了抱著孩子的大人，空氣裡有酒精棉的味道。護理人員撐起一把大傘，一個個替孩子打針。你哭得很大聲，但領到了一顆糖。',
+    effects: { health: +2, happiness: -1, social: +1 },
+  },
+  {
+    id: 'health_blood_donation',
+    title: '捐血車來了',
+    ages: [18, 60],
+    once: false,
+    cooldown: 15,
+    weight: 0.2,
+    tags: ['health', 'community'],
+    cond: (s, h) => h.incomeAtLeast('LM') && h.stat('health') > 55,
+    text: (s, h) => '捐血車停在廣場邊，志工發著餅乾和飲料。「捐一袋血，救三個人」的海報貼在車門上。你卷起袖子，一邊看著自己的血緩緩流進袋子，一邊覺得自己突然有了一點神聖感。',
+    effects: { happiness: +2, social: +2, health: -1 },
+    set: ['blood_donor'],
+  },
+  {
+    id: 'health_dental',
+    title: '牙痛不是病',
+    ages: [10, 80],
+    once: false,
+    cooldown: 12,
+    weight: 0.35,
+    tags: ['health'],
+    text: (s, h) => h.byIncome({
+      L: '一顆蛀牙痛了好幾個月，你用鹽水漱口、咬著濕布忍耐。最近的牙醫在遠遠的鎮上，你一直等著哪天趕集時能順路去看看，可是賣完東西之後，錢總是已經有了別的用途。',
+      LM: '半夜牙痛得睡不著。隔天你在診所排了一個多小時的隊，請牙醫直接把牙拔了。帳單比想像中便宜，卻仍讓你心疼地想了很久，回家路上你用沒麻的那一邊嘴巴吃了碗熱粥。',
+      UM: '牙痛讓你的臉腫了一邊。你請了半天假去補牙，牙醫邊鑽邊問你要不要順便洗牙，你張著嘴、含著棉花，含糊地說「下次吧」，連自己都不信。',
+      H: '你終於預約了拖了三年的洗牙，醫師看完後念了你整整五分鐘。你回家後乖乖拿出牙線，並在心裡發誓這次是真的，至少會撐到下個月，最好撐到下一次洗牙。',
+    }),
+    effects: (s, h) => { h.change('health', -2); h.change('happiness', -2); h.change('wealth', h.byIncome({ L: -1, LM: -1, UM: -1, H: 0 })); },
+  },
+  {
+    id: 'health_first_glasses',
+    title: '看清楚了',
+    ages: [6, 14],
+    weight: 0.8,
+    tags: ['health', 'childhood', 'school'],
+    cond: (s, h) => h.inSchool() || h.incomeAtLeast('UM'),
+    text: (s, h) => h.byIncome({
+      L: '黑板上的字你一直覺得是模糊的，只好靠耳朵聽、靠同桌抄。有一天，巡迴義診的人替你戴上一副試戴的眼鏡，你第一次看見遠處樹上的每一片葉子。',
+      LM: '老師發現你上課時總是瞇著眼。家人存了一陣子錢替你配了第一副眼鏡，你戴上去，才發現原來黑板上的字是有邊邊的，樹葉也不是一整團綠色。',
+      UM: '你第一次戴上眼鏡，走出店門，覺得整個世界像是換了一個解析度。你連路邊的招牌都忍不住一個字一個字念出來，家人在旁邊偷笑，說你像個剛學會認字的小孩。',
+      H: '驗光師替你調好新眼鏡的度數。你走在街上，看見遠方的招牌和每一片樹葉，才知道原來之前整個世界都是一團霧，而你一直以為大家看到的都一樣。',
+    }),
+    effects: { knowledge: +3, happiness: +3, health: +1 },
+  },
+  {
+    id: 'health_cataract',
+    title: '霧濛濛的眼睛',
+    ages: [60, 92],
+    weight: 0.8,
+    tags: ['health', 'aging'],
+    text: (s, h) => '近來你覺得世界像被蒙了一層霧，連家人的臉都看不太清，倒茶時也常常倒到杯子外面。醫師說是白內障，只要一個小手術就能重見清晰。',
+    choices: [
+      {
+        label: '參加義診或公立醫院手術',
+        effects: { health: +3, happiness: +5 },
+        result: '手術一個早上就做完了。隔天拆下紗布，你看見窗外的光竟然是這麼亮，忍不住抓著護理師的手說謝謝。',
+        ai: 2,
+      },
+      {
+        label: '自費選擇進階鏡片',
+        cond: (s, h) => h.incomeAtLeast('UM') && h.stat('wealth') > 40,
+        effects: { health: +3, happiness: +5, wealth: -3 },
+        result: '術後你連眼鏡都不太需要了。你站在陽台，把鄰居家陽台上那盆花的每一片花瓣都數了一遍。',
+        ai: 2,
+      },
+      {
+        label: '習慣了，不想麻煩',
+        effects: { health: -2, happiness: -2 },
+        result: '你說這樣也過得去。但你開始不敢單獨出門，也看不清孫輩們傳來的照片，漸漸少說了很多話。',
+        ai: 0.5,
+      },
+    ],
+  },
+  {
+    id: 'health_disability_adaptation',
+    title: '重新安排生活',
+    ages: [10, 90],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => (h.hasCondition('disability') ? 2 : 0),
+    tags: ['health', 'disability'],
+    cond: (s, h) => h.hasCondition('disability'),
+    text: (s, h) => '一些對別人理所當然的事，對你來說需要重新規劃：階梯、門檻、擁擠的公車。你不想要同情，只想要有一條走得通的路，和一個不需要開口求人的清晨。',
+    choices: [
+      {
+        label: '申請輔具與環境改善',
+        cond: (s, h) => h.incomeAtLeast('LM'),
+        effects: { health: +1, happiness: +3, wealth: -1 },
+        result: '專員來家裡丈量了門寬和浴室。幾週後安裝好扶手和斜坡，你第一次自己從家門口出去、又自己回家。',
+        ai: 2,
+      },
+      {
+        label: '加入同病友或身障者的互助團體',
+        effects: { social: +4, happiness: +3 },
+        result: '聚會裡的人都很會自嘲，也很會互相教竅門。你學到的第一件事是：這條路不是只有你一個人在走。',
+        ai: 2,
+      },
+      {
+        label: '調整工作與生活節奏，靠家人與自己',
+        effects: { happiness: +1, social: +1, health: -1 },
+        result: '你和家人一起重新排了家務與工作。慢一點，卻很穩。每個人都比以前更懂得開口請求、也更懂得開口幫忙。',
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'health_hiv_support',
+    title: '病毒與日子',
+    ages: [16, 90],
+    once: false,
+    cooldown: 15,
+    weight: (s, h) => (h.hasCondition('hiv') ? 3 : 0),
+    tags: ['health', 'hiv'],
+    cond: (s, h) => h.hasCondition('hiv'),
+    text: (s, h) => (h.yearIn(1983, 1995)
+      ? '診斷書上寫著的病名，在這個年代幾乎沒有藥可以醫，也很少人願意談論。你坐在診間外，聽著走廊盡頭的電視聲，想著該怎麼對家人開口。'
+      : '你被診斷出感染病毒，頭一天晚上幾乎沒有睡。醫護人員說今天已經有穩定的藥物可以控制，但需要每天吃，也需要一個能讓你安心談話的地方。'),
+    choices: [
+      {
+        label: '開始並規律服用抗病毒藥物',
+        cond: (s, h) => h.yearIn(1996, 2300) && (h.incomeAtLeast('UM') || h.yearIn(2004, 2300)),
+        effects: (s, h) => { h.change('health', +3); h.change('wealth', -1); h.addRisk(0.7, 6); },
+        result: '藥盒擺在床頭，你每天同一個時間吃。半年後抽血，數值降到測不到，醫護人員說：「你可以正常生活了。」',
+        ai: 3,
+      },
+      {
+        label: '加入同伴支持團體',
+        effects: { social: +4, happiness: +3 },
+        result: '那間小房間裡的人說著各種語言和口音，卻有一種默契。你在那裡第一次說出「我也是」，然後放聲笑了。',
+        ai: 2,
+      },
+      {
+        label: '暫時保密，只告訴一個最信任的人',
+        effects: (s, h) => { h.change('happiness', -2); h.change('social', -2); h.addRisk(1.1, 2); },
+        result: '你選了最了解你的朋友說出來。他聽完沉默了很久，只說了一句：「你不用一個人。」這句話讓你撐了很久。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_caregiver_strain',
+    title: '照顧者也需要被照顧',
+    ages: [28, 75],
+    once: false,
+    cooldown: 8,
+    weight: (s, h) => (h.has('caregiver_parent') ? 3 : 0),
+    tags: ['health', 'caregiving', 'mental'],
+    cond: (s, h) => h.has('caregiver_parent'),
+    text: (s, h) => '照顧家人的日子沒有下班時間。你在廚房裡洗碗，突然發現自己站了十分鐘什麼也沒做，眼淚落進水槽裡。沒有人問過你累不累，你也從沒想過可以回答。',
+    choices: [
+      {
+        label: '請手足輪班，或使用喘息照顧',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.siblings() > 0,
+        effects: { health: +3, happiness: +3, wealth: -1, social: +1 },
+        result: '你終於開口求助。弟妹來接手三天，你一個人去海邊坐了一整個下午，發現自己還記得怎麼放鬆。',
+        ai: 2,
+      },
+      {
+        label: '參加照顧者互助聚會',
+        effects: { social: +4, happiness: +2 },
+        result: '聚會裡的人都在談怎麼翻身、怎麼餵藥、怎麼不被愧疚吞沒。你回家時覺得肩膀輕了一點。',
+        ai: 1.5,
+      },
+      {
+        label: '繼續一肩扛下',
+        effects: (s, h) => { h.change('health', -4); h.change('happiness', -3); if (h.chance(0.08)) h.addCondition('depression'); },
+        result: '你說沒關係，習慣了。可是夜裡你的背總是痛，笑容也越來越少，直到有人輕輕叫醒你：「你也要休息。」',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'health_sports_injury',
+    title: '逞強的球賽',
+    ages: [10, 42],
+    once: false,
+    cooldown: 6,
+    weight: 0.3,
+    tags: ['health', 'accident'],
+    text: (s, h) => '你在球場上為了搶一顆球，膝蓋以奇怪的角度轉了一下。隊友七手八腳地把你抬到場邊，你痛得齜牙咧嘴，卻還是問了一句：「那球進了沒？」',
+    effects: (s, h) => { h.change('health', -3); h.change('social', +1); h.change('happiness', -1); },
+  },
+  {
+    id: 'health_motorbike_night',
+    title: '深夜的車程',
+    ages: [16, 55],
+    once: false,
+    cooldown: 8,
+    weight: 0.5,
+    tags: ['health', 'road'],
+    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'EAS'),
+    text: (s, h) => '聚會散得很晚，雨剛停，路面亮晶晶的。你的摩托車停在巷口，頭盔掛在後視鏡上，眼皮重得像灌了鉛，而回家的路還有四十分鐘，路上幾乎沒有一盞路燈。',
+    choices: [
+      {
+        label: '戴好頭盔，慢慢騎回去',
+        effects: { health: +1, happiness: +1 },
+        result: '你一路慢慢騎，連紅燈都等得乖乖的。回到家時天快亮了，你鬆了一口氣，感覺自己像個很有責任感的大人。',
+        ai: 2.5,
+      },
+      {
+        label: '睡在朋友家，明早再走',
+        effects: { social: +2, happiness: +1 },
+        result: '朋友在地板上鋪了一條毯子，大家擠在一起聊到睡著。隔天早上有人煮了麵，你覺得這樣比趕夜路好多了。',
+        ai: 1.5,
+      },
+      {
+        label: '睏了也要趕快騎回去',
+        effects: (s, h) => { h.addRisk(1.35, 1); if (h.chance(0.2)) { h.change('health', -6); h.change('wealth', -2); } },
+        result: (s, h) => (s.stats.health < 60 ? '在一個轉彎處你差點睡著，車身晃了一下才回神。這次你摔了，膝蓋與手肘擦破了皮，酒也醒了大半。' : '你一路平安到了家，後來才想起剛才那一刻的恐懼，手指微微發抖。'),
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'health_road_crash',
+    title: '路口的碰撞',
+    ages: [12, 78],
+    once: false,
+    cooldown: 8,
+    weight: (s, h) => 0.2 * roadWeight(h),
+    tags: ['health', 'accident', 'road'],
+    text: (s, h) => `${h.byIncome({
+      L: '在擁擠的公路上，一輛卡車擦過了你。你被路人用板車送往最近的診所，一路上沒有救護車，也沒有人知道該通知誰，直到天黑家人才找到你。',
+      LM: '路口的號誌壞了，兩輛車擦撞後又撞到了你。骨折讓你好幾週無法工作，肇事者早已不見蹤影，醫藥費全由家人自己扛，連拐杖都是向鄰居借來的。',
+      UM: '你在路口被一輛右轉車撞倒。救護車很快到了，醫師說是骨折，需要住院好幾天。保險理賠的文件寫了又寫，簽名簽到手痠，比骨折的地方還讓你頭痛。',
+      H: '你在路口被一輛右轉車擦撞，救護車很快就到。醫師說是骨折，需要住院觀察。你躺在病床上，保險業務員已很有效率地遞來了表格，還順便問你要不要升級保單。',
+    })}`,
+    effects: (s, h) => { h.change('health', -6); h.change('wealth', h.byIncome({ L: -4, LM: -3, UM: -2, H: -1 })); h.change('happiness', -3); },
+    schedule: [{ id: 'health_rehab', inYears: [0, 1] }],
+  },
+  {
+    id: 'health_rehab',
+    title: '一步一步練習',
+    ages: [12, 90],
+    weight: 0,
+    tags: ['health', 'followup'],
+    text: (s, h) => '復健室的鏡子前，你扶著欄杆反覆練習走路，汗水流進眼睛。第三個月，你第一次不扶欄杆走完整條走廊，治療師在一旁拍手，你有點害羞。',
+    effects: { health: +4, happiness: +2, social: +1 },
+  },
+  {
+    id: 'health_weight_gain',
+    title: '褲子變緊了',
+    ages: [28, 68],
+    once: false,
+    cooldown: 10,
+    weight: (s, h) => 0.3 + (h.incomeAtLeast('UM') ? 0.3 : 0) + (h.isRegion('NAM', 'OCE', 'MENA', 'LAC') ? 0.3 : 0),
+    tags: ['health', 'lifestyle'],
+    cond: (s, h) => h.incomeAtLeast('UM') || (h.incomeAtLeast('LM') && h.urban()),
+    text: (s, h) => '你在試衣間裡發現，去年的褲子怎麼也拉不上來。外送、加班、沙發，這些詞一個接一個浮上腦海，你對鏡子苦笑了一下，決定今天不要先責怪任何人。',
+    choices: [
+      {
+        label: '約朋友一起散步、慢慢調整飲食',
+        effects: { health: +3, social: +2, happiness: +1 },
+        result: '你和朋友固定每週三傍晚走一小時，順便聊八卦。幾個月後褲子鬆了一點，朋友也成了更可靠的朋友。',
+        ai: 2.5,
+      },
+      {
+        label: '報名健身房、買運動課程',
+        cond: (s, h) => h.incomeAtLeast('UM'),
+        effects: { health: +2, wealth: -2 },
+        result: '前兩個月你天天報到，教練叫得出你的名字。第三個月你偶爾缺席，第四個月你開始懷念沙發。',
+        ai: 1.2,
+      },
+      {
+        label: '買大一號的褲子，繼續生活',
+        effects: { health: -2, happiness: +1 },
+        result: '你覺得這沒什麼大不了。直到有一天爬五樓氣喘吁吁，才意識到身體真的在提醒你。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'health_checkup_good_news',
+    title: '報告上全是綠燈',
+    ages: [35, 85],
+    once: false,
+    cooldown: 8,
+    weight: 0.25,
+    tags: ['health'],
+    cond: (s, h) => h.incomeAtLeast('UM') && h.stat('health') > 55,
+    text: (s, h) => '檢查報告寄到家裡，所有數字都在標準範圍內。你拿著那張紙站在客廳，不知道該跟誰分享，最後把它貼在冰箱上，每次開冰箱都偷偷高興一下。',
+    effects: { health: +1, happiness: +3 },
+  },
+  {
+    id: 'health_telehealth',
+    title: '視訊看診',
+    ages: [18, 95],
+    once: false,
+    cooldown: 10,
+    weight: 0.3,
+    tags: ['health', 'tech'],
+    cond: (s, h) => h.yearIn(2021, 2200) && (h.incomeAtLeast('LM') || !h.urban()),
+    text: (s, h) => h.byIncome({
+      L: '社區診所有了一台共用的平板，護理人員讓你透過視訊跟遠方的醫師說話。你不必再翻山越嶺花一整天，當天就拿到了處方和藥，護理人員還笑說：「以後看醫師都不用背乾糧了。」',
+      LM: '你用手機跟醫師視訊，描述了症狀，還把皮疹湊近鏡頭給對方看。三分鐘就結束，藥房隔天就把藥寄到了門口，你有點不習慣這麼快，還以為自己漏問了什麼。',
+      UM: '你用手機預約視訊門診，不用請半天假。醫師的聲音有點卡、畫面時有時無，但解答很清楚，開完藥你還趕得及回到座位上，把下午的會議開完。',
+      H: '你在客廳用手機跟家庭醫師視訊，醫師看了你的紅疹，開了藥膏，十分鐘結束。你一邊覺得這樣真方便，一邊又莫名懷念起從前苦等的候診室，和裡面那些愛聊天的老人家。',
+    }),
+    effects: { health: +2, wealth: +1, happiness: +1 },
+  },
+];
