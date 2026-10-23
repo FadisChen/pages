@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever the list of files changes.
 
 const CACHE_PREFIX = 'lifelottery-';
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE = CACHE_PREFIX + CACHE_VERSION;
 
 const PRECACHE = [
@@ -36,14 +36,20 @@ const PRECACHE = [
   'js/data/events/seed.js',
   'js/data/events/world.js',
   'js/data/events/youth.js',
+  'js/data/geo.js',
+  'js/data/money.js',
   'js/data/names.js',
+  'js/data/religion.js',
   'js/data/riskref.js',
+  'js/data/worldmap.js',
   'js/data/yearly.js',
   'js/engine/birth.js',
   'js/engine/events.js',
+  'js/engine/focus.js',
   'js/engine/helpers.js',
   'js/engine/life.js',
   'js/engine/mortality.js',
+  'js/engine/odds.js',
   'js/engine/rng.js',
   'js/engine/summary.js',
   'js/engine/systems.js',
@@ -51,8 +57,11 @@ const PRECACHE = [
   'js/storage.js',
   'js/strings.js',
   'js/theme-init.js',
+  'js/ui/achievements.js',
   'js/ui/chart.js',
+  'js/ui/collectionview.js',
   'js/ui/dom.js',
+  'js/ui/oddsview.js',
   'js/ui/pacing.js',
   'js/ui/review.js',
   'js/ui/screens/about.js',
@@ -66,6 +75,7 @@ const PRECACHE = [
   'js/ui/session.js',
   'js/ui/sharecard.js',
   'js/ui/ticker.js',
+  'js/ui/worldmap.js',
   'manifest.webmanifest',
 ];
 

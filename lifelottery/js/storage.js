@@ -7,6 +7,7 @@ export const KEYS = {
   settings: 'lifelottery.settings',
   album: 'lifelottery.album',
   theme: 'lifelottery.theme',
+  achievements: 'lifelottery.achievements',
 };
 
 export const ALBUM_VERSION = 1;
@@ -201,18 +202,33 @@ export function normalizeSummary(x) {
   };
 }
 
+/**
+ * Optional facts the game stores next to the summary when a life ends ({ drawMode, partnerYears }). Old records have none;
+ * everything that reads them has a fallback (ui/achievements.js, engine/odds.js).
+ */
+export function normalizeMeta(m) {
+  if (!m || typeof m !== 'object') return undefined;
+  const out = {};
+  if (m.drawMode === 'births' || m.drawMode === 'population') out.drawMode = m.drawMode;
+  if (typeof m.partnerYears === 'number' && Number.isFinite(m.partnerYears)) out.partnerYears = Math.max(0, Math.min(120, Math.round(m.partnerYears)));
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function normalizeRecord(r) {
   if (!r || typeof r !== 'object') return null;
   const id = str(r.id, 64);
   if (!id) return null;
   const summary = normalizeSummary(r.summary);
   if (!summary) return null;
-  return {
+  const rec = {
     id,
     savedAt: num(r.savedAt, Date.now()),
     message: str(r.message, MESSAGE_MAX),
     summary,
   };
+  const meta = normalizeMeta(r.meta);
+  if (meta) rec.meta = meta;
+  return rec;
 }
 
 let albumCache = null;
@@ -263,6 +279,29 @@ export function deleteRecord(id) {
 export function clearAlbum() {
   albumCache = [];
   persistAlbum();
+  removeRaw(KEYS.achievements); // a fresh album announces its achievements again
+}
+
+// ---------------------------------------------------------------------------------------------
+// Achievements: earned status is always derived from the album (ui/achievements.js); only the log of which unlocks were
+// already announced is stored, as { id: unlockedAtMs } (0 = earned before the log existed).
+// ---------------------------------------------------------------------------------------------
+
+export function loadAchievementLog() {
+  const raw = readJSON(KEYS.achievements);
+  const src = raw && typeof raw === 'object' && raw.seen && typeof raw.seen === 'object' ? raw.seen : {};
+  const out = {};
+  for (const [id, t] of Object.entries(src)) if (/^[a-z0-9_]{1,40}$/.test(id) && typeof t === 'number' && Number.isFinite(t)) out[id] = t;
+  return out;
+}
+
+/** Merge `{ id: timestamp }` into the log (existing entries win). Returns the merged log. */
+export function addAchievementLog(entries) {
+  const log = loadAchievementLog();
+  let changed = false;
+  for (const [id, t] of Object.entries(entries)) if (!(id in log)) { log[id] = t; changed = true; }
+  if (changed) writeRaw(KEYS.achievements, JSON.stringify({ v: 1, seen: log }));
+  return log;
 }
 
 /** Cumulative numbers for the album header. */

@@ -291,6 +291,7 @@ export const S = {
     cardCompareWorld: '世界同年代平均',
     cardChartTitle: '一生的曲線',
     cardHighlights: '重要時刻',
+    cardOddsValue: (n) => `約 ${n}`,
     cardShareText: (name, age, country) => `我在《人生籤》抽到${country}的${name}，走完了 ${age} 年的人生。`,
   },
 
@@ -301,6 +302,7 @@ export const S = {
     empty: '還沒有前世。走完第一段人生，它就會出現在這裡。',
     emptyCta: '開始投胎',
     cumulativeTitle: '累計',
+    listTitle: '每一段人生',
     lives: '活過的人生',
     livesUnit: '段',
     years: '總共活了',
@@ -360,6 +362,7 @@ export const S = {
       ['1970 年資料', 'Gapminder/UN：人口、預期壽命；嬰兒死亡率由 UN IGME 1970 年數字換算。1955–1990 年出生的人生，用 1970 年與今天之間的內插（1970 年以前則順著趨勢外推）。'],
       ['2050 年預期壽命', '模型推估（接近 UN WPP 中推估的收斂趨勢），不是官方預測。2040–2070 年出生的人生，2050 年以後順著趨勢延伸並放緩。'],
       ['所得組別', '世界銀行分組，憑記憶整理。'],
+      ['世界地圖', 'Natural Earth 110m 國界（公有領域，經 world-atlas 2.0.2）、Equal Earth 投影、道格拉斯—普克簡化；國家與大洲對照來自 datasets/country-codes。新加坡等太小的國家以圓點標示。由 tools/build-map.mjs 產生。'],
     ],
     estimatesTitle: '估計值',
     estimates: '高等教育入學率、道路交通死亡率、童婚比例、他殺率四個欄位找不到可用的開放資料集，是憑記憶整理的估計值，每個國家都標示在 est 欄位。其他欄位若改用推估，也會逐國標示。資料多為 2017–2022 年，不代表最新狀況。',
@@ -393,6 +396,117 @@ export const S = {
     backHome: '回首頁',
   },
 
+  map: {
+    birthTitle: (country) => `你出生在${country}`,
+    birthDesc: (country) => `世界地圖，標示出生地${country}的位置。`,
+    lifeTitle: '人生足跡',
+    lifeAlt: (name) => `${name}的人生足跡地圖`,
+    lifeDesc: (birth, lived) => (lived.length ? `出生在${birth}，之後住過${lived.join('、')}，地圖上以弧線連起搬家的順序。` : `出生在${birth}，一生沒有離開過這個國家。`),
+    lifeStayed: (country) => `一生都在${country}。`,
+    legendBirth: '出生地',
+    legendLived: '住過的地方',
+    legendMove: '搬家的順序',
+    albumTitle: '出生過的國家地圖',
+    albumAlt: (n, total) => `世界地圖，標示出生過的 ${n} 個國家（共 ${total} 個）`,
+    albumDesc: (names) => (names.length ? `出生過的國家：${names.join('、')}。` : '還沒有出生過的國家。'),
+    legendCount: '出生次數',
+    legendFew: '1 次',
+    legendMany: '4 次以上',
+    tinyNote: '圓點與圓圈標出太小、在地圖上看不見的國家。',
+    countryTip: (name, n) => (n > 1 ? `${name}：出生 ${n} 次` : `${name}`),
+  },
+
+  odds: {
+    title: '這樣一生的機率',
+    revealTitle: '像你這樣的人',
+    revealLead: '同年出生的人裡，像你這樣的人約',
+    summaryLead: (age) => (age < 1 ? '同年出生的人裡，像你這樣出生、又在不滿一歲時離世的人約' : `同年出生的人裡，像你這樣出生、又剛好在 ${age} 歲離世的人約`),
+    bigLabel: (n) => `約 ${n}`,
+    oneIn: (n) => `1／${n}`,
+    breakdown: '這個機率是這樣算出來的',
+    total: '全部相乘',
+    parts: {
+      country: (name) => `出生在${name}`,
+      gender: (g) => (g === 'M' ? '是男性' : '是女性'),
+      wealth: (label) => `家庭經濟是${label}`,
+      place: (urban) => (urban ? '出生在城市' : '出生在鄉村'),
+      age: (age) => (age < 1 ? '不滿一歲就離世' : `在 ${age} 歲離世`),
+    },
+    rowAria: (label, n) => `${label}，機率約 ${n}`,
+    mode: { births: '抽籤方式：依新生兒人數', population: '抽籤方式：依現有人口' },
+    note: '各項相乘估算：國家與性別依該年出生的統計，家庭經濟為五等分，城鄉依該國都市化程度，離世年齡依該國同年代的生命表。不含人生中的選擇與事件。',
+    noteReveal: '各項相乘估算：國家與性別依該年出生的統計，家庭經濟為五等分，城鄉依該國都市化程度。',
+    units: { '': '', wan: '萬', yi: '億', zhao: '兆' },
+    cardLabel: '這樣一生的機率',
+    cardLead: '同年出生的人裡，像這樣的一生約',
+  },
+
+  collection: {
+    title: '人生收藏',
+    lead: '每一段人生，都在世界上留下一個位置。',
+    empty: '走完第一段人生，收藏就會開始累積。',
+    tiles: {
+      countries: '出生過的國家',
+      continents: '出生過的大洲',
+      eras: '出生過的年代',
+      years: '總共活過',
+      longest: '最長的一生',
+      shortest: '最短的一生',
+    },
+    of: (n, total) => `${n} / ${total}`,
+    yearsValue: (n) => `${n} 年`,
+    ageValue: (n) => (n < 1 ? '不滿 1 歲' : `${n} 歲`),
+    ageOf: (name, age) => `${name}・${age < 1 ? '不滿 1 歲' : `${age} 歲`}`,
+    continentsTitle: '大洲',
+    continentNames: { AS: '亞洲', EU: '歐洲', AF: '非洲', NA: '北美洲', SA: '南美洲', OC: '大洋洲' },
+    erasTitle: '年代',
+    eraNames: { past: '過去', present: '現在', future: '未來' },
+    timesBorn: (n) => `${n} 次`,
+    notYet: '尚未',
+    countriesList: (n) => `出生過的國家（${n}）`,
+    countryTimes: (name, n) => (n > 1 ? `${name} ×${n}` : name),
+    countriesNone: '還沒有出生過的國家',
+  },
+
+  ach: {
+    title: '成就',
+    summary: (n, total) => `已解鎖 ${n} / ${total}`,
+    earned: '已解鎖',
+    locked: '尚未解鎖',
+    earnedOn: (d) => `${d} 解鎖`,
+    progress: (n, total) => `${n} / ${total}`,
+    toast: (names) => `解鎖成就：${names.join('、')}`,
+    unlockedTitle: '解鎖了新的成就',
+    unlockedLead: '這段人生替你的收藏添了一枚章。',
+    badgeAria: (name, earned) => `${name}，${earned ? '已解鎖' : '尚未解鎖'}`,
+    items: {
+      first_life: ['第一次投胎', '走完你的第一段人生。'],
+      lives_5: ['五度輪迴', '走完五段人生。'],
+      lives_10: ['十世修行', '走完十段人生。'],
+      age_90: ['長壽之人', '有一段人生活到 90 歲以上。'],
+      age_100: ['活過百歲', '有一段人生活到 100 歲以上。'],
+      tiny_nation: ['小國寡民', '出生在人口不到 100 萬的國家。'],
+      three_countries: ['走過三個國家', '一段人生裡，住過三個以上的國家。'],
+      five_countries: ['四海為家', '一段人生裡，住過五個以上的國家。'],
+      three_eras: ['三個年代', '在過去、現在、未來都出生過。'],
+      both_genders: ['換個身分', '當過女性，也當過男性。'],
+      golden_wedding: ['金婚', '與伴侶走過 50 年。'],
+      big_family: ['兒孫滿堂', '一生養育四個以上的孩子。'],
+      scholar: ['學海無涯', '一段人生讀到研究所。'],
+      two_worlds: ['兩個世界', '出生在低所得國家，也出生在高所得國家。'],
+      humble_long: ['寒門長壽', '出身最貧困的五分之一，卻活到 75 歲以上。'],
+      beat_average: ['贏過平均', '比本國同年代的平均壽命多活 15 年以上。'],
+      rare_odds: ['百萬分之一', '有一段人生的機率不到一百萬分之一。'],
+      twice_same: ['又見面了', '兩次出生在同一個國家。'],
+      taiwan: ['寶島的孩子', '出生在台灣。'],
+      three_continents: ['走遍三大洲', '在三個不同的大洲出生過。'],
+      all_continents: ['六大洲集滿', '六個大洲都出生過。'],
+      ten_countries: ['十個故鄉', '出生過十個不同的國家。'],
+      twentyfive_countries: ['二十五個故鄉', '出生過二十五個不同的國家。'],
+      long_career: ['一輩子的工作', '一段人生工作了 40 年以上。'],
+    },
+  },
+
   errors: {
     saveBroken: '找不到可用的存檔，已回到首頁。',
     generic: '發生錯誤，請重新整理頁面。',
@@ -408,4 +522,15 @@ function fmt1(n) {
 /** Page titles per route (document.title). */
 export function pageTitle(part) {
   return part ? `${part}｜${S.appName}` : `${S.appName} Life Lottery`;
+}
+
+/** Number part of a rounded "1 in N" (see engine/odds.js humanizeOneIn): "47", "4,300", "3.5萬", "1.2億". */
+export function oneInNumber(h) {
+  const v = h.unit ? String(h.value) : h.value >= 1000 ? h.value.toLocaleString('en-US') : String(h.value);
+  return `${v}${S.odds.units[h.unit] || ''}`;
+}
+
+/** "1／4,300" for a humanised N. */
+export function oneInText(h) {
+  return S.odds.oneIn(oneInNumber(h));
 }

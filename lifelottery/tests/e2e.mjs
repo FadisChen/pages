@@ -215,6 +215,12 @@ try {
   console.log('\nFull life on auto-choice (mobile, light)');
   {
     const ctx = await browser.newContext({ viewport: MOBILE, deviceScaleFactor: 2, colorScheme: 'light', acceptDownloads: true });
+    // record every string the share card paints, so the test can check what the card says
+    await ctx.addInitScript(() => {
+      window.__cardTexts = [];
+      const orig = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (t, ...a) { window.__cardTexts.push(String(t)); return orig.call(this, t, ...a); };
+    });
     const page = await ctx.newPage();
     watch(page, 'auto-life');
     await page.goto(`${FAST}&seed=e2e-auto-1`);
@@ -250,6 +256,20 @@ try {
       assert((await page.textContent('.hundred-text')).includes('100 個嬰兒'), '100 babies text');
       assert((await page.$$('.hundred .dots .dot')).length === 100, '100 dots');
       assert((await page.$$('.cmp-row')).length >= 3, 'comparison rows');
+      // world map: accessible, birth country highlighted (shape or marker), gentle pulse rings present
+      const map = await page.evaluate(() => {
+        const svg = document.querySelector('.birth-map svg.wm');
+        return svg ? { role: svg.getAttribute('role'), title: svg.querySelector('title').textContent, desc: svg.querySelector('desc').textContent, hi: svg.querySelectorAll('.wm-birth, .wm-m-birth').length, rings: svg.querySelectorAll('.wm-ring').length, pin: !!svg.querySelector('.wm-pin-dot'), land: svg.querySelector('.wm-land').getAttribute('d').length } : null;
+      });
+      assert(map && map.role === 'img', 'birth map is an svg role=img');
+      assert(map.title.includes(country.trim()) && map.desc.length > 10, `map title/desc: ${map.title}`);
+      assert(map.hi >= 1 && map.pin && map.rings === 2, `birth country highlighted: ${JSON.stringify(map)}`);
+      assert(map.land > 20000, 'land path is drawn');
+      // odds: 像你這樣的人約 1／N with four facts and the product row
+      const odds = await page.evaluate(() => ({ big: document.querySelector('.odds-reveal [data-role="odds-big"]')?.textContent, lead: document.querySelector('.odds-reveal .odds-lead')?.textContent, rows: document.querySelectorAll('.odds-reveal .odds-row').length }));
+      assert(/^約 1／[\d.,]+[萬億兆]?$/.test(odds.big || ''), `odds big text: ${odds.big}`);
+      assert(odds.lead.includes('同年出生的人裡，像你這樣的人約'), 'odds lead');
+      assert(odds.rows === 5, `odds rows (4 facts + total): ${odds.rows}`);
       await noHScroll(page, 'lottery');
     });
 
@@ -281,6 +301,21 @@ try {
       await noHScroll(page, 'summary');
     });
 
+    await step('summary: odds, life map, first-life achievement toast and unlock card', async () => {
+      const odds = await page.evaluate(() => ({ big: document.querySelector('.screen-review [data-role="odds-big"]')?.textContent, rows: document.querySelectorAll('.screen-review .odds-card .odds-row').length, lead: document.querySelector('.screen-review .odds-card .odds-lead')?.textContent }));
+      assert(/^約 1／[\d.,]+[萬億兆]?$/.test(odds.big || ''), `summary odds: ${odds.big}`);
+      assert(odds.rows >= 5 && odds.rows <= 6, `rows ${odds.rows}`); // country, gender, wealth, place, [age], total
+      assert(/離世的人約$/.test(odds.lead), `lead: ${odds.lead}`);
+      const map = await page.evaluate(() => { const s = document.querySelector('.map-card svg.wm'); return s ? { birth: s.querySelectorAll('.wm-birth, .wm-m-birth').length, title: s.querySelector('title').textContent, arcs: s.querySelectorAll('.wm-arc').length } : null; });
+      assert(map && map.birth >= 1, `life map highlights the birth country: ${JSON.stringify(map)}`);
+      const toastText = await page.evaluate(() => document.querySelector('#toast .toast-ach')?.textContent || '');
+      assert(toastText.includes('解鎖成就') && toastText.includes('第一次投胎'), `achievement toast: "${toastText}"`);
+      assert((await page.$$('.unlock-card .badge.is-earned')).length >= 1, 'unlock card lists the new badge');
+      const log = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.achievements') || 'null'));
+      assert(log && log.seen && 'first_life' in log.seen, `achievement log stored: ${JSON.stringify(log)}`);
+      await noHScroll(page, 'summary sections');
+    });
+
     await step('summary: message to the character is saved into the album record', async () => {
       await page.fill('#life-message', '謝謝你走完這一程。');
       await page.click('[data-action="save-message"]');
@@ -308,6 +343,9 @@ try {
       await page.locator('.share-card').screenshot({ path: path.join(SHOTS, 'sharecard-section.png') });
       const png = await page.evaluate(() => document.getElementById('share-canvas').toDataURL('image/png').split(',')[1]);
       fs.writeFileSync(path.join(SHOTS, 'sharecard-1080x1350.png'), Buffer.from(png, 'base64'));
+      const texts = await page.evaluate(() => window.__cardTexts);
+      assert(texts.some((t) => /^約 1／[\d.,]+[萬億兆]?$/.test(t)), `share card paints the odds: ${texts.filter((t) => t.includes('1／')).join('|')}`);
+      assert(texts.includes('這樣一生的機率'), 'share card odds label');
     });
 
     await step('album: the finished life was added; save is cleared after leaving the review', async () => {
@@ -317,6 +355,19 @@ try {
       assert((await page.$$('.album-card')).length === 1, 'one album card');
       assert((await page.textContent('.album-card')).includes('有留言'), 'message tag');
       assert((await page.textContent('.cumulative')).includes('活過的人生'), 'cumulative stats');
+      const col = await page.evaluate(() => ({
+        tiles: document.querySelectorAll('.collection-card .col-tile').length,
+        countries: document.querySelector('.collection-card .col-tile b')?.textContent,
+        mapHi: document.querySelectorAll('.collection-card svg.wm .wm-hi, .collection-card svg.wm .wm-m').length,
+        badges: document.querySelectorAll('.ach-card .badge').length,
+        earned: [...document.querySelectorAll('.ach-card .badge.is-earned')].map((b) => b.dataset.id),
+        summary: document.querySelector('.ach-card .card-title small')?.textContent,
+      }));
+      assert(col.tiles === 6 && /^1 \/ 173$/.test(col.countries), `collection tiles: ${JSON.stringify(col)}`);
+      assert(col.mapHi >= 1, 'album map shades the birth country');
+      assert(col.badges >= 20 && col.earned.includes('first_life'), `achievements: ${JSON.stringify(col)}`);
+      assert(/^已解鎖 \d+ \/ \d+$/.test(col.summary), col.summary);
+      await noHScroll(page, 'album collection');
       const save = await page.evaluate(() => localStorage.getItem('lifelottery.save'));
       assert(save === null, 'dead save cleared after leaving the review');
       const keys = await page.evaluate(() => Object.keys(localStorage));
@@ -517,6 +568,32 @@ try {
       await page.waitForSelector('.toast-error');
       assert((await page.$$('.album-card')).length === 3, 'bad file leaves the album unchanged');
     });
+    await step('old album records (no meta, era, urbanBirth, countriesLived, wealthQ) still render; collection and achievements derive from them', async () => {
+      const legacy = JSON.parse(JSON.stringify(records[0]));
+      legacy.id = 'legacy-1';
+      legacy.savedAt = Date.now() - 99999;
+      delete legacy.meta;
+      const sm = legacy.summary;
+      for (const k of ['era', 'urbanBirth', 'birthCity', 'countriesLived', 'wealthQ', 'yearsWorked', 'education']) delete sm[k];
+      sm.age = 104; sm.deathYear = sm.birthYear + 104; sm.homeCountry = { code: '', name: '台灣' };
+      sm.lifespan = { age: 104, countryLe: 80, worldLe: 70, vsCountry: 24, vsWorld: 34 };
+      const file = path.join(SHOTS, 'legacy-test.json');
+      fs.writeFileSync(file, JSON.stringify({ app: 'lifelottery', v: 1, records: [legacy] }));
+      await page.goto(`${BASE}#/album`);
+      await page.waitForSelector('.album-card');
+      await page.setInputFiles('[data-role="import-input"]', file);
+      await page.waitForFunction(() => document.querySelectorAll('.album-card').length === 4);
+      const earned = await page.evaluate(() => [...document.querySelectorAll('.ach-card .badge.is-earned')].map((b) => b.dataset.id));
+      for (const id of ['age_100', 'age_90', 'taiwan', 'beat_average']) assert(earned.includes(id), `legacy record earns ${id}: ${earned}`);
+      await page.goto(`${BASE}#/album/legacy-1`);
+      await page.waitForSelector('.review-hero');
+      assert(await page.$('.odds-card [data-role="odds-big"]'), 'odds derived for an old record (draw mode defaults to newborns)');
+      assert(await page.$('.map-card svg.wm .wm-birth, .map-card svg.wm .wm-m-birth'), 'map derived from the country name');
+      await page.evaluate(() => { const b = document.querySelector('.review-actions [data-action="delete-record"]'); if (b) b.click(); });
+      await page.click('[data-confirm="ok"]');
+      await page.waitForSelector('.album-card');
+      await page.waitForFunction(() => document.querySelectorAll('.album-card').length === 3);
+    });
     await step('album export: downloads JSON that round-trips', async () => {
       const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-action="export"]')]);
       const data = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
@@ -656,6 +733,8 @@ try {
         await page.waitForSelector('.birth-country');
         await page.waitForTimeout(300);
         await shot(page, tag, '03-lottery-reveal');
+        await page.locator('.birth-card').screenshot({ path: path.join(SHOTS, `${tag}-03a-birth-map.png`) });
+        await page.locator('.odds-reveal').screenshot({ path: path.join(SHOTS, `${tag}-03b-odds.png`) });
         await noHScroll(page, `${tag} lottery`);
 
         await page.click('[data-action="begin"]');
@@ -676,11 +755,16 @@ try {
         await page.waitForTimeout(400);
         await shot(page, tag, '08-summary');
         await noHScroll(page, `${tag} summary`);
+        await page.locator('.odds-card').screenshot({ path: path.join(SHOTS, `${tag}-08a-odds.png`) });
+        await page.locator('.map-card').screenshot({ path: path.join(SHOTS, `${tag}-08b-life-map.png`) });
+        fs.writeFileSync(path.join(SHOTS, `${tag}-08c-sharecard.png`), Buffer.from(await page.evaluate(() => document.getElementById('share-canvas').toDataURL('image/png').split(',')[1]), 'base64'));
 
         await page.goto(`${FAST}#/album`);
         await page.waitForSelector('.album-card');
         await shot(page, tag, '09-album');
         await noHScroll(page, `${tag} album`);
+        await page.locator('.collection-card').screenshot({ path: path.join(SHOTS, `${tag}-09a-collection.png`) });
+        await page.locator('.ach-card').screenshot({ path: path.join(SHOTS, `${tag}-09b-achievements.png`) });
         await page.click('.album-link');
         await page.waitForSelector('.review-hero');
         await page.waitForTimeout(300);

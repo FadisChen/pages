@@ -4,6 +4,7 @@ import { S } from '../../strings.js';
 import * as store from '../../storage.js';
 import { el, icon, toast, confirmDialog, downloadBlob, todayStamp, fmtInt } from '../dom.js';
 import { renderReview } from '../review.js';
+import { collectionCard, achievementsCard } from '../collectionview.js';
 
 const A = S.album;
 
@@ -82,6 +83,9 @@ function listView(ctx, root) {
       list.length ? el('section', { class: 'card cumulative', 'aria-labelledby': 'cum-title' },
         el('h2', { id: 'cum-title', class: 'card-title' }, A.cumulativeTitle),
         el('dl', { class: 'cum-grid' }, stat(A.lives, st.lives, A.livesUnit), stat(A.years, st.years, A.yearsUnit), stat(A.countries, st.countries, A.countriesUnit), stat(A.longest, st.longest, A.longestUnit))) : null,
+      list.length ? collectionCard(list) : null,
+      list.length ? achievementsCard(list, store.loadAchievementLog()) : null,
+      list.length ? el('h2', { class: 'card-title list-title' }, A.listTitle) : null,
       list.length
         ? el('ul', { class: 'album-list' }, list.map((r) => recordCard(r, removeOne)))
         : el('div', { class: 'card empty' }, el('p', null, A.empty), el('a', { class: 'btn btn-primary', href: '#/setup' }, A.emptyCta)),

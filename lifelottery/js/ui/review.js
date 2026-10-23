@@ -3,8 +3,14 @@
 
 import { S } from '../strings.js';
 import * as store from '../storage.js';
+import { BY_CODE } from '../data/countries.js';
 import { el, icon, toast, announce, downloadBlob, fmt1 } from './dom.js';
 import { createLifeChart } from './chart.js';
+import { createWorldMap } from './worldmap.js';
+import { oddsCard } from './oddsview.js';
+import { badgeEl } from './collectionview.js';
+import { ACHIEVEMENTS, lifeFacts } from './achievements.js';
+import { oddsFromSummary } from '../engine/odds.js';
 import { drawShareCard, cardToBlob, cardFileName, canShareImage, shareCard, CARD_W, CARD_H } from './sharecard.js';
 
 const T = S.summary;
@@ -57,6 +63,35 @@ function statsSection(sum) {
     el('dl', { class: 'stat-grid' }, items.map(([k, v]) => el('div', { class: 'stat-item' }, el('dt', null, k), el('dd', null, v)))));
 }
 
+/** 人生足跡: the birth country, the countries lived in and the order of the moves. */
+function mapSection(record) {
+  const sum = record.summary;
+  const f = lifeFacts(record);
+  if (!f.code) return null;
+  const route = [...f.lived];
+  const moved = route.slice(1);
+  const names = moved.map((c) => (BY_CODE[c] || {}).name).filter(Boolean);
+  const home = sum.homeCountry.name;
+  const map = createWorldMap({ title: S.map.lifeAlt(sum.name), desc: S.map.lifeDesc(home, names), birth: f.code, lived: moved, route });
+  return el('section', { class: 'card map-card', 'aria-labelledby': 'sec-map' },
+    el('h2', { id: 'sec-map', class: 'card-title' }, S.map.lifeTitle),
+    map.node,
+    el('ul', { class: 'map-legend', 'aria-hidden': 'true' },
+      el('li', null, el('i', { class: 'map-sw' }), S.map.legendBirth),
+      names.length ? el('li', null, el('i', { class: 'map-sw lived' }), S.map.legendLived) : null,
+      names.length ? el('li', null, el('i', { class: 'map-sw move' }), S.map.legendMove) : null),
+    el('p', { class: 'map-places' }, names.length ? [home, ...names].join(' → ') : S.map.lifeStayed(home)));
+}
+
+function unlockedSection(ids) {
+  if (!ids || !ids.length) return null;
+  const defs = ids.map((id) => ACHIEVEMENTS.find((a) => a.id === id)).filter(Boolean);
+  return el('section', { class: 'card unlock-card', 'aria-labelledby': 'sec-unlock' },
+    el('h2', { id: 'sec-unlock', class: 'card-title' }, S.ach.unlockedTitle),
+    el('p', { class: 'fine' }, S.ach.unlockedLead),
+    el('ul', { class: 'badges' }, defs.map((a) => badgeEl({ id: a.id, icon: a.icon, done: true, value: 1, goal: 1 }, Date.now()))));
+}
+
 function helpCard(extraClass = '') {
   return el('aside', { class: `help-card ${extraClass}`, 'aria-labelledby': 'help-title' },
     el('h2', { id: 'help-title' }, T.helpTitle),
@@ -75,7 +110,7 @@ export { helpCard };
  * @param {object} ctx     router context
  * @param {{ mode: 'summary'|'album' }} opts
  */
-export function renderReview(record, ctx, { mode }) {
+export function renderReview(record, ctx, { mode, unlocked = [] }) {
   const sum = record.summary;
   const parts = [];
   const cleanups = [];
@@ -94,6 +129,13 @@ export function renderReview(record, ctx, { mode }) {
   ));
 
   if (sum.suicide) parts.push(helpCard('help-top'));
+
+  parts.push(unlockedSection(unlocked));
+
+  let odds = null;
+  try { odds = oddsFromSummary(sum, (record.meta && record.meta.drawMode) || 'births'); } catch (e) { console.error(e); }
+  if (odds) parts.push(oddsCard(odds, { mode: 'life', age: sum.age, drawMode: (record.meta && record.meta.drawMode) || 'births' }));
+  parts.push(mapSection(record));
 
   parts.push(lifespanSection(sum));
 

@@ -16,6 +16,21 @@ function newId() {
   return `l${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
+/**
+ * Facts the album keeps next to the summary: the draw mode (needed to recompute the odds of the life later) and how long
+ * the last partnership lasted (for the 金婚 achievement). A widow's years are approximate (the partner died some years before).
+ */
+function recordMeta(s) {
+  const meta = { drawMode: s.settings && s.settings.drawMode === 'population' ? 'population' : 'births' };
+  const p = s.partner;
+  if (p && Number.isFinite(p.since)) {
+    const end = s.death ? s.death.year : s.year;
+    if (p.status === 'married') meta.partnerYears = Math.max(0, end - p.since);
+    else if (p.status === 'widowed') meta.partnerYears = Math.max(0, end - p.since - 6);
+  }
+  return meta;
+}
+
 export const session = {
   get state() { return state; },
   get recordId() { return recordId; },
@@ -67,7 +82,7 @@ export const session = {
     if (!recordId) recordId = newId();
     let rec = store.getRecord(recordId);
     if (!rec) {
-      const res = store.putRecord({ id: recordId, savedAt: Date.now(), message: '', summary: getSummary(state) });
+      const res = store.putRecord({ id: recordId, savedAt: Date.now(), message: '', summary: getSummary(state), meta: recordMeta(state) });
       rec = res.record;
     }
     this.persist();

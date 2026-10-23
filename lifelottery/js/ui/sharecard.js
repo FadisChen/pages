@@ -1,7 +1,8 @@
 // Share card: a 1080x1350 Canvas image of a finished life ("a paper notebook page under the night sky").
 // Pure drawing code: give it a canvas and an album record; it paints synchronously with system fonts.
 
-import { S } from '../strings.js';
+import { S, oneInText } from '../strings.js';
+import { oddsFromSummary } from '../engine/odds.js';
 import { STAT_KEYS } from './chart.js';
 
 export const CARD_W = 1080;
@@ -195,7 +196,7 @@ export function drawShareCard(canvas, record) {
   g.font = `600 22px ${SANS}`;
   g.fillText('L I F E   L O T T E R Y', 82, 146);
 
-  const px = 60, py = 200, pw = 960, ph = 1000;
+  const px = 60, py = 200, pw = 960, ph = 1050;
   drawPaper(g, px, py, pw, ph);
 
   const x0 = 156;
@@ -281,10 +282,39 @@ export function drawShareCard(canvas, record) {
     by += 52;
   }
 
+  // odds: "這樣一生的機率  約 1／N" (the product of the birth lottery's draws and the age of death, engine/odds.js)
+  let odds = null;
+  try { odds = oddsFromSummary(sum, (record.meta && record.meta.drawMode) || 'births'); } catch (e) { odds = null; }
+  if (odds) {
+    const bx = x0, bw = w0, bh = 80, byy = 804;
+    g.save();
+    roundRect(g, bx, byy, bw, bh, 16);
+    g.fillStyle = 'rgba(180,67,44,0.08)';
+    g.fill();
+    g.setLineDash([10, 7]);
+    g.lineWidth = 2.5;
+    g.strokeStyle = C.accent;
+    g.stroke();
+    g.restore();
+    const big = T.cardOddsValue(oneInText(odds.human));
+    g.textAlign = 'right';
+    g.fillStyle = C.accent;
+    const bigPx = fitText(g, big, (p) => `800 ${p}px ${SERIF}`, 372, 50, 26);
+    g.font = `800 ${bigPx}px ${SERIF}`;
+    g.fillText(big, bx + bw - 24, byy + 55);
+    g.textAlign = 'left';
+    g.fillStyle = C.ink;
+    g.font = `700 27px ${SERIF}`;
+    g.fillText(S.odds.cardLabel, bx + 24, byy + 37);
+    g.fillStyle = C.muted;
+    fitText(g, S.odds.cardLead, (p) => `${p}px ${SANS}`, bw - 372 - 56, 21, 15);
+    g.fillText(S.odds.cardLead, bx + 24, byy + 64);
+  }
+
   // curves
   g.fillStyle = C.muted;
   g.font = `600 24px ${SANS}`;
-  g.fillText(T.cardChartTitle, x0, 850);
+  g.fillText(T.cardChartTitle, x0, 928);
   // tiny legend
   let lx = x0 + 180;
   g.font = `22px ${SANS}`;
@@ -293,18 +323,18 @@ export function drawShareCard(canvas, record) {
     g.lineWidth = 5;
     g.setLineDash(DASH[k]);
     g.beginPath();
-    g.moveTo(lx, 842);
-    g.lineTo(lx + 26, 842);
+    g.moveTo(lx, 920);
+    g.lineTo(lx + 26, 920);
     g.stroke();
     g.setLineDash([]);
     g.fillStyle = C.ink2;
-    g.fillText(S.life.statLabels[k], lx + 34, 850);
+    g.fillText(S.life.statLabels[k], lx + 34, 928);
     lx += 34 + g.measureText(S.life.statLabels[k]).width + 22;
   }
-  drawCurves(g, sum.statHistory, x0, 872, w0, 120);
+  drawCurves(g, sum.statHistory, x0, 948, w0, 84);
 
   // highlight + message
-  let ty = 1062;
+  let ty = 1100;
   g.textAlign = 'left';
   const top = sum.featuredHighlight || sum.highlights[0];
   if (top) {
@@ -312,7 +342,7 @@ export function drawShareCard(canvas, record) {
     g.font = `28px ${SANS}`;
     const line = wrap(g, `${T.cardHighlights}・${top.age} 歲　${top.text}`, w0, 1)[0];
     g.fillText(line, x0, ty);
-    ty += 52;
+    ty += 46;
   }
   const msg = (record.message || '').trim();
   if (msg) {
@@ -330,12 +360,12 @@ export function drawShareCard(canvas, record) {
   g.textAlign = 'center';
   g.fillStyle = C.cream;
   g.font = `600 40px ${SERIF}`;
-  g.fillText(T.cardTagline, CARD_W / 2, 1270);
+  g.fillText(T.cardTagline, CARD_W / 2, 1296);
   g.fillStyle = 'rgba(239,232,214,0.6)';
   g.font = `24px ${SANS}`;
   let url = '';
   try { if (/^https?:$/.test(location.protocol)) url = `${location.host}${location.pathname.replace(/index\.html$/, '')}`; } catch (e) { url = ''; }
-  if (url) g.fillText(url, CARD_W / 2, 1312);
+  if (url) g.fillText(url, CARD_W / 2, 1334);
   return canvas;
 }
 
