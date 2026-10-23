@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>人生籤 Life Lottery</title>
+  <meta name="description" content="依真實統計隨機出生、走完一生的網頁遊戲。你無法選擇在哪裡出生，抽一支籤，走一趟人生。">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#efe7d4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a1024" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="人生籤">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/theme-init.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要內容</a>
+  <header class="topbar" id="topbar">
+    <a class="brand" href="#/" aria-label="人生籤，回到首頁">
+      <span class="brand-mark" aria-hidden="true">籤</span>
+      <span class="brand-name">人生籤</span>
+    </a>
+    <nav class="topnav" aria-label="主選單">
+      <a href="#/album" data-nav="album">前世記錄</a>
+      <a href="#/about" data-nav="about">關於</a>
+      <button type="button" class="icon-btn" id="theme-toggle"></button>
+    </nav>
+  </header>
+  <main id="main" tabindex="-1">
+    <noscript><p class="noscript">人生籤需要啟用 JavaScript 才能遊玩。</p></noscript>
+  </main>
+  <div id="toast" class="toast-host" role="status" aria-live="polite"></div>
+  <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1485 @@
+// Era events tied to calendar years and regions. Ids start with `world_`.
+//
+// Almost everything here is a `chance` event gated by `h.yearIn(a, b)` plus a country or region test, so it
+// only reaches people who are actually alive, at the right age, in the right place at that time.
+// Dates follow the public record; wording stays neutral and describes how ordinary people lived through it.
+// h.die() is used only where mortality of the event is documented (famine, genocide, great disasters), with
+// small probabilities that are in the order of the real share of a country's population.
+//
+// Follow-up chains (schedule):
+//   world_asian_crisis_1997 -> world_asian_crisis_recovery      world_taiwan_921 -> world_taiwan_921_rebuild
+//   world_ussr_collapse -> world_post_soviet_decade             world_tohoku_2011 -> world_tohoku_aftermath
+//   world_hiv_peak_africa -> world_arv_rollout                  world_haiti_2010 -> world_haiti_cholera
+//   world_tsunami_2004 -> world_tsunami_rebuild                 world_ukraine_2022_home -> world_ukraine_later
+//   world_sars_2003 -> world_sars_after
+
+// ---- country groups ----
+const FSU = new Set(['RUS', 'UKR', 'BLR', 'MDA', 'GEO', 'ARM', 'AZE', 'KAZ', 'UZB', 'TJK', 'KGZ', 'TKM', 'EST', 'LVA', 'LTU']);
+const EAST_EUROPE = new Set(['DEU', 'POL', 'CZE', 'SVK', 'HUN', 'ROU', 'BGR', 'ALB', 'SRB', 'HRV', 'SVN', 'MKD', 'BIH', 'MNE', 'XKX']);
+const EURO_2002 = new Set(['DEU', 'FRA', 'ITA', 'ESP', 'PRT', 'NLD', 'BEL', 'AUT', 'FIN', 'IRL', 'GRC', 'LUX']);
+const SOUTH_EUROPE = new Set(['GRC', 'ESP', 'PRT', 'ITA', 'IRL', 'CYP']);
+const ASIA_1997 = new Set(['THA', 'IDN', 'KOR', 'MYS', 'PHL', 'HKG']);
+const TSUNAMI_2004 = { IDN: 0.12, LKA: 0.3, THA: 0.1, IND: 0.06, MDV: 0.5, MMR: 0.02, MYS: 0.03, SOM: 0.03 };
+const HIV_AFRICA = new Set(['ZAF', 'UGA', 'ZMB', 'ZWE', 'BWA', 'MWI', 'KEN', 'TZA', 'MOZ', 'LSO', 'SWZ', 'NAM', 'CMR', 'CIV', 'NGA', 'COD', 'ETH', 'AGO', 'GAB', 'TGO', 'GHA', 'BEN', 'COG', 'CAF', 'RWA', 'BDI', 'SSD']);
+const COASTAL_FUTURE = new Set(['BGD', 'NLD', 'IDN', 'VNM', 'EGY', 'MDV', 'FJI', 'SLB', 'PHL', 'THA', 'MMR', 'GUY', 'SUR', 'TUV', 'BEL', 'DNK', 'USA', 'JPN', 'CHN', 'IND', 'NGA', 'SEN', 'GMB', 'MOZ', 'TLS', 'CPV', 'PNG', 'HTI', 'DOM', 'CUB', 'JAM', 'TTO', 'SGP', 'TWN', 'HKG', 'ITA', 'GBR']);
+const AGING_FUTURE = new Set(['JPN', 'KOR', 'TWN', 'CHN', 'HKG', 'SGP', 'ITA', 'ESP', 'PRT', 'GRC', 'DEU', 'FIN', 'POL', 'ROU', 'BGR', 'HRV', 'LTU', 'LVA', 'EST', 'THA', 'CUB', 'URY', 'CHL', 'RUS', 'UKR', 'HUN', 'CZE', 'SVN', 'SRB', 'MAC']);
+const SEA_EXPOSURE = { BGD: 0.6, NLD: 0.5, MDV: 1, FJI: 0.7, SLB: 0.7, VNM: 0.4, IDN: 0.4, DNK: 0.3, GUY: 0.5, SUR: 0.5, CPV: 0.6, TLS: 0.4, PNG: 0.3, SGP: 0.4 };
+const seaExposure = (code) => SEA_EXPOSURE[code] ?? (COASTAL_FUTURE.has(code) ? 0.25 : 0);
+
+// ---- helpers ----
+const kid = (h) => h.age() < 14;
+const gdpOf = (h) => h.stats().gdp || 5000;
+/** Year a technology reaches ordinary households of the person's country; poorer families get it later. */
+function techYear(h, table) {
+  const g = gdpOf(h);
+  const row = table.find(([min]) => g >= min) || table[table.length - 1];
+  return row[1] + (h.wealthQ() <= 2 ? 6 : h.wealthQ() === 3 ? 2 : 0);
+}
+const TV = [[15000, 1962], [9000, 1972], [5000, 1982], [2500, 1992], [0, 2004]];
+const MOBILE = [[15000, 1996], [9000, 2000], [5000, 2004], [2500, 2008], [0, 2012]];
+const NET = [[15000, 1996], [9000, 2001], [5000, 2006], [2500, 2011], [0, 2016]];
+const SMART_LATE = [[15000, 2011], [9000, 2014], [5000, 2017], [2500, 2020], [0, 2023]];
+const inWindow = (h, table, span) => h.year() >= techYear(h, table) && h.year() <= techYear(h, table) + span;
+const lowInc = (h) => h.income() === 'L' || h.income() === 'LM';
+
+export default [
+  // =====================================================================================
+  // 1970-1989
+  // =====================================================================================
+  {
+    id: 'world_oil_crisis_1973',
+    title: '油價風暴',
+    ages: [3, 100],
+    chance: 0.5,
+    tags: ['world', 'economy'],
+    cond: (s, h) => h.yearIn(1973, 1975),
+    text: (s, h) => h.byIncome({
+      L: '遠方的國家為了石油吵得天翻地覆，你這邊最先感覺到的，是煤油和肥料一夜之間貴了好幾成。燈點得更少了，家人也更早入睡，連說話都不自覺地壓低了聲音。',
+      LM: '石油價格暴漲，運輸費、肥料和車票都跟著上漲。市集裡的人談論的不再是收成，而是下個月還買不買得起煤油，也有人開始學著把一桶油分成三天用。',
+      UM: '石油價格暴漲，政府宣布限電限油，街上的車變少了。你聽說有人排了很長的隊，只為了加滿一桶油，公家機關的燈也被要求提早關掉，大家開始習慣在半暗的走廊裡說話。',
+      H: '電視裡一再播放加油站大排長龍的畫面，政府呼籲週末少開車。大人們低聲討論著物價，你第一次聽見「能源危機」這個詞，雖然不太懂，卻記住了大人皺著眉頭的樣子。',
+    }),
+    effects: (s, h) => { h.change('wealth', h.byIncome({ L: -2, LM: -3, UM: -3, H: -2 })); h.change('happiness', -1); },
+  },
+  {
+    id: 'world_green_revolution',
+    title: '新品種的稻種',
+    ages: [12, 80],
+    chance: 0.3,
+    tags: ['world', 'farm', 'regional'],
+    cond: (s, h) => h.yearIn(1970, 1988) && !h.urban() && !h.incomeAtLeast('H') && h.isRegion('SAS', 'SEA', 'LAC', 'MENA', 'EAS'),
+    text: (s, h) => '推廣員帶著一袋袋新品種的稻麥種子走進村子，說只要配合肥料和灌溉，收成可以多出一倍。老人們半信半疑，你家的田正好在水渠旁邊。',
+    choices: [
+      {
+        label: '貸款買新種子與肥料',
+        effects: (s, h) => { if (h.chance(0.7)) { h.change('wealth', +5); h.change('knowledge', +1); } else { h.change('wealth', -3); h.change('happiness', -2); } },
+        result: (s, h) => '第一季收成讓全家人吃驚，穀倉第一次堆得這麼滿。你記得那一年的稻浪，也記得之後還款的壓力。',
+        ai: 1.5,
+      },
+      {
+        label: '先試種一小塊田',
+        effects: { wealth: +2, knowledge: +2 },
+        result: '你把最靠近水渠的一小塊田拿來試。三個月後，那一小塊田的綠色跟旁邊明顯不同，鄰居們紛紛過來看。',
+        ai: 2,
+      },
+      {
+        label: '照老方法種就好',
+        effects: { happiness: +1, wealth: -1 },
+        result: '你說老祖宗種了幾百年的方法不會錯。收成跟往年差不多，只是第二年，村子裡越來越多田地變得不太一樣了。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'world_china_after_cr',
+    title: '老師回來了',
+    ages: [3, 30],
+    chance: 0.6,
+    tags: ['world', 'china', 'school'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(1976, 1981),
+    text: (s, h) => (kid(h)
+      ? '廣播裡反覆播放著沉重的音樂，大人們的表情很複雜，很多話只敢在家裡小聲說。過了一陣子，學校恢復了考試，被調到鄉下的老師也一個個回來了。'
+      : '那些年的許多事，大人們不太願意談。如今學校恢復了考試，被送到鄉下的老師與工程師一個個回到了崗位，你終於有機會正式地學點東西。'),
+    effects: { knowledge: +3, happiness: +2, social: +1 },
+  },
+  {
+    id: 'world_china_reform_era',
+    title: '市集重新熱鬧起來',
+    ages: [8, 60],
+    chance: 0.5,
+    tags: ['world', 'china', 'economy'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(1980, 1989),
+    text: (s, h) => (h.urban()
+      ? '街角出現了第一家個體戶小店，賣汽水和錄音帶。大人們一開始只敢遠遠看，後來也開始排隊，口袋裡的錢居然真的能買到東西，而且比以前更好吃、更好看。'
+      : '田地分給各戶經營之後，家裡的收成頭一年就多了一截。農閒時，你跟著鄰居把雞蛋和蔬菜挑到鎮上賣，錢包一天比一天鼓，母親第一次在年底替全家人買了新衣服。'),
+    effects: { wealth: +4, happiness: +3 },
+  },
+  {
+    id: 'world_sahel_drought',
+    title: '沒有雨的年頭',
+    ages: [0, 70],
+    chance: 0.6,
+    tags: ['world', 'famine', 'regional'],
+    cond: (s, h) => h.yearIn(1972, 1974) && ['NER', 'MLI', 'BFA', 'TCD', 'MRT', 'SEN', 'GMB', 'ETH', 'SOM'].includes(s.countryCode) && !h.urban(),
+    text: (s, h) => '雨季遲遲沒有來，井越掘越深，牲口一頭接一頭倒下。村子裡的人收拾行李往南走，路上遇到的每個人都問同一句話：前面有水嗎？你默默把水壺握得更緊了。',
+    effects: (s, h) => {
+      h.change('health', -6); h.change('wealth', -5); h.change('happiness', -4);
+      if (h.chance(0.012)) h.die('malnutrition');
+    },
+  },
+  {
+    id: 'world_bhola_cyclone_1970',
+    title: '那一夜的潮水',
+    ages: [0, 70],
+    chance: 1,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'BGD' && h.yearIn(1970, 1971) && !h.urban() && h.coastal(),
+    text: (s, h) => '十一月的夜裡，風聲越來越大，海水湧進了沿海的村子。天亮時，許多房子只剩下地基，倖存的人坐在樹梢上，等著有人划船來，沒有人說話，只有水拍在樹幹上的聲音。',
+    effects: (s, h) => {
+      h.change('health', -6); h.change('wealth', -6); h.change('happiness', -5);
+      if (h.chance(0.012)) h.die('disaster');
+    },
+  },
+  {
+    id: 'world_bangladesh_1971',
+    title: '一九七一年',
+    ages: [0, 80],
+    chance: 1,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'BGD' && h.yearIn(1971, 1972),
+    text: (s, h) => '九個月的戰事讓許多人離開了家。有人躲進鄰國，也有人在田野間輾轉。戰爭結束後，這片土地有了新的名字，你和家人在廢墟間重新開始。',
+    effects: (s, h) => {
+      h.change('happiness', -3); h.change('wealth', -5); h.change('health', -4);
+      if (h.chance(0.012)) h.die('conflict');
+    },
+  },
+  {
+    id: 'world_khmer_rouge',
+    title: '空蕩蕩的城市',
+    ages: [0, 80],
+    chance: 1,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'KHM' && h.yearIn(1975, 1979),
+    text: (s, h) => '一夜之間，城市裡的人被帶往鄉間，學校、市場和寺廟都停擺了。你的日子被勞動、飢餓和沉默占滿，大家學會了不要多問，只求家人還在身邊。',
+    effects: (s, h) => {
+      h.change('health', -8); h.change('happiness', -8); h.change('social', -5); h.change('knowledge', -3);
+      if (h.chance(0.1)) h.die('conflict');
+    },
+    highlight: '經歷了國家最艱難的幾年。',
+  },
+  {
+    id: 'world_iran_iraq_war',
+    title: '長長的戰爭',
+    ages: [5, 60],
+    chance: 0.6,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => (s.countryCode === 'IRN' || s.countryCode === 'IRQ') && h.yearIn(1980, 1988),
+    text: (s, h) => '戰爭打了八年，電視裡每天播報前線的消息，街坊的青年一個接一個被徵召。警報聲響起時，你學會了在最短時間內抱起最重要的東西。',
+    effects: (s, h) => {
+      h.change('happiness', -4); h.change('social', -2); h.change('wealth', -3);
+      if (h.male() && h.age() >= 17 && h.age() <= 45 && h.chance(0.015)) h.die('conflict');
+    },
+  },
+  {
+    id: 'world_afghan_war_1980s',
+    title: '山路上的人群',
+    ages: [0, 70],
+    chance: 0.7,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'AFG' && h.yearIn(1979, 1992),
+    text: (s, h) => '戰火沿著山谷蔓延，村子裡的人一批批離開，有人去了邊境另一邊的營地，有人留下來守著田。你的家人討論了很久，不知道該走還是該留。',
+    effects: (s, h) => { h.change('happiness', -5); h.change('wealth', -5); h.change('health', -3); if (h.chance(0.008)) h.die('conflict'); },
+  },
+  {
+    id: 'world_ethiopia_famine_1984',
+    title: '一九八四年的乾季',
+    ages: [0, 70],
+    chance: 0.8,
+    tags: ['world', 'famine', 'regional'],
+    cond: (s, h) => s.countryCode === 'ETH' && h.yearIn(1984, 1985) && !h.urban(),
+    text: (s, h) => '連續幾季的雨沒有來，田裡什麼也長不出來。家人帶著僅有的東西走了好幾天，到了救濟站的帳篷外，排隊領取每日那一點點粥，輪到你時，你把碗捧得很穩，怕灑出一滴。',
+    effects: (s, h) => {
+      h.change('health', -8); h.change('wealth', -5); h.change('happiness', -5);
+      if (h.chance(0.015)) h.die('malnutrition');
+    },
+  },
+  {
+    id: 'world_chernobyl_1986',
+    title: '四月底的雨',
+    ages: [1, 90],
+    chance: 0.9,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => ['UKR', 'BLR', 'RUS'].includes(s.countryCode) && h.yearIn(1986, 1987),
+    text: (s, h) => '起初你只聽說某座發電廠出了事故。後來，大人們開始叮嚀不要喝牛奶、不要讓孩子在雨裡玩。很長一段時間，大家都在小心翼翼地過日子。',
+    effects: { happiness: -3, health: -2, social: -1 },
+  },
+  {
+    id: 'world_tv_arrives',
+    title: '電視機',
+    ages: [3, 50],
+    chance: 0.3,
+    tags: ['world', 'tech'],
+    cond: (s, h) => inWindow(h, TV, 8),
+    text: (s, h) => (techYear(h, TV) <= 1972
+      ? '家裡換了一台彩色電視。晚上全家人圍在客廳，盯著畫面裡的人物走來走去。你發現，原來綠色的草地和紅色的衣服真的有那麼鮮豔，連廣告都變得很好看。'
+      : h.byIncome({
+        L: h.seenEvent('childhood_first_tv')
+          ? '村裡的電視一台接一台地多了起來，你家今年也終於買了一台，擺在院子裡接上電瓶。'
+          : '村子裡有人買了第一台電視，擺在院子裡接上電瓶。傍晚大家擠過去，連牆頭上都坐滿了人，映出的畫面比什麼故事都精彩，第二天孩子們都在學電視裡的人走路。',
+        LM: '家裡終於買了一台電視，擺在最顯眼的位置。每天晚上整條巷子的人都來看，連續劇一播完，大家就開始爭論結局，有人甚至吵到隔天早上還沒完。',
+        UM: '家裡添了一台電視，從此晚餐桌上多了一個聲音。你學會了很多遠方的事，也學會了廣告裡的每一句口號，連洗髮精的名字都記得很牢。',
+        H: '客廳裡多了一台電視，全家人晚飯後圍在一起看。你學會了很多遠方的事，也學會了每一句廣告詞，換台時還要和家人爭遙控器，吵吵鬧鬧卻是一天最熱鬧的時刻。',
+      })),
+    effects: { knowledge: +2, happiness: +3, social: +1 },
+  },
+  {
+    id: 'world_vietnam_doi_moi',
+    title: '市場開放的年代',
+    ages: [10, 55],
+    chance: 0.4,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => s.countryCode === 'VNM' && h.yearIn(1987, 1996),
+    text: (s, h) => '政策放寬之後，街頭多了許多小攤和小店，過去配給的票證漸漸用不上。你的家人也開始做起小生意，餐桌上的菜色悄悄豐盛了些，連過年才有的肉，也開始偶爾出現在平常的晚餐。',
+    effects: { wealth: +4, happiness: +3 },
+  },
+
+  // =====================================================================================
+  // 1989-2000
+  // =====================================================================================
+  {
+    id: 'world_berlin_wall_1989',
+    title: '圍牆倒下的夜晚',
+    ages: [5, 90],
+    chance: 0.9,
+    tags: ['world', 'cold_war'],
+    cond: (s, h) => h.yearIn(1989, 1990) && h.isRegion('EUR'),
+    text: (s, h) => (EAST_EUROPE.has(s.countryCode)
+      ? '電視裡的人群爬上了那道水泥牆，邊境一個個打開。街上的人又笑又哭，陌生人互相擁抱。過去不能說的話，一夜之間可以在餐桌上大聲說了。'
+      : '電視裡的人群爬上了那道水泥牆，記者聲音發抖。你坐在客廳看著，一旁的大人們屏住了呼吸，有人輕聲說：「這個世界，從今以後不一樣了。」'),
+    effects: { happiness: +3, social: +2, knowledge: +1 },
+  },
+  {
+    id: 'world_ussr_collapse',
+    title: '地圖上換了名字',
+    ages: [3, 90],
+    chance: 1,
+    tags: ['world', 'cold_war', 'regional'],
+    cond: (s, h) => FSU.has(s.countryCode) && h.yearIn(1991, 1992),
+    text: (s, h) => '電視上換了旗幟，報紙換了名稱，你的證件突然屬於另一個國家。店裡貨架一夜之間空了，大人們說，過去穩定的日子，可能回不去了。',
+    effects: (s, h) => { h.change('wealth', -4); h.change('happiness', -3); h.change('social', -1); },
+    schedule: [{ id: 'world_post_soviet_decade', inYears: [1, 3] }],
+  },
+  {
+    id: 'world_post_soviet_decade',
+    title: '發不出來的薪水',
+    ages: [6, 75],
+    weight: 0,
+    tags: ['world', 'economy', 'followup'],
+    text: (s, h) => '通貨膨脹把存款吃掉了大半，薪水常常晚了幾個月才發，有時還發罐頭或鍋子代替。你學會了在市場擺攤、以物易物，也學會了互相幫忙過日子。',
+    effects: (s, h) => { h.change('wealth', -3); h.change('social', +2); h.change('happiness', -2); if (h.employed() && h.chance(0.06)) h.loseJob(); },
+  },
+  {
+    id: 'world_yugoslav_wars',
+    title: '分裂的國家',
+    ages: [3, 80],
+    chance: 0.7,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => ['BIH', 'HRV', 'SRB', 'XKX', 'MKD', 'MNE', 'SVN'].includes(s.countryCode) && h.yearIn(1991, 1999),
+    text: (s, h) => '鄰居變成了不同陣營，昨天還一起喝咖啡的人今天不敢互相招呼。你的家人收拾了行李，有人去了親戚家，有人選擇留下，誰也不確定明天會怎麼樣。',
+    effects: (s, h) => {
+      h.change('happiness', -5); h.change('wealth', -4); h.change('social', -3);
+      if ((s.countryCode === 'BIH' || s.countryCode === 'XKX') && h.chance(0.006)) h.die('conflict');
+    },
+  },
+  {
+    id: 'world_gulf_war_1991',
+    title: '沙漠裡的戰爭',
+    ages: [5, 75],
+    chance: 0.8,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => (s.countryCode === 'IRQ' || s.countryCode === 'KWT') && h.yearIn(1990, 1991),
+    text: (s, h) => '先是不安的傳言，接著是封鎖與警報。電力時有時無，食物與藥品越來越少。家人把窗戶貼上膠帶，圍在收音機旁，一遍遍地換頻道，等著天亮，也等著下一個消息。',
+    effects: { happiness: -4, wealth: -4, health: -3 },
+  },
+  {
+    id: 'world_japan_lost_decade',
+    title: '就業冰河期',
+    ages: [20, 45],
+    chance: 0.6,
+    tags: ['world', 'economy', 'job'],
+    cond: (s, h) => s.countryCode === 'JPN' && h.yearIn(1993, 2004) && !h.retired(),
+    text: (s, h) => '泡沫經濟的餘波還沒散去，企業一家接一家凍結新進人員的名額。你寄出的履歷像石沉大海，朋友們有的當了約聘，有的繼續念書等景氣。',
+    choices: [
+      {
+        label: '接受約聘或打工，先累積經驗',
+        effects: (s, h) => { if (!h.employed()) h.startJob(h.pick(['clerk', 'sales', 'factory'])); h.change('wealth', +1); h.change('happiness', -2); h.change('social', +1); },
+        result: '你在一間小公司找到契約的工作。薪水不高也沒保障，但同事人很好，你每天都學到一點新東西。',
+        ai: 1.5,
+      },
+      {
+        label: '繼續投履歷，等正式的機會',
+        effects: { happiness: -3, wealth: -2 },
+        result: '你一邊打零工一邊參加面試。兩年後終於有人錄取了你，那封通知信，你收在抽屜最底層，一直留著。',
+        ai: 1,
+      },
+      {
+        label: '進修考證，換一條路走',
+        cond: (s, h) => h.incomeAtLeast('UM'),
+        effects: { knowledge: +4, wealth: -2, happiness: +1 },
+        result: '你報名了證照班，晚上念書、白天打工。考到證書的那天，你站在補習班的樓梯間，終於放聲笑了出來。',
+        ai: 1.5,
+      },
+    ],
+  },
+  {
+    id: 'world_china_xiagang',
+    title: '下崗的通知',
+    ages: [24, 55],
+    chance: 0.5,
+    tags: ['world', 'china', 'economy', 'job'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(1996, 2002) && h.urban() && h.employed(),
+    text: (s, h) => '廠裡貼出一張公告，因為改制和裁併，一批工人要「下崗」。你和同事們站在公布欄前沉默了很久，許多人在這個廠一待就是一輩子，你突然發現自己從沒想過，離開這裡之後要做什麼。',
+    choices: [
+      {
+        label: '領資遣補助，自己做點小生意',
+        effects: (s, h) => { h.loseJob(); h.change('wealth', h.chance(0.5) ? +3 : -3); h.change('happiness', -2); },
+        result: '你和家人合開了一間小店，白天顧店、半夜進貨。前兩年很辛苦，但你開始明白，自己也可以決定自己的生活。',
+        ai: 1.5,
+      },
+      {
+        label: '參加再就業培訓，找新工作',
+        effects: (s, h) => { h.loseJob(); h.change('knowledge', +3); h.change('wealth', -2); },
+        result: '你在培訓班學會了電腦和簡單的會計。教室裡全是年紀相仿的老同事，大家互相打氣，也互相交換介紹工作的消息。',
+        ai: 2,
+      },
+      {
+        label: '留在原單位，接受內部調動',
+        effects: { wealth: -2, happiness: -1, social: +1 },
+        result: '你被調到另一個部門，薪水降了一截，但每個月都還有工資。你小心翼翼地做事，很少再提「鐵飯碗」這三個字。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_india_it_boom',
+    title: '電話那頭的世界',
+    ages: [20, 45],
+    chance: 0.3,
+    tags: ['world', 'economy', 'job', 'tech'],
+    cond: (s, h) => (s.countryCode === 'IND' || s.countryCode === 'PHL') && h.yearIn(1998, 2012) && h.urban() && h.eduAtLeast('secondary'),
+    text: (s, h) => '城裡新蓋了一棟玻璃帷幕的辦公大樓，裡面的人整夜接聽著地球另一端的客服電話，薪水是同年紀朋友的兩倍。大家都在問：你要不要也去面試？',
+    choices: [
+      {
+        label: '去面試，學習口音和系統',
+        effects: { wealth: +5, knowledge: +3, health: -3, social: -1 },
+        result: '你花了三個星期練習口音與流程，終於上線。日夜顛倒的作息很累人，但你第一次有了自己的收入與自己的主意。',
+        ai: 2,
+      },
+      {
+        label: '繼續念書，考更穩定的資格',
+        effects: { knowledge: +4, wealth: -1 },
+        result: '家人覺得這份工作不踏實，你也想再多念一點。你把玻璃大樓記在心裡，並在晚自習時偷偷看它的燈亮到天亮。',
+        ai: 1,
+      },
+      {
+        label: '把消息分享給家鄉的朋友',
+        effects: { social: +3, happiness: +2 },
+        result: '你把招募的消息寄給老家的同學，沒想到有兩個人真的去了。他們寄回來的明信片上寫著：「謝謝你。」',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_south_africa_1994',
+    title: '排了一整天的隊',
+    ages: [18, 90],
+    chance: 1,
+    tags: ['world', 'regional', 'milestone'],
+    cond: (s, h) => s.countryCode === 'ZAF' && h.yearIn(1994, 1994),
+    text: (s, h) => '投票日那天，長長的隊伍從清晨排到傍晚，有人帶著板凳和孩子，有人拄著拐杖。你在票匭前停了一下，覺得手裡的那張紙，重得出奇。',
+    effects: { happiness: +6, social: +3 },
+    highlight: '參加了國家第一次不分種族的全民投票。',
+  },
+  {
+    id: 'world_rwanda_1994',
+    title: '一九九四年的春天',
+    ages: [0, 80],
+    chance: 1,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'RWA' && h.yearIn(1994, 1994),
+    text: (s, h) => '四月之後的一百天，國家陷入巨大的暴力。鄰里、教會與學校都不再安全，有人躲在沼澤與屋頂下。倖存的人，日後都帶著自己的名單過日子。',
+    effects: (s, h) => {
+      h.change('happiness', -10); h.change('social', -8); h.change('health', -5);
+      if (h.chance(0.07)) h.die('conflict');
+    },
+    highlight: '經歷了國家最黑暗的一百天。',
+  },
+  {
+    id: 'world_hiv_peak_africa',
+    title: '村子裡的葬禮',
+    ages: [5, 70],
+    chance: 0.5,
+    tags: ['world', 'health', 'regional'],
+    cond: (s, h) => HIV_AFRICA.has(s.countryCode) && h.yearIn(1990, 2004),
+    text: (s, h) => '這幾年村裡的葬禮特別多，常常一週好幾場，過世的多是青壯年。大家小聲說著病名，有人開始在教會與學校裡教孩子如何保護自己，也有人悄悄把病人的手握得更緊。',
+    effects: { happiness: -3, social: -2, health: -1 },
+    schedule: [{ id: 'world_arv_rollout', inYears: [5, 9] }],
+  },
+  {
+    id: 'world_arv_rollout',
+    followCond: (s, h) => (h.year() >= 2003 ? true : 'wait'),
+    title: '藥終於來了',
+    ages: [12, 90],
+    weight: 0,
+    tags: ['world', 'health', 'followup'],
+    text: (s, h) => '診所開始免費發放抗病毒藥物。排隊的人愈來愈多，鄰居中也有人從病床上慢慢站起來，重新下田工作。葬禮的次數，一年比一年少了。',
+    effects: (s, h) => { h.change('happiness', +4); h.change('social', +2); if (h.hasCondition('hiv')) { h.change('health', +3); h.addRisk(0.85, 4); } },
+  },
+  {
+    id: 'world_hurricane_mitch_1998',
+    title: '米契颶風',
+    ages: [3, 85],
+    chance: 0.6,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => ['HND', 'NIC', 'GTM', 'SLV'].includes(s.countryCode) && h.yearIn(1998, 1998),
+    text: (s, h) => '連下了好幾天的雨，山坡開始鬆動，河水漫過田地和道路。有的村子被土石整個掩埋，你和鄰居們擠在學校的屋頂上，等救援直升機經過。',
+    effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -4); h.change('health', -3); if (h.chance(0.004)) h.die('disaster'); },
+  },
+  {
+    id: 'world_asian_crisis_1997',
+    title: '貨幣暴跌的夏天',
+    ages: [14, 80],
+    chance: 0.9,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => ASIA_1997.has(s.countryCode) && h.yearIn(1997, 1998),
+    text: (s, h) => (s.countryCode === 'KOR'
+      ? '匯率一夜暴跌，企業接連倒閉，電視上播著大家把金戒指捐出來還國家外債的畫面。你身邊有人失業，也有人被迫延後婚事，大家聊天時，話題總繞回物價。'
+      : `貨幣的價值一天比一天薄，進口品價格飆漲，銀行和公司接連出問題。新聞裡的專家說著你聽不懂的詞，而你只知道，${h.employed() ? '薪水' : '家裡的錢'}突然不夠用了。`),
+    effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -3); if (h.employed() && h.chance(0.12)) h.loseJob(); },
+    schedule: [{ id: 'world_asian_crisis_recovery', inYears: [2, 4] }],
+  },
+  {
+    id: 'world_asian_crisis_recovery',
+    title: '慢慢走出來',
+    ages: [10, 85],
+    weight: 0,
+    tags: ['world', 'economy', 'followup'],
+    text: (s, h) => '風暴過了幾年，街上的店面重新亮起了燈，朋友也終於找到了新工作。大家學會了不再把所有雞蛋放在同一個籃子裡，也對「繁榮」多了點小心。',
+    effects: { wealth: +3, happiness: +3 },
+  },
+  {
+    id: 'world_taiwan_921',
+    title: '九二一的凌晨',
+    ages: [10, 95],
+    chance: 1,
+    tags: ['world', 'disaster', 'taiwan'],
+    cond: (s, h) => s.countryCode === 'TWN' && h.yearIn(1999, 1999),
+    text: (s, h) => '凌晨一點四十七分，地面突然劇烈搖晃，停電的黑暗裡只聽見玻璃碎裂與人們的叫聲。天亮後電視播出了倒塌的大樓與山區斷裂的道路，全島都沉默了。',
+    choices: [
+      {
+        label: '加入救災或捐出物資',
+        effects: { social: +5, happiness: +1, health: -2, wealth: -1 },
+        result: '你和鄰居開著車把毛毯、飲水和泡麵送到災區。看見人們在帳篷間互相遞水，你覺得這座島比想像中更有溫度。',
+        highlight: '九二一大地震後投入救災。',
+        schedule: [{ id: 'world_taiwan_921_rebuild', inYears: [2, 4] }],
+        ai: 1.5,
+      },
+      {
+        label: '陪家人、確認親友平安',
+        effects: { happiness: -1, social: +3 },
+        result: '你一遍遍撥著電話，直到所有親友的聲音都回來。那幾天你們全家睡在客廳，餘震一來，就有人伸手握住另一個人的手。',
+        schedule: [{ id: 'world_taiwan_921_rebuild', inYears: [2, 4] }],
+        ai: 2,
+      },
+      {
+        label: '照常上班上課，把眼淚留給夜晚',
+        effects: { happiness: -3, wealth: +1 },
+        result: '你什麼也沒說，只是把新聞關掉，騎車去上班。路上看到半倒的招牌，才意識到這座城市也在慢慢搖著頭。',
+        schedule: [{ id: 'world_taiwan_921_rebuild', inYears: [2, 4] }],
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'world_taiwan_921_rebuild',
+    title: '重建的路',
+    ages: [5, 95],
+    weight: 0,
+    tags: ['world', 'followup', 'taiwan'],
+    text: (s, h) => '過了幾年，中部山區的學校一所一所重新蓋起來，新的校舍用上了抗震的設計。你路過時，看到孩子們在操場上奔跑，覺得時間是會幫人縫補的。',
+    effects: { happiness: +3, social: +2 },
+  },
+  {
+    id: 'world_y2k_2000',
+    title: '千禧年的跨年',
+    ages: [5, 95],
+    chance: 1,
+    tags: ['world', 'fun'],
+    cond: (s, h) => h.yearIn(2000, 2000) && !h.has('war'),
+    text: (s, h) => '新聞整個月都在預測「千禧蟲」會讓電腦失靈。你和朋友在跨年夜故意圍著收音機倒數，結果零點一過，燈亮著，水龍頭也照常出水，大家笑成一團。',
+    effects: { happiness: +3, social: +2 },
+  },
+  {
+    id: 'world_mobile_phone_arrives',
+    title: '第一支行動電話',
+    ages: [14, 75],
+    chance: 0.25,
+    tags: ['world', 'tech'],
+    cond: (s, h) => inWindow(h, MOBILE, 8) && h.year() >= 1990 && h.techReady(1995) && !h.has('has_smartphone'),
+    text: (s, h) => h.byIncome({
+      L: '村口的小店裝了一支手機，大家輪流付錢借打。你第一次在這支小盒子裡聽見遠方親戚的聲音，對方問了三遍「聽得到嗎」，而你每一次都大聲回答「聽得到！」，像是怕聲音飛不過去。',
+      LM: '你買了一張預付卡，和鄰居輪流用同一支手機。每次要打電話前，你都先算一算餘額，再把想說的話濃縮成幾句，最後兩個人都說「沒事，就是問問你好不好」。',
+      UM: '你買了人生中的第一支手機。它很重，鈴聲很大，你卻忍不住在街上到處接電話，連打錯的人都覺得很親切，還跟對方聊了兩句天氣，後來才發現對方根本是撥錯號碼的陌生人。',
+      H: '你終於有了自己的手機，不用再守在家裡電話旁邊等消息。隔週，你已經忘了沒有它的日子是怎麼過的，也開始會在它沒電時心慌，還得想辦法找個插座。',
+    }),
+    effects: { social: +4, happiness: +2, wealth: -1 },
+  },
+  {
+    id: 'world_mobile_money_africa',
+    title: '用手機寄錢',
+    ages: [16, 70],
+    chance: 0.3,
+    tags: ['world', 'tech', 'regional'],
+    cond: (s, h) => h.yearIn(2008, 2022) && h.isRegion('SSA') && !h.incomeAtLeast('H') && h.stat('wealth') < 80,
+    text: (s, h) => '以前寄錢回家要搭車一整天，現在你在街角的小攤按幾個鍵，家鄉的人就收到了錢。你不必再把鈔票縫在衣服裡，也不用擔心半路被偷。',
+    effects: { wealth: +3, social: +2, happiness: +2 },
+  },
+
+  // =====================================================================================
+  // 2000-2019
+  // =====================================================================================
+  {
+    id: 'world_internet_arrives',
+    title: '連上了網路',
+    ages: [10, 70],
+    chance: 0.25,
+    tags: ['world', 'tech'],
+    cond: (s, h) => inWindow(h, NET, 8) && h.year() >= 1993 && h.techReady(1995) && !h.has('has_smartphone'),
+    text: (s, h) => h.byIncome({
+      L: '鎮上開了第一間網路咖啡廳，按小時計費。你花了十分鐘才搞懂滑鼠，卻在螢幕上看見了一張地球另一邊的照片，隔壁的人催你快一點，因為時間在跳。',
+      LM: '你和朋友在網咖擠成一團，用一個帳號輪流看新聞、寄信、玩遊戲。網咖老闆一直提醒時間到了，你卻總想再多看一頁，結果一不小心就多坐了一個鐘頭。',
+      UM: `家裡裝了${h.techReady(2000) ? '寬頻' : '撥接網路'}，家人輪流排隊上線。你從此多了一個隨時可以問問題的老師，也多了一個很難關掉的視窗，晚上十二點螢幕還亮著，家人在門外喊你去睡覺。`,
+      H: '家裡的數據機發出尖銳的撥接聲，網頁慢慢跳了出來。你第一次發現，原來不出門也能認識住在另一個國家的人，還能和對方聊上一整個晚上。',
+    }),
+    effects: { knowledge: +3, social: +2, happiness: +2, health: -1 },
+  },
+  {
+    id: 'world_dotcom_bubble',
+    title: '網路泡沫',
+    ages: [22, 48],
+    chance: 0.3,
+    tags: ['world', 'economy', 'tech'],
+    cond: (s, h) => h.yearIn(1998, 2001) && h.techReady(1995) && h.incomeAtLeast('UM') && h.urban() && h.eduAtLeast('secondary'),
+    text: (s, h) => '新聞天天說網路公司股價翻倍，昨天還是電腦社社員的朋友今天已經成了「創辦人」。有人邀你加入一間剛成立的新創公司，薪水少、股票多。',
+    choices: [
+      {
+        label: '辭掉工作，加入新創',
+        effects: (s, h) => { if (h.chance(0.35)) { h.change('wealth', +7); h.change('happiness', +3); } else { h.change('wealth', -5); h.change('happiness', -3); } h.change('knowledge', +2); },
+        result: '你和一群年輕人在租來的辦公室熬夜寫程式。公司後來撐了多久，你已經不太記得，只記得那段日子裡大家吃著同一盒披薩。',
+        ai: 0.9,
+      },
+      {
+        label: '繼續穩定的工作，把錢存著',
+        effects: { wealth: +1, happiness: +1 },
+        result: '你婉拒了邀請。一年半之後新創一家接一家倒閉，朋友打電話來借錢，你才第一次明白什麼叫做「穩定也是一種選擇」。',
+        ai: 2,
+      },
+      {
+        label: '拿一小部分積蓄買些股票',
+        effects: (s, h) => { h.change('wealth', h.chance(0.45) ? +3 : -3); },
+        result: '你只放了一點點錢進去，每天都盯著螢幕。泡沫破掉的那天，你損失了一筆不大不小的錢，也學到了一堂很貴的課。',
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'world_china_wto_migration',
+    title: '去南方的工廠',
+    ages: [16, 45],
+    chance: 0.3,
+    tags: ['world', 'china', 'economy', 'job'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(2001, 2012) && !h.urban() && !h.inSchool(),
+    text: (s, h) => '加入世貿組織之後，沿海的工廠到處在招人，同村的人一批批上了南下的火車。他們寄回來的錢，讓村裡蓋起了新房子，過年時火車站擠滿了帶著大包小包的人。',
+    choices: [
+      {
+        label: '搭上火車，去沿海打工',
+        effects: (s, h) => { if (!h.employed()) h.startJob(h.female() ? h.pick(['factory', 'domestic']) : h.pick(['factory', 'construction'])); h.change('wealth', +5); h.change('social', -3); h.change('health', -2); h.change('knowledge', +1); },
+        set: ['left_home'],
+        result: '你和同鄉擠在十幾人一間的宿舍，每天工作十幾個小時。每個月寄回家的錢，讓你覺得這些辛苦都有了出口。',
+        ai: (s, h) => (h.isPoor() ? 2 : 1),
+      },
+      {
+        label: '留在家鄉，找附近的工作',
+        effects: (s, h) => { if (!h.employed()) h.startJob(h.pick(['factory', 'shopkeeper', 'laborer'])); h.change('social', +2); h.change('happiness', +1); h.change('wealth', +1); },
+        result: '你留在縣城，在剛開的小工廠和商店之間打工。薪水沒有沿海高，但每週你都能回家吃一頓飯。',
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'world_euro_cash_2002',
+    title: '歐元現金登場',
+    ages: [5, 95],
+    chance: 1,
+    tags: ['world', 'europe', 'fun'],
+    cond: (s, h) => EURO_2002.has(s.countryCode) && h.yearIn(2002, 2002),
+    text: (s, h) => '新年一過，口袋裡的舊硬幣變成了異國文物，大家排隊兌換新鈔，還拿著計算機重新學習「這杯咖啡到底貴不貴」。小孩子們最開心，因為每枚硬幣都閃閃發亮。',
+    effects: { knowledge: +1, happiness: +1, social: +1 },
+  },
+  {
+    id: 'world_sars_2003',
+    title: '口罩與耳溫槍',
+    ages: [5, 90],
+    chance: 0.8,
+    tags: ['world', 'health', 'regional'],
+    cond: (s, h) => ['CHN', 'HKG', 'TWN', 'SGP', 'VNM', 'MAC'].includes(s.countryCode) && h.yearIn(2003, 2003),
+    text: (s, h) => '新聞天天報導一種新的肺炎，醫院裡的醫護人員穿著防護衣。學校量體溫、公司分區上班，街上的人戴起口罩，彼此保持了一點距離。連平常最愛湊熱鬧的鄰居，也只敢隔著門打招呼。',
+    effects: { happiness: -3, social: -3, wealth: -2 },
+    schedule: [{ id: 'world_sars_after', inYears: [1, 2] }],
+  },
+  {
+    id: 'world_sars_after',
+    title: '洗手的習慣',
+    ages: [5, 95],
+    weight: 0,
+    tags: ['world', 'health', 'followup'],
+    text: (s, h) => '疫情過後，辦公室與學校的洗手台前多了一張小小的標語。你注意到自己養成了進門先洗手的習慣，也比從前更能體會公共衛生這件事。',
+    effects: { health: +1, happiness: +2 },
+  },
+  {
+    id: 'world_argentina_2001',
+    title: '敲鍋子的夜晚',
+    ages: [10, 85],
+    chance: 1,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => s.countryCode === 'ARG' && h.yearIn(2001, 2002),
+    text: (s, h) => '銀行突然限制提款，存款變成了一串打不開的數字。晚上，鄰居們拿著鍋蓋走到街上用力敲打，彼此都沒說話，卻明白其他人和自己一樣憤怒又不安。',
+    effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -3); h.change('social', +2); },
+  },
+  {
+    id: 'world_tsunami_2004',
+    title: '海水退去的那天',
+    ages: [0, 90],
+    chance: 1,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => h.yearIn(2004, 2005) && TSUNAMI_2004[s.countryCode] !== undefined && h.coastal() && h.stable('world_tsunami_2004', TSUNAMI_2004[s.countryCode] * (h.urban() ? 1 : 1.8)),
+    text: (s, h) => '十二月的早晨，海水突然退得很遠，海灘上露出平常看不見的礁石和魚。有人好奇地走過去，隨後遠方傳來轟隆的聲音，一道牆似的海水正朝岸邊壓來。',
+    choices: [
+      {
+        label: '立刻往高處跑，帶上身邊的人',
+        effects: (s, h) => { if (h.chance(0.006)) { h.die('disaster'); return; } h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
+        result: (s, h) => (s.alive ? '你朝山坡拼命跑，回頭看見海水捲過剛剛站的地方。你的家沒有了，但身邊的人都還在。' : '海水來得比所有人想得都快，你再也沒有機會回頭看一眼熟悉的家。'),
+        schedule: [{ id: 'world_tsunami_rebuild', inYears: [1, 3] }],
+        ai: 4,
+      },
+      {
+        label: '先回頭拿重要的東西',
+        effects: (s, h) => { if (h.chance(0.06)) { h.die('disaster'); return; } h.change('wealth', -3); h.change('happiness', -4); h.change('health', -5); },
+        result: (s, h) => (s.alive ? '你抓著重要的東西往外衝，水已經淹到胸口。你被一根被沖來的木板勾住，才僥倖留下一條命。' : '最後一刻你再也沒能走出屋子，那條通往山坡的路，是你最後沒有走完的一段。'),
+        schedule: [{ id: 'world_tsunami_rebuild', inYears: [1, 3] }],
+        ai: 0.4,
+      },
+    ],
+  },
+  {
+    id: 'world_tsunami_rebuild',
+    title: '海邊重新蓋起來的屋子',
+    ages: [3, 95],
+    weight: 0,
+    tags: ['world', 'disaster', 'followup'],
+    text: (s, h) => '海邊的新房一戶一戶蓋了起來，有人在牆上畫上彩色的魚。大家在聚會裡輪流說起那天的事，有人哭，有人笑，更多的人一起把網拉上岸。',
+    effects: { wealth: +2, happiness: +3, social: +3 },
+  },
+  {
+    id: 'world_hurricane_katrina_2005',
+    title: '颶風過後',
+    ages: [5, 90],
+    chance: 0.08,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'USA' && h.yearIn(2005, 2005) && s.city === '休士頓' && h.stable('world_hurricane_katrina_2005', 0.15), // New Orleans and the Gulf coast, not every American
+    text: (s, h) => '颶風登陸後，堤防潰決，南方城市大片被水淹沒。你和家人在屋頂上揮手，後來被送到體育館暫住，在那裡你學會了和陌生人分享一條毯子。',
+    effects: { wealth: -6, happiness: -4, social: -1, health: -2 },
+  },
+  {
+    id: 'world_kashmir_quake_2005',
+    title: '十月的山區地震',
+    ages: [3, 85],
+    chance: 0.12,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'PAK' && h.yearIn(2005, 2005) && !h.urban(),
+    text: (s, h) => '上午學校剛開始上課時，大地猛烈搖晃，山坡上的房子一排排倒塌。接下來的冬天，許多人住在帳篷裡，救援隊與志工沿著崎嶇的山路背來糧食與毯子。',
+    effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -5); h.change('health', -3); if (h.chance(0.02)) h.die('disaster'); },
+  },
+  {
+    id: 'world_food_price_spike_2008',
+    title: '米價與麵包',
+    ages: [5, 90],
+    chance: 0.7,
+    tags: ['world', 'economy', 'food'],
+    cond: (s, h) => h.yearIn(2007, 2008) && lowInc(h),
+    text: (s, h) => '麵粉、米和食用油的價格短短幾個月翻了好幾番，市場裡人們圍著價目牌不停地搖頭。你家的餐桌上，每一頓都少了一樣菜，鍋裡的粥也變稀了。',
+    effects: (s, h) => { h.change('wealth', -4); h.change('health', -2); h.change('happiness', -3); },
+  },
+  {
+    id: 'world_crisis_2008_aftermath',
+    title: '房子與工作',
+    ages: [20, 70],
+    chance: 0.5,
+    tags: ['world', 'economy'],
+    cond: (s, h) => h.yearIn(2009, 2012) && h.incomeAtLeast('UM') && h.wageEarner(),
+    text: (s, h) => (h.employed()
+      ? '危機之後公司一再縮編，新人進不來，老人走不出去。你的薪水凍結了好幾年，但你知道自己算是幸運的一群，至少還有一張辦公桌，每個月的薪水也還準時入帳。'
+      : '金融風暴之後工作機會變少，你把履歷改了又改，面試了十幾家公司。你開始學會跟自己說：這不是你的問題，是整個世界都在收縮，並在每次被拒絕後，仍然多寄出一封信。'),
+    effects: (s, h) => { h.change('wealth', -3); h.change('happiness', -2); },
+  },
+  {
+    id: 'world_eurozone_debt_crisis',
+    title: '緊縮的年代',
+    ages: [18, 70],
+    chance: 0.7,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => SOUTH_EUROPE.has(s.countryCode) && h.yearIn(2010, 2014),
+    text: (s, h) => '政府為了還債削減預算，薪水、退休金和公共服務同時縮水。街頭天天有人抗議，年輕的朋友一個個收拾行李，去北方或更遠的地方找工作。',
+    choices: [
+      {
+        label: '留下來，想辦法撐過去',
+        effects: { wealth: -3, social: +2, happiness: -1 },
+        result: '你兼了第二份工作，和家人合住在同一個屋簷下。日子很緊，但大家學會共享一鍋湯。',
+        ai: 1.6,
+      },
+      {
+        label: '到北歐或德國找機會',
+        cond: (s, h) => h.age() <= 45 && !h.isMigrant(),
+        effects: (s, h) => { if (h.migrate(h.pick(['DEU', 'GBR', 'NLD', 'SWE', 'CHE', 'NOR'])) && !h.employed()) h.startJob(h.pick(['clerk', 'cook', 'caregiver', 'factory'])); h.change('wealth', +4); h.change('social', -4); h.change('happiness', -1); },
+        result: (s, h) => `你搭上了清晨的班機，抵達${h.countryName()}。新環境又冷又安靜，但第一個月薪水入帳時，你傳了一張截圖給${h.parentAlive('mother') ? '母親' : '家人'}。`,
+        highlight: (s, h) => `為了工作移居${h.countryName()}。`,
+        ai: (s, h) => (h.isPoor() ? 1.4 : 0.8),
+      },
+      {
+        label: '加入社區互助與街頭行動',
+        effects: { social: +4, wealth: -1, happiness: +1 },
+        result: '你加入了鄰里的互助小組，一起分送食物、整理舊衣、交換二手書。你發現，大家雖然窮了一點，但彼此更靠近了。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_sichuan_2008',
+    title: '五月的午後',
+    ages: [3, 90],
+    chance: 0.12,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(2008, 2008),
+    text: (s, h) => '五月的午後，教室、辦公室和市場同時搖晃起來，人們衝向街頭。接下來好幾週，志願者從四面八方趕來，捐款箱與水瓶在城市的角落越堆越高。',
+    effects: { happiness: -3, social: +4, wealth: -2 },
+  },
+  {
+    id: 'world_beijing_olympics_2008',
+    title: '八月八號的煙火',
+    ages: [5, 90],
+    chance: 0.8,
+    tags: ['world', 'china', 'fun'],
+    cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(2008, 2008),
+    text: (s, h) => '開幕式那晚，全家人擠在電視機前，看著煙火一個一個在夜空中炸開。你的鄰居們一整個夏天都在談論獎牌和志願者，連平常不關心比賽的人也一起歡呼。',
+    effects: { happiness: +4, social: +3 },
+  },
+  {
+    id: 'world_social_media_age',
+    title: '被按讚綁住的日子',
+    ages: [12, 60],
+    chance: 0.2,
+    tags: ['world', 'tech', 'mental'],
+    cond: (s, h) => h.yearIn(2008, 2035) && h.techReady(2008) && h.year() >= techYear(h, NET) + 2 && (h.incomeAtLeast('UM') || h.urban()),
+    text: (s, h) => '你的手機開始每隔幾分鐘就震動一次，有人按讚、有人留言、有人分享你不認識的人生。你有時覺得自己離每個人都很近，卻也比以前更孤單。',
+    choices: [
+      {
+        label: '設定使用時間，晚上關機',
+        effects: { happiness: +2, health: +1, social: -1 },
+        result: '你花了一週才習慣少一點通知。多出來的時間用來散步、看書和發呆，你發現世界慢下來並沒有拋棄你。',
+        ai: 1.8,
+      },
+      {
+        label: '持續追蹤，順便經營個人頁面',
+        cond: (s, h) => h.age() < 45,
+        effects: (s, h) => { h.change('social', +3); h.change('knowledge', +1); h.change('happiness', h.chance(0.5) ? +2 : -3); },
+        result: '你分享了生活中的小事，有人留言說「謝謝你」，也有人無聊地嘲笑。你一度為此失眠，後來學會了把留言當成天氣。',
+        ai: 1.5,
+      },
+      {
+        label: '直接刪掉應用程式，回歸面對面',
+        effects: { social: +2, happiness: +2, knowledge: -1 },
+        result: '你刪掉了幾個軟體，開始約朋友面對面吃飯。起初有點不安，後來你發現朋友其實都還在，只是等你開口。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_smartphone_late',
+    title: '共用的那支手機',
+    ages: [12, 70],
+    chance: 0.3,
+    tags: ['world', 'tech'],
+    cond: (s, h) => inWindow(h, SMART_LATE, 8) && (lowInc(h) || h.stat('wealth') <= 30) && h.year() >= 2010 && !h.has('has_smartphone'),
+    text: (s, h) => '家裡終於有了一支智慧型手機，大家輪流用。你用它查天氣、看影片、傳訊息給遠方的親戚，第一次覺得外面的世界也能裝進一個口袋。',
+    effects: { knowledge: +3, social: +3, happiness: +2 },
+    set: ['has_smartphone'],
+  },
+  {
+    id: 'world_christchurch_2011',
+    title: '基督城的地震',
+    ages: [3, 90],
+    chance: 0.1,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'NZL' && h.yearIn(2010, 2011) && s.city === '基督城', // the quake struck Christchurch itself
+    text: (s, h) => '午餐時間，城市中心突然劇烈搖晃，磚牆倒下、街道裂開。接下來的幾年，市中心大片被圍起來，居民們一邊整理自己的生活，一邊想像重建後的樣子。',
+    effects: { wealth: -3, happiness: -3, social: +2 },
+  },
+  {
+    id: 'world_haiti_2010',
+    title: '一月的黃昏',
+    ages: [0, 85],
+    chance: 1,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'HTI' && h.yearIn(2010, 2010),
+    text: (s, h) => '黃昏時，地面突然劇烈搖晃，首都的房子像紙盒一樣倒下，空氣裡全是灰塵。夜裡人們在街頭搭起臨時的棚子，用手挖開瓦礫，尋找親人的聲音。',
+    effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -7); h.change('health', -4); if (h.chance(0.02)) h.die('disaster'); },
+    schedule: [{ id: 'world_haiti_cholera', inYears: [0, 1] }],
+  },
+  {
+    id: 'world_haiti_cholera',
+    title: '霍亂的消息',
+    ages: [0, 85],
+    weight: 0,
+    tags: ['world', 'health', 'followup'],
+    text: (s, h) => '秋天，河邊的村子傳出腹瀉病人暴增的消息。診所前排起長隊，志工拿著氯片和口服補水鹽沿著巷弄走，教大家煮沸、洗手、不喝生水。',
+    effects: (s, h) => { h.change('health', -4); h.change('happiness', -3); if (h.chance(0.01)) h.die('diarrhea'); },
+  },
+  {
+    id: 'world_arab_spring_2011',
+    title: '廣場上的人群',
+    ages: [14, 75],
+    chance: 0.6,
+    tags: ['world', 'politics', 'regional'],
+    cond: (s, h) => ['EGY', 'TUN', 'LBY', 'YEM', 'SYR', 'BHR', 'MAR', 'JOR'].includes(s.countryCode) && h.yearIn(2011, 2012),
+    text: (s, h) => '電視與手機裡，廣場上擠滿了人，有人唱歌、有人喊口號。你的家人對未來有不同的看法，飯桌上的爭論從晚餐持續到深夜，但大家都明白，有些事情改變了。',
+    effects: { happiness: -1, social: +2, knowledge: +2, wealth: -2 },
+  },
+  {
+    id: 'world_syria_2011',
+    title: '離開的路',
+    ages: [10, 80],
+    chance: 0.7,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'SYR' && h.yearIn(2012, 2018),
+    text: (s, h) => '戰事擴大後，城市裡的電力與水變得時有時無，街區一處處被封鎖。家人在地圖上圈出幾條可能的路，有人準備去鄰國，有人守著家，誰也不知道哪個決定是對的。',
+    choices: [
+      {
+        label: '帶著家人前往鄰國',
+        effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -5); h.change('social', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
+        result: '你們趕了好幾天的路，才到邊境的營地。排隊登記時，工作人員遞給你一杯熱茶，你這才發現自己已經很久沒有好好坐下。',
+        ai: 1.6,
+      },
+      {
+        label: '搬到比較安全的城市或親戚家',
+        effects: (s, h) => { h.change('happiness', -3); h.change('wealth', -4); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
+        result: '你和家人擠在表親的家裡，十幾個人共用一個爐子。大家把能做的事都做了，並約定每天晚上在屋頂一起吃飯。',
+        ai: 1.4,
+      },
+      {
+        label: '留在原地，守著家',
+        effects: (s, h) => { h.change('happiness', -4); h.change('health', -4); h.addRisk(1.3, 2); },
+        result: '你把窗戶貼上膠帶，在地下室儲存水和乾糧。每次警報響起，你都把孩子或老人抱到最安全的角落，等一切歸於平靜。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'world_tohoku_2011',
+    title: '三月十一日',
+    ages: [0, 95],
+    chance: 1,
+    tags: ['world', 'disaster', 'japan'],
+    cond: (s, h) => s.countryCode === 'JPN' && h.yearIn(2011, 2011) && (s.city === '東京' || h.stable('world_tohoku_2011', 0.15)),
+    text: (s, h) => '午後兩點四十六分，大地劇烈搖動了好幾分鐘。電視畫面裡，海水吞沒了東北沿岸的城鎮，而你身處的城市則停電、斷訊，人們在街上一起等待下一個消息。',
+    choices: [
+      {
+        label: '去災區當志工',
+        cond: (s, h) => h.age() >= 18 && h.stat('health') >= 40,
+        effects: { social: +5, happiness: -1, health: -2 },
+        result: '你坐上夜行巴士，到了災區，和一群陌生人一起清理泥土與家具。晚上睡在體育館裡，隔壁的老奶奶塞給你一顆橘子。',
+        highlight: '在東日本大地震後投入志工行列。',
+        schedule: [{ id: 'world_tohoku_aftermath', inYears: [1, 4] }],
+        ai: 1.2,
+      },
+      {
+        label: '捐款並照顧身邊的人',
+        effects: { social: +3, wealth: -1, happiness: -1 },
+        result: '你把能捐的捐出去，也替鄰居的老人家買了幾天的食物。那些日子，每個人都盡量對彼此更溫柔一些。',
+        schedule: [{ id: 'world_tohoku_aftermath', inYears: [1, 4] }],
+        ai: 2,
+      },
+      {
+        label: '關心核電事故的消息，考慮暫時避難',
+        cond: (s, h) => h.hasChildren() || h.urban(),
+        effects: { happiness: -3, social: -1, wealth: -2 },
+        result: '你每天追蹤輻射數值與氣象報告，最後和家人暫時搬到了遠方的親戚家。住了幾個月後，你們才決定是否回去。',
+        schedule: [{ id: 'world_tohoku_aftermath', inYears: [1, 4] }],
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'world_tohoku_aftermath',
+    title: '海邊的紀念',
+    ages: [5, 95],
+    weight: 0,
+    tags: ['world', 'followup', 'japan'],
+    text: (s, h) => '幾年後，你經過一個重新鋪好的車站，月台上有人放了一束花。電視播出每年三月十一日的靜默，你跟著大家閉上眼睛，把這一天好好記在心裡。',
+    effects: { happiness: +1, social: +2 },
+  },
+  {
+    id: 'world_russia_heat_2010',
+    title: '焦黑的夏天',
+    ages: [3, 90],
+    chance: 0.5,
+    tags: ['world', 'disaster', 'climate', 'regional'],
+    cond: (s, h) => s.countryCode === 'RUS' && h.yearIn(2010, 2010) && (s.city === '莫斯科' || s.city === '喀山' || h.stable('world_russia_heat_2010', 0.25)),
+    text: (s, h) => '七月的氣溫高得不尋常，森林與泥炭地四處起火，城市被濃煙裹住，連白天也要點燈。人們戴著口罩上班，一邊用濕毛巾貼住窗縫，傍晚的太陽像一顆紅色的圓盤。',
+    effects: (s, h) => { h.change('health', -4); h.change('happiness', -3); if (h.age() >= 65 && h.chance(0.05)) h.addRisk(1.3, 1); },
+  },
+  {
+    id: 'world_typhoon_haiyan_2013',
+    title: '海燕颱風',
+    ages: [3, 90],
+    chance: 0.12,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'PHL' && h.yearIn(2013, 2013) && h.coastal() && (s.city === '宿霧' || h.stable('world_typhoon_haiyan_2013', 0.15)),
+    text: (s, h) => '史上最強的颱風之一從海上撲來，海水與狂風摧毀了沿岸的村鎮。幾天後，救援直升機的聲音才慢慢遠遠傳來，你和鄰居們一起清出一條通往市場的路。',
+    effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -5); h.change('social', +2); if (h.chance(0.006)) h.die('disaster'); },
+  },
+  {
+    id: 'world_ebola_2014',
+    title: '不能握手的年頭',
+    ages: [3, 80],
+    chance: 0.8,
+    tags: ['world', 'health', 'regional'],
+    cond: (s, h) => ['SLE', 'LBR', 'GIN'].includes(s.countryCode) && h.yearIn(2014, 2015),
+    text: (s, h) => '廣播天天宣導：不要握手、不要碰觸遺體、發燒就趕快通報。學校停課，市場空蕩蕩，防護衣下的護理人員們日夜不休。社區志工們挨家挨戶教大家怎麼洗手。',
+    effects: (s, h) => { h.change('happiness', -5); h.change('social', -4); h.change('wealth', -3); if (h.chance(0.01)) h.die('other'); },
+  },
+  {
+    id: 'world_nepal_quake_2015',
+    title: '四月的震動',
+    ages: [3, 85],
+    chance: 0.3,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'NPL' && h.yearIn(2015, 2015),
+    text: (s, h) => '一個週六的中午，大地劇烈搖動，老城區的古廟與山裡的石屋紛紛倒塌。往後好幾個月，人們住在鐵皮與防水布搭的棚子裡，等著雨季前蓋好新家。',
+    effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); if (h.chance(0.004)) h.die('disaster'); },
+  },
+  {
+    id: 'world_venezuela_exodus',
+    title: '貨架空了的超市',
+    ages: [15, 80],
+    chance: 0.5,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => s.countryCode === 'VEN' && h.yearIn(2015, 2020),
+    text: (s, h) => '物價每週都在變，薪水還沒領就已經不夠買一箱雞蛋。超市貨架空了大半，有人排隊整夜，有人靠海外親友寄來的錢過日子，鄰居一個個收拾行李出國。',
+    choices: [
+      {
+        label: '離開，去鄰近國家重新開始',
+        cond: (s, h) => !h.isMigrant() && h.age() <= 55,
+        effects: (s, h) => { h.migrate(h.pick(['COL', 'PER', 'CHL', 'ESP', 'USA'])); h.change('wealth', +2); h.change('social', -5); h.change('happiness', -2); },
+        result: (s, h) => `你背著一個背包，搭上長途巴士，抵達${h.countryName()}。第一份工作是洗碗，但薪水能換成穩定的食物，你寄回一半。`,
+        highlight: (s, h) => `為了生活離開家鄉，到${h.countryName()}重新開始。`,
+        ai: (s, h) => (h.isPoor() ? 1.5 : 0.8),
+      },
+      {
+        label: '留下，靠鄰里互助撐過去',
+        effects: { wealth: -3, social: +4, happiness: -1 },
+        result: '社區裡開始辦共煮餐會，每家帶一點米、一顆洋蔥，大家一起煮。你發現，就算世界混亂，人們還是會想把鍋子擺在一起。',
+        ai: 1.6,
+      },
+    ],
+  },
+  {
+    id: 'world_sri_lanka_crisis_2022',
+    title: '加油站的長隊',
+    ages: [10, 85],
+    chance: 0.9,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => s.countryCode === 'LKA' && h.yearIn(2022, 2022),
+    text: (s, h) => '外匯短缺，燃油、瓦斯和藥品陸續斷貨。每天都有人在加油站前排隊過夜，晚上又停電好幾小時，大家學會用蠟燭吃飯、用手機的最後一格電量報平安。',
+    effects: { wealth: -4, happiness: -3, social: +1 },
+  },
+  {
+    id: 'world_bushfires_2019',
+    title: '橘紅色的天空',
+    ages: [3, 90],
+    chance: 0.5,
+    tags: ['world', 'disaster', 'climate', 'regional'],
+    cond: (s, h) => s.countryCode === 'AUS' && h.yearIn(2019, 2020) && s.city !== '伯斯',
+    text: (s, h) => '夏天的天空變成橘紅色，空氣裡全是煙味，連室內也聞得到。新聞每天更新著撤離的區域，你把重要的文件和寵物的鐵籠放在門口，等著下一個通知。',
+    effects: (s, h) => { h.change('health', -3); h.change('happiness', -4); h.change('wealth', -2); },
+  },
+  {
+    id: 'world_world_cup_summer',
+    title: '世界盃的夏天',
+    ages: [6, 85],
+    once: false,
+    cooldown: 12,
+    chance: 0.12,
+    tags: ['world', 'fun'],
+    cond: (s, h) => h.year() % 4 === 2 && h.year() >= 1970 && h.year() <= 2100 && !h.has('war'),
+    text: (s, h) => h.byIncome({
+      L: '村口的小店把電視搬到外面，傍晚全村的人擠在一起看球賽。進球的那一刻，有人跳起來，有人把小孩舉上肩膀，連最安靜的老人也拍起了手。',
+      LM: '世界盃開打，街角小吃店的電視前擠滿了人。你輸了一份便當的賭注，卻贏來一整夜的笑聲，與一個一起罵裁判的新朋友，老闆還加送了一盤小菜。',
+      UM: h.wageEarner()
+        ? `世界盃那個月，全公司的人都睡眠不足，午休時大家圍著${h.techReady(2005) ? '手機' : '收音機'}討論戰術，連平常最安靜的同事也成了球評，會議室裡的白板上，出現了奇怪的戰術圖。`
+        : `世界盃那個月，全街的人都睡眠不足，大家圍著${h.techReady(2005) ? '手機' : '收音機'}討論戰術，連平常最安靜的鄰居也成了球評，小吃店的白板上，出現了奇怪的戰術圖。`,
+      H: '世界盃那個月，你和朋友們輪流在家裡辦轉播派對，零食堆成了小山。比賽結果其實沒那麼重要，大家只是需要一個一起大叫的理由，而你已經很久沒有這樣笑過了。',
+    }),
+    effects: { happiness: +3, social: +3, health: -1 },
+  },
+
+  // =====================================================================================
+  // 疫情後續（2020-2023）
+  // =====================================================================================
+  {
+    id: 'world_pandemic_remote_school',
+    title: '螢幕裡的教室',
+    ages: [6, 70],
+    weight: 0,
+    tags: ['world', 'pandemic', 'school', 'followup'],
+    followCond: (s, h) => h.age() >= 6 && (h.inSchool() || (h.hasChildren() && h.youngestChildAge() >= 5 && h.youngestChildAge() <= 22)),
+    text: (s, h) => (h.inSchool()
+      ? h.byIncome({
+        L: '學校關了好幾個月，老師把課程錄成廣播，一天只有一小時。你和兄弟姊妹只有一台收音機，大家擠在一起聽，聽完就跑去田裡幫忙到天黑。',
+        LM: '學校改成線上上課，家裡只有一支手機，要輪流用。你常常站在窗邊找訊號，作業交晚了，老師回了一句「沒關係，先平安」，你看著那句話，鼻子有點酸。',
+        UM: '你在家上網課，鏡頭外有狗在叫，家人在煮飯。老師不斷說「聽得到嗎」，同學們全都靜音，一起沉默地笑了，然後都在等有人先打破沉默。',
+        H: '你第一次在自己的臥室上完了一整學期的課。網路順暢、筆電夠用，但你發現自己最想念的，是下課時和同學一起排隊買飲料的那段時間。',
+      })
+      : h.byIncome({
+        L: `學校關了好幾個月，${h.childName(0)}靠廣播和課本自學，你坐在旁邊陪著，雖然看不太懂，仍然一頁一頁翻著，替孩子守著那一點點求學的火光，也守著自己對未來的那份期待。`,
+        LM: `學校改成線上上課，家裡只有一支手機，你得在工作與${h.childName(0)}的課程之間輪流使用。你把訊號最好的角落讓給孩子，自己站在門外接電話。`,
+        UM: `${h.childName(0)}在客廳上網課，你在隔壁工作，兩邊都怕聲音太大。午餐時你們比賽誰的會議比較無聊，笑著，也有點疲憊，心裡同時覺得這段日子很荒謬，也很難得。`,
+        H: `${h.childName(0)}在家裡上網課，你得同時當老師、助教和網管。傍晚你們一起散步，孩子說：「爸媽，我想念教室的味道。」你一時語塞，只能握緊他的手。`,
+      })),
+    effects: (s, h) => {
+      if (h.inSchool()) { h.change('knowledge', h.byIncome({ L: -5, LM: -4, UM: -2, H: -1 })); h.change('social', -4); h.change('happiness', -2); }
+      else { h.change('happiness', -2); h.change('social', -2); h.change('health', -1); }
+    },
+  },
+  {
+    id: 'world_pandemic_work',
+    title: '疫情裡的工作日',
+    ages: [18, 65],
+    weight: 0,
+    tags: ['world', 'pandemic', 'job', 'followup'],
+    followCond: (s, h) => h.age() >= 18 && h.age() <= 65 && h.employed(),
+    text: (s, h) => (h.isJob('nurse', 'doctor', 'caregiver', 'driver', 'cook', 'shopkeeper', 'street_vendor', 'farmer', 'laborer', 'factory', 'guard', 'domestic', 'construction')
+      ? '當許多人在家工作時，你仍得每天出門。口罩勒得耳朵發痛，一天的工作結束，家人在門口噴酒精、等你換衣服，才敢靠近你，那種被愛又被防著的感覺，你到現在都說不清。'
+      : (h.officeJob() ? '你把客廳一角變成辦公室，視訊會議裡總有人忘了關麥克風。' : '你把家裡一角變成工作區，聯絡全靠手機和訊息，總有人在該回覆的時候消失。') + '省下了通勤的時間，卻發現自己的工作和生活像一杯被攪混的奶茶，再也分不開。'),
+    effects: (s, h) => { h.change('health', -1); h.change('happiness', -2); h.change('wealth', h.incomeAtLeast('UM') ? 0 : -1); },
+  },
+  {
+    id: 'world_pandemic_vaccine',
+    title: '疫苗與排隊',
+    ages: [12, 100],
+    weight: 0,
+    tags: ['world', 'pandemic', 'vaccine', 'followup'],
+    followCond: (s, h) => h.age() >= 12,
+    text: (s, h) => h.byIncome({
+      L: '聽說有疫苗了，但鄰近的診所只拿到一點點，優先給了老人和醫護人員。大家互相打聽什麼時候會輪到自己，家裡的長輩替你問了好幾次。',
+      LM: '疫苗終於開放接種，排隊的人從診所門口一路排到街角。有人不放心，有人謠言聽了一堆，你得決定要不要加入隊伍，而你的背後有人在拉你的衣角，問你到底要不要排。',
+      UM: '政府開放接種，簡訊通知你預約時間。社群上說法很多，你把官方資訊翻了又翻，也問了醫師朋友，想為自己和家人做出一個合理的決定。',
+      H: '你收到接種通知，診所氣氛意外地輕鬆，護理人員問你想打哪隻手。出門後你看見長長的隊伍，才體會這是許多人等了一年多的事，心裡忽然有點不好意思。',
+    }),
+    choices: [
+      {
+        label: '排隊接種',
+        cond: (s, h) => h.incomeAtLeast('UM') || h.yearIn(2022, 2023),
+        effects: (s, h) => { h.change('health', +1); h.change('social', +1); if (h.age() >= 60) h.addRisk(0.92, 1); },
+        result: '手臂痠了一天，發了點小燒。走出診所，你覺得肩膀鬆了一點，終於可以去探望一直不敢靠近的老人。',
+        ai: 3,
+      },
+      {
+        label: '等待社區或國際捐贈的疫苗',
+        cond: (s, h) => lowInc(h) && h.yearIn(2021, 2022),
+        effects: { happiness: -1, social: +1 },
+        result: '你每天去社區看公告。幾週後，一批從國外運來的疫苗送到診所，護理人員先照名單通知了長輩，你輪到時，已經是夏天。',
+        ai: 2,
+      },
+      {
+        label: '先觀望，多問醫師與家人',
+        effects: (s, h) => { h.change('happiness', -1); if (h.age() >= 60) h.addRisk(1.1, 1); },
+        result: '你向醫師問了很多問題，也和家人討論了很久。最後的決定不容易，卻是你自己想清楚的。',
+        ai: 0.7,
+      },
+    ],
+  },
+  {
+    id: 'world_pandemic_bereavement',
+    title: '來不及見的最後一面',
+    ages: [18, 100],
+    weight: 0,
+    tags: ['world', 'pandemic', 'grief', 'followup', 'family'],
+    followCond: (s, h) => h.age() >= 18 && (h.parentsAlive() > 0 || h.age() >= 55),
+    text: (s, h) => '疫情期間，家人住進了醫院，探病時間被限制成十分鐘，隔著玻璃。後來他離開了，葬禮上只有寥寥幾個人，你用手機給遠方的親戚直播，大家一起哭。',
+    effects: { happiness: -7, social: -3, health: -2 },
+    highlight: '在疫情期間失去了一位重要的家人。',
+  },
+  {
+    id: 'world_pandemic_long',
+    title: '好不了的疲倦',
+    ages: [18, 85],
+    weight: 0,
+    tags: ['world', 'pandemic', 'health', 'followup'],
+    followCond: (s, h) => h.age() >= 18 && h.age() <= 85,
+    text: (s, h) => '明明早就退燒，你卻整天疲倦得像背著一包石頭，腦袋也像蒙上一層霧，常常忘記剛才要做的事。醫師說這可能是疫情的後遺症，需要時間，也需要耐心。',
+    effects: (s, h) => { h.change('health', -4); h.change('happiness', -2); h.change('wealth', -1); },
+  },
+  {
+    id: 'world_pandemic_reopening',
+    title: '重新擁抱的那天',
+    ages: [3, 100],
+    weight: 0,
+    tags: ['world', 'pandemic', 'followup'],
+    text: (s, h) => '口罩不再是必需品，市場、學校和機場重新熱鬧起來。你和很久沒見的朋友在街角碰面，隔了三年的第一個擁抱，兩個人都愣了一下才笑出來。',
+    effects: { happiness: +4, social: +4 },
+  },
+
+  // =====================================================================================
+  // 2020 年代後半
+  // =====================================================================================
+  {
+    id: 'world_afghanistan_2021',
+    title: '八月的突然轉變',
+    ages: [8, 80],
+    chance: 0.8,
+    tags: ['world', 'regional'],
+    cond: (s, h) => s.countryCode === 'AFG' && h.yearIn(2021, 2022),
+    text: (s, h) => '八月的幾天之內，城市的權力易手，許多人在機場前排隊，也有人悄悄關上店門。學校、工作與日常的許多規則被重新規定，家人在飯桌上小聲討論下一步。',
+    effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -4); if (h.female()) { h.change('knowledge', -3); h.change('social', -3); } },
+  },
+  {
+    id: 'world_ukraine_2022_home',
+    title: '二月的清晨',
+    ages: [10, 90],
+    chance: 1,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'UKR' && h.yearIn(2022, 2023),
+    text: (s, h) => '凌晨，窗外傳來你從未聽過的聲音，手機裡的通知一則接一則。你把證件和藥品放進包包，與家人在走廊、地鐵站或朋友家裡過了許多夜晚，不知道這一天會持續多久。',
+    choices: [
+      {
+        label: '離開，前往西部或鄰近國家',
+        cond: (s, h) => h.age() < 60 || h.hasChildren(),
+        effects: (s, h) => { h.change('happiness', -5); h.change('wealth', -5); h.change('social', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
+        result: '你搭上擠滿人的火車，行李只剩下一個背包。月台上，志工遞給你熱茶與麵包，你拿著杯子，手還在微微發抖。',
+        schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
+        ai: 1.8,
+      },
+      {
+        label: '留在原地，協助鄰里與志願工作',
+        effects: (s, h) => { h.change('happiness', -4); h.change('social', +3); h.change('health', -3); h.addRisk(1.2, 2); },
+        result: '你和鄰居輪流守夜、整理地下室，替更年長的人送藥與食物。那段日子很漫長，卻讓你知道身邊有誰可以倚靠。',
+        schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
+        ai: 1.2,
+      },
+      {
+        label: '暫時搬到較安全的親戚家',
+        effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
+        result: '你們一起擠在親戚家，大家輪流煮飯，也輪流聽新聞。夜裡有人哼起舊歌，其他人安靜地接上了下一句。',
+        schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
+        ai: 1.5,
+      },
+    ],
+  },
+  {
+    id: 'world_ukraine_later',
+    title: '遠方的家',
+    ages: [3, 95],
+    weight: 0,
+    tags: ['world', 'followup'],
+    text: (s, h) => '時間久了，臨時的住所漸漸成了日子。你學會了新的語言、新的菜單，也在手機裡留著老家院子的照片。每次視訊，有人問你什麼時候回去，你總說：「等一切都好了。」',
+    effects: { happiness: -1, social: +2, knowledge: +1 },
+  },
+  {
+    id: 'world_ukraine_neighbors',
+    title: '新來的鄰居',
+    ages: [6, 90],
+    chance: 0.6,
+    tags: ['world', 'regional'],
+    cond: (s, h) => ['POL', 'MDA', 'ROU', 'SVK', 'HUN', 'CZE', 'LTU', 'LVA', 'EST', 'DEU', 'BGR'].includes(s.countryCode) && h.yearIn(2022, 2023),
+    text: (s, h) => '街角的學校多了一班語言輔導班，火車站旁有人發熱湯和玩偶。你認識了一位剛抵達的鄰居，她帶著孩子，用翻譯軟體笑著說謝謝，那頓晚餐你記得很久。',
+    effects: { social: +4, happiness: +1, wealth: -1 },
+  },
+  {
+    id: 'world_energy_prices_2022',
+    title: '冬天的瓦斯帳單',
+    ages: [18, 95],
+    chance: 0.7,
+    tags: ['world', 'economy', 'regional'],
+    cond: (s, h) => h.isRegion('EUR') && h.yearIn(2022, 2023),
+    text: (s, h) => '能源價格飆漲，帳單上的數字讓你連看了三遍。家人把暖氣調低一度，晚上全家擠在客廳一起看電視，穿著毛衣，笑說這是最省錢的團圓。',
+    effects: (s, h) => { h.change('wealth', h.isRich() ? -1 : -3); h.change('happiness', -1); h.change('social', +1); },
+  },
+  {
+    id: 'world_pakistan_floods_2022',
+    title: '水淹過了田',
+    ages: [3, 85],
+    chance: 0.4,
+    tags: ['world', 'disaster', 'regional'],
+    cond: (s, h) => s.countryCode === 'PAK' && h.yearIn(2022, 2022) && !h.urban(),
+    text: (s, h) => '雨季的雨下個不停，河水漫出了河道，三分之一的國土泡在水裡。你和家人帶著牲口走到公路邊的高地，搭起帆布棚，等待水位下降，也等待救濟的卡車。',
+    effects: (s, h) => { h.change('wealth', -6); h.change('health', -3); h.change('happiness', -4); h.set('displaced'); h.s.flags._displacedAt = h.year(); if (h.chance(0.003)) h.die('disaster'); },
+  },
+  {
+    id: 'world_turkey_quake_2023',
+    title: '二月的凌晨震動',
+    ages: [3, 90],
+    chance: 0.1,
+    tags: ['world', 'disaster', 'regional'],
+    // Syria: the quake zone (Aleppo, Homs) itself; Turkey: the cities of the game are outside the zone, so people there live it through relatives
+    cond: (s, h) => h.yearIn(2023, 2023) && ((s.countryCode === 'SYR' && (s.city === '阿勒坡' || s.city === '霍姆斯')) || (s.countryCode === 'TUR' && h.stable('world_turkey_quake_2023', 0.5))),
+    text: (s, h) => (s.countryCode === 'SYR'
+      ? '寒冷的凌晨，大地猛烈晃動，整排公寓像積木一樣垮下。天亮後，人們在冰冷的瓦礫間徒手挖掘，街上的火堆旁，每個人都在尋找自己的家人。'
+      : '寒冷的凌晨，電視插播地震快訊：南方好幾座城市的公寓整排垮下。你一整天打不通親戚的電話，傍晚才收到一則簡訊：「人還在。」接下來的幾週，你把捐款和冬衣一箱一箱送上車。'),
+    effects: (s, h) => {
+      if (s.countryCode === 'SYR') { h.change('wealth', -6); h.change('happiness', -6); h.change('health', -3); if (h.chance(0.015)) h.die('disaster'); }
+      else { h.change('happiness', -4); h.change('social', +2); h.change('wealth', -1); }
+    },
+  },
+  {
+    id: 'world_sudan_2023',
+    title: '關上的店門',
+    ages: [3, 85],
+    chance: 0.7,
+    tags: ['world', 'conflict', 'regional'],
+    cond: (s, h) => s.countryCode === 'SDN' && h.yearIn(2023, 2026),
+    text: (s, h) => '四月的某個早晨，首都傳出槍聲，銀行與市場一夜關閉。你與家人把必需品塞進車子，離開了熟悉的社區，沿路都是同樣拖著行李的人。',
+    effects: (s, h) => { h.change('happiness', -5); h.change('wealth', -5); h.change('health', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
+  },
+
+  // =====================================================================================
+  // 未來 2030-2100
+  // =====================================================================================
+  {
+    id: 'world_future_heat_wave_rich',
+    title: '四十度的夏天',
+    ages: [3, 100],
+    once: false,
+    cooldown: 12,
+    chance: 0.04,
+    tags: ['world', 'future', 'climate'],
+    cond: (s, h) => h.yearIn(2030, 2100) && h.incomeAtLeast('UM') && (h.hotClimate() || h.climate() === 'temperate'),
+    text: (s, h) => '這個夏天，氣象署連續十幾天發布高溫警報，柏油路面蒸出熱浪。學校縮短了課時，公園裡加設了降霧裝置，你學會了像在沙漠一樣，早晚才出門。',
+    effects: (s, h) => { h.change('health', -3); h.change('wealth', -1); h.change('happiness', -2); if (h.age() >= 70 && h.chance(0.05)) h.addRisk(1.2, 1); },
+  },
+  {
+    id: 'world_future_heat_wave_poor',
+    title: '熱得睡不著的夜',
+    ages: [14, 100],
+    once: false,
+    cooldown: 12,
+    chance: 0.05,
+    tags: ['world', 'future', 'climate'],
+    cond: (s, h) => h.yearIn(2030, 2100) && lowInc(h) && h.hotClimate(),
+    text: (s, h) => '夜裡氣溫也不降，屋裡像烤箱，大家搬到屋外或屋頂睡覺。井水一天比一天少，工地與田裡的工作都改在清晨和傍晚做，午後所有人縮在樹蔭下喘氣。',
+    choices: [
+      {
+        label: '調整作息，清晨與夜間工作',
+        effects: { health: -2, wealth: -1, social: +1 },
+        result: '你改在天亮前出門，午後在樹蔭下睡覺。收入少了一點，但身體還撐得住，鄰居們也這樣做，彼此打氣。',
+        ai: 2,
+      },
+      {
+        label: '花錢買電扇、冰塊或電力',
+        cond: (s, h) => h.stat('wealth') >= 25,
+        effects: { wealth: -3, health: +1, happiness: +1 },
+        result: '你扛回了一台二手冷氣和一袋冰塊，孩子們終於睡了一個好覺。家人看著電表，嘴上說「值得」，臉上卻有點心疼。',
+        ai: 1,
+      },
+      {
+        label: '照常工作，硬撐過去',
+        effects: (s, h) => { h.change('health', -5); h.change('wealth', +1); h.addRisk(1.15, 1); },
+        result: '你不想少賺一天，咬牙做完活。下午頭暈目眩，同伴扶你到陰影下，用水淋你的頭。那天的薪水你一整年都記得。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_future_ai_work',
+    title: '工作被重新定義',
+    ages: [20, 62],
+    chance: 0.04,
+    tags: ['world', 'future', 'tech', 'job'],
+    cond: (s, h) => h.yearIn(2030, 2100) && h.wageEarner() && h.incomeAtLeast('LM'),
+    text: (s, h) => '公司宣布導入新一代的自動化代理，許多例行的報表、客服與初稿工作交給機器處理。會議室裡有人興奮、有人沉默，每個人都在問：下一個會被改變的是誰的工作？',
+    choices: [
+      {
+        label: '學習與人工智慧協作的新技能',
+        effects: { knowledge: +4, wealth: +2, health: -1 },
+        result: '你每晚花一小時學習新工具，並從中找到自己真正擅長的部分。半年後你成了同事求助的對象，也發現自己的判斷力比想像中更值錢。',
+        ai: 2,
+      },
+      {
+        label: '轉往需要面對面照護與手藝的工作',
+        effects: (s, h) => { h.startJob(h.pick(['caregiver', 'cook', 'artisan'])); h.change('wealth', -1); h.change('happiness', +3); h.change('social', +3); },
+        result: '你選擇走向需要人與人之間溫度的工作。收入起初下降了些，但每天結束工作時，你覺得自己是被真實的人需要著的。',
+        ai: 1.2,
+      },
+      {
+        label: '繼續現在的做法，觀察再說',
+        effects: (s, h) => { h.change('happiness', -2); h.change('wealth', h.chance(0.4) ? -3 : 0); },
+        result: '你照舊做著手邊的事，同時偷偷擔心。幾個月後單位進行調整，你的工作內容改了一半，但你還在，這點讓你鬆了一口氣。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_future_ai_tutor',
+    title: '會耐心的家教',
+    ages: [6, 22],
+    chance: 0.06,
+    tags: ['world', 'future', 'tech', 'school'],
+    cond: (s, h) => h.yearIn(2030, 2100) && h.inSchool(),
+    text: (s, h) => h.byIncome({
+      L: '學校用太陽能充電的平板，裝了一個說當地語言的學習助理。它從不嫌你問得蠢，也不急著給答案，你的數學成績悄悄爬上去了一點，老師還以為你偷偷補習了。',
+      LM: '老師給了你一個學習助理的帳號，它會用你熟悉的語言解釋題目。你發現自己終於敢問那些不敢在課堂上問的「笨問題」了，連下課後都還想繼續問。',
+      UM: '你的學習助理會在你卡住時換一種說法，直到你點頭為止。老師說它不能取代老師，但你注意到老師的眼神放鬆了不少，也有更多時間聽你講話。',
+      H: '你的學習助理能讀懂你的語氣，題目錯了就換個方式講。你偶爾也想跟它爭辯，結果它安靜地聽，然後給了你一份比你更好的反駁，你只好笑著認輸。',
+    }),
+    effects: { knowledge: +4, happiness: +1 },
+  },
+  {
+    id: 'world_future_aging_society',
+    title: '空蕩蕩的教室',
+    ages: [10, 90],
+    chance: 0.04,
+    tags: ['world', 'future', 'aging', 'regional'],
+    cond: (s, h) => h.yearIn(2030, 2100) && AGING_FUTURE.has(s.countryCode),
+    text: (s, h) => '社區裡的學校一所所合併，原本的校舍改成了日間照護中心。你在街上遇到的人越來越多是白髮老人，連機器人店員也會禮貌地問：「需要攙扶嗎？」',
+    effects: { social: +1, happiness: 0, knowledge: +1 },
+  },
+  {
+    id: 'world_future_space_milestone',
+    title: '月球上的第一年',
+    ages: [5, 95],
+    chance: 0.02,
+    tags: ['world', 'future', 'fun'],
+    cond: (s, h) => h.yearIn(2035, 2100) && h.techReady(2035),
+    text: (s, h) => '新聞宣布第一批人類在月面基地度過了一整年。你和家人圍著螢幕看他們用乾燥的食物慶祝，孩子們興奮得連飯都忘了吃，大人則悄悄抬頭看了看夜空。',
+    effects: { knowledge: +2, happiness: +3, social: +1 },
+  },
+  {
+    id: 'world_future_sea_level',
+    title: '漲潮的街道',
+    ages: [16, 100],
+    once: false,
+    cooldown: 15,
+    chance: 0.05,
+    tags: ['world', 'future', 'climate', 'regional'],
+    cond: (s, h) => h.yearIn(2035, 2100) && h.coastal() && h.stable('world_sea_level', seaExposure(s.countryCode)),
+    text: (s, h) => '海水一年比一年上得更高，每逢大潮，街道就積水到腳踝。社區開了好幾次會議，討論要築高堤防、改建高腳屋，還是離開這片住了幾代人的土地。',
+    choices: [
+      {
+        label: '參與社區築堤與高腳屋改建',
+        effects: { wealth: -3, social: +4, happiness: +1 },
+        result: '你和鄰居一起搬沙袋、種紅樹林。工程很辛苦，但每次漲潮時，看到堤防穩穩擋住了海水，大家一起鼓掌。',
+        ai: 1.8,
+      },
+      {
+        label: '搬往地勢較高的地方',
+        cond: (s, h) => h.stat('wealth') > 25,
+        effects: { wealth: -4, social: -3, happiness: -1, health: +1 },
+        result: '你賣掉老房子，搬往內陸。新的社區很乾燥，但夜裡你還是會想起海浪的聲音，想起屋簷下掛著的鹹魚。',
+        ai: 1,
+      },
+      {
+        label: '先留下，看政府的方案',
+        effects: { happiness: -2, wealth: -1 },
+        result: '你和多數人一樣決定再觀望一陣子。每年雨季，你多墊了一層磚，也多買了一雙防水靴。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'world_future_cheap_solar',
+    title: '屋頂上的太陽',
+    ages: [6, 95],
+    chance: 0.035,
+    tags: ['world', 'future', 'energy'],
+    cond: (s, h) => h.yearIn(2030, 2070) && !h.displaced(),
+    text: (s, h) => h.byIncome({
+      L: '村口裝了一組太陽能板，傍晚整個村子的燈同時亮起來。孩子們第一次可以在夜裡寫功課，婦女們也不再需要為煤油燈的煙霧咳嗽，村口的夜晚第一次這麼亮。',
+      LM: `你家屋頂上多了一排便宜的太陽能板，電費帳單少了一大截。家裡終於可以用冰箱存剩菜，${h.parentAlive('mother') ? '母親' : '負責買菜的人'}也不必天天上市場，菜放進冰箱裡，三天後還是新鮮的。`,
+      UM: '社區的屋頂都裝了太陽能板，電費一年比一年低。你開始把家用電器的使用時間，調到最晴朗的下午，洗衣機也莫名地變得很勤勞，鄰居聚在一起，笑著說這是「陽光牌」生活。',
+      H: '你的電費帳單變成了負數，電力公司反過來付你錢。你站在屋頂看著那排藍色面板，心想從前的人怎麼能忍受那麼貴的電，又覺得這件事好像不太真實。',
+    }),
+    effects: { wealth: +2, health: +1, happiness: +2, knowledge: +1 },
+  },
+  {
+    id: 'world_future_water_stress',
+    title: '限水的水龍頭',
+    ages: [5, 95],
+    chance: 0.03,
+    tags: ['world', 'future', 'climate', 'regional'],
+    cond: (s, h) => h.yearIn(2030, 2100) && h.isRegion('MENA', 'SAS', 'CAS', 'SSA', 'LAC'),
+    text: (s, h) => '供水的時間一年比一年短，水龍頭只在清晨和傍晚出水。你學會了用小盆接水洗菜、再留著洗地，鄰居們也開始互相分享水塔的節水訣竅。',
+    effects: { health: -1, happiness: -2, social: +2, wealth: -1 },
+  },
+  {
+    id: 'world_future_climate_migration',
+    title: '搬家的季節',
+    ages: [10, 70],
+    chance: 0.03,
+    tags: ['world', 'future', 'climate', 'migration'],
+    cond: (s, h) => h.yearIn(2040, 2100) && !h.incomeAtLeast('H') && !h.isMigrant() && !(h.urban() && h.age() >= 20) && h.isRegion('SAS', 'SSA', 'MENA', 'SEA', 'CAS'),
+    text: (s, h) => '連續幾年的乾旱與洪水讓土地越來越難耕種。鄰居們一戶戶搬去城市或更北、更涼的地方，你的家人圍著餐桌討論，要不要也跟著走，沒有人說出口的是，誰也捨不得這片土地。',
+    choices: [
+      {
+        label: '搬到城市或較涼爽的地方',
+        effects: (s, h) => { h.change('wealth', +2); h.change('social', -3); h.change('happiness', -1); h.set('left_home'); },
+        result: '你們一家人把房子交給親戚照看，帶著孩子與幾袋種子搬了出去。新的社區一開始很陌生，直到有人敲門送來一盤水果。',
+        ai: 1.4,
+      },
+      {
+        label: '留下，改種耐旱作物並共用水源',
+        effects: { wealth: -1, knowledge: +2, social: +3 },
+        result: '社區請來農業顧問，大家一起改種耐旱的穀物，並輪流使用水井。收成不如以往，但每個人都知道自己並不孤單。',
+        ai: 1.8,
+      },
+    ],
+  },
+  {
+    id: 'world_future_ai_clinic',
+    title: '口袋裡的醫療助理',
+    ages: [10, 100],
+    chance: 0.03,
+    tags: ['world', 'future', 'health', 'tech'],
+    cond: (s, h) => h.yearIn(2032, 2100),
+    text: (s, h) => '診所裡多了一個會看影像、聽咳嗽聲的醫療助理，它先篩出需要優先處理的人，再把資料交給醫師。偏鄉的候診名單縮短了，你的症狀也被更早看見了。',
+    effects: (s, h) => { h.change('health', +2); h.change('happiness', +1); if (h.chance(0.15)) h.addRisk(0.95, 3); },
+  },
+  {
+    id: 'world_future_longevity',
+    title: '一百歲的生日派對',
+    ages: [70, 105],
+    chance: 0.04,
+    tags: ['world', 'future', 'aging'],
+    cond: (s, h) => h.yearIn(2060, 2120) && h.incomeAtLeast('LM'),
+    text: (s, h) => '新的抗老化療法讓越來越多人健康地活過九十歲。你的社區也辦起了百歲生日派對，壽星抱著蛋糕笑說：「我活得夠久，連這個世代的新詞都學會了。」',
+    effects: { happiness: +3, social: +2, health: +1 },
+  },
+  {
+    id: 'world_future_remote_nomads',
+    title: '在海邊辦公',
+    ages: [22, 60],
+    chance: 0.04,
+    tags: ['world', 'future', 'job', 'tech'],
+    cond: (s, h) => h.yearIn(2030, 2100) && h.employed() && h.eduAtLeast('tertiary') && h.incomeAtLeast('UM'),
+    text: (s, h) => '公司宣布完全遠距，你可以住在任何有網路的地方。你把筆電帶到海邊小鎮，早上遠距開會、下午潛水，卻也發現原來「想念同事的吵雜」是件真實的事。',
+    effects: { happiness: +3, social: -2, wealth: +1, health: +1 },
+  },
+];
