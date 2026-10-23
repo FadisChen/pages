@@ -1,6 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="人生籤">
-  <rect width="64" height="64" rx="14" fill="#17233d"/>
-  <circle cx="46" cy="18" r="7" fill="#e0b36f"/>
-  <rect x="27" y="12" width="10" height="42" rx="3" fill="#faf6ec"/>
-  <rect x="29" y="18" width="6" height="2.5" rx="1" fill="#17233d"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="人生籤">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1024"/>
+      <stop offset="0.6" stop-color="#16224a"/>
+      <stop offset="1" stop-color="#27386d"/>
+    </linearGradient>
+    <linearGradient id="stick" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e3c485"/>
+      <stop offset="1" stop-color="#c39d55"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <g fill="#fff">
+    <circle cx="86" cy="96" r="5" opacity=".9"/>
+    <circle cx="150" cy="168" r="3" opacity=".6"/>
+    <circle cx="60" cy="236" r="3.5" opacity=".7"/>
+    <circle cx="258" cy="64" r="4" opacity=".8"/>
+    <circle cx="430" cy="236" r="3.5" opacity=".6"/>
+    <circle cx="372" cy="150" r="3" opacity=".7"/>
+  </g>
+  <path d="M388 70a58 58 0 1 0 54 88 46 46 0 1 1-54-88z" fill="#e8b765"/>
+  <g transform="rotate(-10 196 356)"><rect x="180" y="150" width="32" height="206" rx="9" fill="url(#stick)"/><rect x="180" y="150" width="32" height="40" rx="9" fill="#8b6f3c"/></g>
+  <g transform="rotate(12 316 356)"><rect x="300" y="190" width="32" height="166" rx="9" fill="url(#stick)"/><rect x="300" y="190" width="32" height="40" rx="9" fill="#8b6f3c"/></g>
+  <g><rect x="240" y="96" width="32" height="260" rx="9" fill="url(#stick)"/><rect x="240" y="96" width="32" height="52" rx="9" fill="#d4533a"/></g>
+  <path d="M146 342h220l-16 124a22 22 0 0 1-22 19H184a22 22 0 0 1-22-19z" fill="#f1e6c8"/>
+  <path d="M146 342h220" stroke="#d9c89d" stroke-width="12" stroke-linecap="round"/>
+  <rect x="222" y="372" width="68" height="78" rx="12" fill="#a63d27"/>
+  <path d="M238 396h36M238 414h36M256 396v38" stroke="#fffaf0" stroke-width="7" stroke-linecap="round"/>
 </svg>
