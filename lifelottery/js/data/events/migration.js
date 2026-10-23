@@ -187,10 +187,10 @@ export default [
     title: '去城裡',
     ages: [17, 45],
     weight: (s, h) => 0.7 + (h.has('w_drought') ? 0.6 : 0) + (h.has('w_family_left') ? 0.4 : 0),
-    tags: ['migration', 'internal', 'chain'],
+    tags: ['migration', 'internal', 'chain', 'independence', 'job'],
     cond: (s, h) => !s.urban && !h.isMigrant() && !h.has('m_city') && !h.inSchool() && !h.retired() && !h.seenEvent('world_china_wto_migration') && !h.seenEvent('world_future_climate_migration'),
     text: (s, h) => h.byIncome({
-      L: '同村的年輕人一個個搭車進城，過年回來時帶著新鞋和新衣服，說話腔調都變了。你站在田埂上看著他們，心裡有東西在動，連續好幾個晚上都沒睡好。',
+      L: `同村的年輕人一個個搭車進城，${h.festival()}回來時帶著新鞋和新衣服，說話腔調都變了。你站在田埂上看著他們，心裡有東西在動，連續好幾個晚上都沒睡好。`,
       LM: '鎮上的工作愈來愈少，進城的班車天天客滿。堂哥說他的工廠還缺人，宿舍有床位，但你得先把自己的田託給別人。這句話，你還沒想好該怎麼開口。',
       UM: '你生長的小鎮還不錯，但機會集中在城市。朋友們一個個搬走，每次聚會人都少了一圈，剩下的人話題也愈來愈少，你開始認真考慮要不要也走。',
       H: '你住的小鎮安靜、物價低，可是工作機會有限。大城市有你想要的行業，也有三倍的房租，你把兩邊的好處與壞處寫在便條紙上，寫滿了一整張。',
@@ -231,7 +231,7 @@ export default [
     title: '城市的第一年',
     ages: [18, 50],
     weight: 0,
-    tags: ['migration', 'internal', 'followup'],
+    tags: ['migration', 'internal', 'followup', 'job'],
     text: (s, h) => h.byIncome({
       L: '城裡的房租貴得嚇人，你和四個人擠在一間屋子。最難的是學會看紅綠燈和認路，最容易的是想家。夜裡你聽著室友的鼾聲，慢慢睡著了。',
       LM: `你在城裡的第一年學了很多：搭哪一班車比較便宜、哪個市場的菜最新鮮、怎麼避開仲介。你的口音，也慢慢變了一點，某天打電話回家，${h.parentAlive('mother') ? '母親' : '家裡的長輩'}說：「你講話怎麼不一樣了？」`,
@@ -1020,7 +1020,7 @@ export default [
     once: false,
     cooldown: 6,
     weight: 0.8,
-    tags: ['migration', 'homesick'],
+    tags: ['migration', 'homesick', 'family'],
     cond: (s, h) => h.isMigrant(),
     text: (s, h) => (h.yearIn(2012, 3000)
       ? '你和家人視訊，螢幕裡的臉有時凍住，有時延遲。家人搶著對鏡頭揮手。掛掉後，房間裡忽然很靜，你把剛才那個畫面截了圖。'
@@ -1121,7 +1121,7 @@ export default [
     once: false,
     cooldown: 10,
     weight: 0.7,
-    tags: ['migration', 'homesick'],
+    tags: ['migration', 'homesick', 'travel', 'family'],
     cond: (s, h) => h.isMigrant() && (h.siblings() > 0 || h.parentsAlive() > 0),
     text: (s, h) => `你隔了${h.yearsAbroad() >= 3 ? '好幾年' : '一陣子'}才回${homeName(s)}。巷口的店換了招牌，認識的人老了，連你記得的路都改了。親戚們把你當客人，招待得周到，也有一點生疏。你在老家的屋頂下睡了幾晚，才慢慢找回口音。`,
     effects: { happiness: +2, social: +2, wealth: -2 },
@@ -1186,7 +1186,7 @@ export default [
     title: '帶回來的積蓄',
     ages: [24, 70],
     weight: 0,
-    tags: ['migration', 'return', 'followup'],
+    tags: ['migration', 'return', 'followup', 'business'],
     text: (s, h) => '你帶回來一筆積蓄，也帶回來外面的經驗。巷口有人問：「你在外面學了什麼？要不要在這裡做點事？」這筆錢，也許是你前半生最重要的一次賭注。',
     choices: [
       {

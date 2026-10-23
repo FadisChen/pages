@@ -13,9 +13,11 @@ import { eraView, incomeGroupAt } from '../data/eras.js';
 import { CONDITIONS } from '../data/conditions.js';
 import { HIV_HIGH } from '../data/causes.js';
 import { baselineQ, expectedHealth } from './mortality.js';
-import { rand, chance, between, randInt, normal, clamp, weightedIndex, normInv, poisson } from './rng.js';
+import { rand, chance, between, randInt, normal, clamp, weightedIndex, normInv, poisson, hash01 } from './rng.js';
 import { randomName } from './birth.js';
 import { drawGroup, getPool, childFamilyToken } from '../data/names.js';
+import { fxOf } from './focus.js';
+import { placeGeo } from '../data/geo.js';
 
 export const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 export const EDU_LEVELS = ['none', 'primary', 'secondary', 'tertiary', 'graduate'];
@@ -46,6 +48,31 @@ export function ctxOf(s) {
 // ---------------------------------------------------------------------------------------------
 // Small state utilities
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * Deterministic per-life coin flip: true with probability `p`, the same answer for the same life and `key`, without consuming
+ * the random generator (h.stable is this function).
+ */
+export function stableFlip(s, key, p = 0.5) {
+  if (!(p > 0)) return false;
+  if (p >= 1) return true;
+  return hash01(`${s.seed}|${s.birthYear}|${s.name.full}|${key}`) < p;
+}
+
+/**
+ * Does this person drink alcohol (beer with friends, a toast at the wedding)? Decided once per life: very unlikely in a Muslim
+ * family, unlikely in many Hindu, Sikh and Buddhist families, less likely for women, and always true with the condition 'alcohol'.
+ */
+export function drinksAlcohol(s) {
+  if (s.age < 18 && !s.conditions.includes('alcohol')) return false;
+  if (s.conditions.includes('alcohol')) return true;
+  let p = { muslim: 0.04, hindu: 0.3, sikh: 0.3, buddhist: 0.5, jewish: 0.7, folk: 0.6 }[s.religion] ?? 0.78;
+  if (s.gender === 'F') {
+    const home = BY_CODE[s.homeCountryCode];
+    p *= s.homeCountryCode === 'USA' || (home && (home.region === 'EUR' || home.region === 'OCE')) ? 0.9 : 0.45;
+  }
+  return stableFlip(s, 'drinks', p);
+}
 
 /** Append a log entry and return it. */
 export function pushLog(s, kind, title, text, delta) {
@@ -175,6 +202,8 @@ function jobWeights(s, ctx, candidates) {
     if (j.min >= 2 && s.age < 18 && s.edu.years < 12) w *= 0.02;
     // nobody becomes a soldier or goes down a mine for the first time at 45
     if (id === 'soldier' && s.age > 32) w = 0;
+    // the fishing in the game is sea fishing (boats, harbours, the catch): it needs a coast
+    if (id === 'fisher' && !placeGeo(s.countryCode, s.city, s.urban).coast) w = 0;
     if ((id === 'miner' || id === 'construction' || id === 'fisher') && s.age > 50) w *= 0.15;
     return w;
   });
@@ -343,6 +372,7 @@ function agePeople(s, ctx) {
         wealth: s.age < 18 && who === 'father' && s.family.wealthQ <= 3 ? -3 : 0,
       });
       pushLog(s, 'event', who === 'mother' ? '母親過世' : '父親過世', parentDeathText(s, who, ctx), delta);
+      if (s.age >= 12) s.pending.push({ id: 'regional_culture_funeral', atAge: s.age }); // the rites of the family's tradition, told in the same year
       if (!s.family.mother.alive && !s.family.father.alive && s.age < 18) {
         s.flags.orphan = true;
         addHighlight(s, '失去了雙親。');
@@ -442,7 +472,7 @@ function planSchooling(s, ctx) {
   const h = (lo + hi) / 2;
   s.flags._dropH = h;
   s.flags._pTertC = clamp(pTert / Math.max(0.05, pEnroll * surviveTo12(h)), 0, 0.97);
-  s.flags._enroll = chance(s.rng, pEnroll);
+  s.flags._enroll = chance(s.rng, Math.min(0.995, pEnroll * (fxOf(s).enroll ?? 1)));
 }
 
 const SCHOOL_START = 6;
@@ -479,7 +509,7 @@ function schooling(s, ctx) {
     }
     return;
   }
-  if (!edu.inSchool) return;
+  if (!edu.inSchool) { returnToSchool(s, ctx); return; }
 
   // --- Adults who went back to school (night school, second chance) ---
   if (s.flags._adultEd) { adultSchooling(s, ctx); return; }
@@ -499,7 +529,7 @@ function schooling(s, ctx) {
   }
   if (y === 6) pushLog(s, 'milestone', '小學畢業', (s.family.wealthQ >= 4 || (incomeRank[inc] >= 2 && s.family.wealthQ >= 3)) ? '你領到畢業證書，在校門口和同學拍了好多張合照，下一個學期就是新的學校了。' : '你領到畢業證書，這是家裡不少人沒有的東西。', applyDelta(s, { happiness: 2, knowledge: 1 }));
   if (y < 12) {
-    if (rand(s.rng) < dropoutHazard(y, s.flags._dropH ?? 0.05)) {
+    if (rand(s.rng) < dropoutHazard(y, s.flags._dropH ?? 0.05) * (fxOf(s).dropout ?? 1)) {
       const reason = s.family.wealthQ <= 2 && incomeRank[inc] <= 1
         ? '學費、交通和家裡的缺口，一點一點把你推出了教室。'
         : (s.gender === 'F' && ctx.view.childMarriage > 15 ? '家裡認為女孩讀到這裡就夠了。' : '你漸漸跟不上，也失去了繼續念下去的動力。');
@@ -514,7 +544,7 @@ function schooling(s, ctx) {
       UM: '畢業典禮上，你和同學們拋起帽子，然後各自走向不同的方向。',
       H: '畢業典禮結束，你和朋友們坐在校園的階梯上，談著對未來的各種打算。',
     }), applyDelta(s, { happiness: 3, knowledge: 1 }));
-    if (chance(s.rng, s.flags._pTertC ?? 0)) {
+    if (chance(s.rng, clamp((s.flags._pTertC ?? 0) * (fxOf(s).tertiary ?? 1), 0, 0.97))) {
       s.flags._tertYears = 4;
       return; // continue into tertiary
     }
@@ -523,7 +553,7 @@ function schooling(s, ctx) {
   }
   // Tertiary years
   if (y < 16) {
-    if (chance(s.rng, incomeRank[inc] >= 2 ? 0.05 : 0.12)) leaveSchool(s, '大學念到一半，你決定先停下來。');
+    if (chance(s.rng, (incomeRank[inc] >= 2 ? 0.05 : 0.12) * (fxOf(s).dropout ?? 1))) leaveSchool(s, '大學念到一半，你決定先停下來。');
     return;
   }
   if (y === 16) {
@@ -531,7 +561,7 @@ function schooling(s, ctx) {
     const crowd = mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手' : father.alive ? '你看見父親在觀眾席裡拚命揮手' : '你特別想起不在現場的雙親';
     pushLog(s, 'milestone', '大學畢業', `你拿到學位。畢業典禮上，${crowd}。`, applyDelta(s, { happiness: 4, knowledge: 2 }));
     addHighlight(s, '大學畢業。');
-    if (s.flags._tertYears === 4 && incomeRank[inc] >= 2 && chance(s.rng, incomeRank[inc] === 3 ? 0.32 : 0.2)) { s.flags._tertYears = 6; return; }
+    if (s.flags._tertYears === 4 && incomeRank[inc] >= 2 && chance(s.rng, (incomeRank[inc] === 3 ? 0.32 : 0.2) * (fxOf(s).tertiary ?? 1))) { s.flags._tertYears = 6; return; }
     leaveSchool(s, null);
     return;
   }
@@ -540,6 +570,16 @@ function schooling(s, ctx) {
     addHighlight(s, '取得研究所學位。');
     leaveSchool(s, null);
   }
+}
+
+/** Focus 'study': a young adult who is not studying sometimes goes back to education (evening school, a degree), see FOCUS_FX.returnEd. */
+function returnToSchool(s, ctx) {
+  const p = fxOf(s).returnEd;
+  if (!p || s.age < 18 || s.age > 30 || s.edu.inSchool || s.edu.years < 6 || s.edu.years >= 16 || s.flags._adultEd) return;
+  if ((s.flags._reenrolled || 0) >= 2) return;
+  const money = { L: 0.4, LM: 0.6, UM: 0.85, H: 1 }[ctx.country.income];
+  const busy = (s.work.status === 'employed' || s.work.status === 'self' ? 0.7 : 1) * (s.children.some((c) => c.alive && s.year - c.birthYear <= 3) ? 0.5 : 1);
+  if (chance(s.rng, p * money * busy)) enroll(s, undefined);
 }
 
 const LEVEL_YEARS = { primary: 6, secondary: 12, tertiary: 16, graduate: 18 };
@@ -683,12 +723,13 @@ function work(s, ctx) {
     if (s.age >= ra + 5) hz = w.status === 'employed' ? 0.5 : 0.2;
     if (s.stats.health < 35 && s.age >= 50) hz = Math.max(hz, 0.25);
     if (s.age >= 80) hz = 1;
+    if (hz && s.age < 80) hz = Math.min(1, hz * (fxOf(s).retire ?? 1));
     if (hz && chance(s.rng, hz)) {
       retire(s);
       return;
     }
     // Layoffs (salaried workers only)
-    if (w.status === 'employed' && chance(s.rng, UNEMPLOY[inc] * (s.stats.health < 40 ? 1.6 : 1))) {
+    if (w.status === 'employed' && chance(s.rng, UNEMPLOY[inc] * (s.stats.health < 40 ? 1.6 : 1) * (fxOf(s).layoff ?? 1))) {
       loseJob(s);
       pushLog(s, 'event', '失去工作', variant(s, 'layoff', [
         '公司裁員，你收到了通知。第一個晚上你睡不著，一遍遍算著存款還能撐多久。',
@@ -699,7 +740,7 @@ function work(s, ctx) {
       return;
     }
     // Career moves
-    if (chance(s.rng, 0.035) && s.age < Math.min(52, ra - 2)) {
+    if (chance(s.rng, 0.035 * (fxOf(s).career ?? 1)) && s.age < Math.min(52, ra - 2)) {
       const id = pickJob(s);
       if (id !== w.job && JOBS[id].rank >= JOBS[w.job].rank - 0.05) {
         startJob(s, id);
@@ -760,7 +801,7 @@ function wealthDynamics(s, ctx) {
   if (w.status === 'employed' || w.status === 'self') {
     const j = JOBS[w.job] || { rank: 0.3 };
     const target = clamp(0.55 * j.rank + 0.25 * s.flags._pctl0 + 0.1 * (eduIndex(s) / 4) + 0.05 + 0.0025 * Math.min(w.yearsWorked, 25), 0.03, 0.98);
-    p += 0.12 * (target - p) + normal(s.rng, 0, 0.012);
+    p += 0.12 * (target + (fxOf(s).pctl ?? 0) - p) + normal(s.rng, 0, 0.012);
   } else if (w.status === 'unemployed') p -= 0.03;
   else if (w.status === 'retired') p *= 1 - { H: 0.002, UM: 0.008, LM: 0.015, L: 0.025 }[ctx.country.income];
   else if (s.age < 15) p += 0.1 * (s.flags._pctl0 - p);
@@ -779,12 +820,12 @@ function smoking(s, ctx) {
       const prev = ctx.view.smoke[s.gender] / 100;
       const everFrac = Math.min(0.9, prev * 1.35);
       const per = 1 - Math.pow(1 - everFrac, 1 / 11);
-      if (chance(s.rng, per)) {
+      if (chance(s.rng, per * (fxOf(s).smokeStart ?? 1))) {
         s.smoker = true;
         pushLog(s, 'event', '第一根菸', variant(s, 'smoke', ['朋友遞來一根菸，你接了過來。那時候你還不知道，戒掉比開始困難得多。', '壓力一大，你又點起了一根菸。你告訴自己只這一次，可是你自己也不太相信。'], (n) => (n % 2 ? '你又點起了一根菸，已經不記得這是第幾次。打火機的聲音熟悉得讓人難過。' : '那根菸是別人遞來的，你猶豫了不到兩秒。有些習慣不是被戒掉，只是在等你。')), applyDelta(s, { social: 1 }));
       }
     }
-  } else if (chance(s.rng, s.age > 40 ? 0.035 : 0.02)) {
+  } else if (chance(s.rng, (s.age > 40 ? 0.035 : 0.02) * (fxOf(s).smokeQuit ?? 1))) {
     s.smoker = false;
     pushLog(s, 'event', '戒菸成功', variant(s, 'quit', ['你終於把最後一包菸丟進垃圾桶。第一個月難熬得要命，但你撐過來了。', '這次你沒有宣布，也沒有立誓，只是默默把菸放下了。三個月後家人才發現，屋子裡的味道不一樣了。'], (n) => (n % 2 ? '你又一次把菸放下了。這次你不再算天數，只是一天一天地過。' : '醫師說的話你終於聽進去了，把剩下的菸送給了鄰居，然後走去散步。')), applyDelta(s, { health: 3, happiness: 2 }));
   }
@@ -853,11 +894,11 @@ function conditions(s, ctx) {
     let h = 0;
     for (const [a, b, p] of c.onset) if (age >= a && age <= b) { h = p; break; }
     if (!h) continue;
-    h *= frailty;
+    h *= frailty * (fxOf(s).condition ?? 1);
     if (c.smokerOnly) h *= s.smoker ? 3 : 0.1;
     if (s.smoker && (id === 'cancer' || id === 'heart_disease')) h *= 1.8;
     if (id === 'diabetes' || id === 'hypertension') h *= 1 + (ctx.country.income === 'H' || ctx.country.income === 'UM' ? 0.2 : 0);
-    if (id === 'alcohol') h *= s.gender === 'M' ? 1.8 : 0.5;
+    if (id === 'alcohol') h *= (s.gender === 'M' ? 1.8 : 0.5) * (s.religion === 'muslim' ? 0.2 : 1) * (fxOf(s).condition ?? 1);
     if (id === 'depression') h *= s.gender === 'F' ? 1.4 : 0.9;
     if (h && chance(s.rng, Math.min(h, 0.4))) {
       addCondition(s, id);
@@ -963,6 +1004,8 @@ export function marry(s) {
   s.partner.status = 'married';
   s.partner.since = s.year;
   s.flags._married = (s.flags._married || 0) + 1;
+  // the wedding rite of the family's tradition is told in the same year (regional_culture_wedding_rite, once per life)
+  if (s.seen.regional_culture_wedding_rite === undefined && !s.pending.some((p) => p.id === 'regional_culture_wedding_rite')) s.pending.push({ id: 'regional_culture_wedding_rite', atAge: s.age });
   if (s.work.status === 'student' && s.edu.inSchool && s.age < 18 && ctx.view.childMarriage > 10) leaveSchool(s, null);
 }
 
@@ -1021,7 +1064,7 @@ export function addChild(s, opts = {}) {
   // nobody in the household shares a full name: not with the siblings, and not with the person, the partner or the parents
   const taken = () => new Set([...s.children.map((c) => c.name), s.name.full, s.partner && s.partner.name, s.family.mother.name, s.family.father.name]);
   for (let tries = 0; tries < 12 && taken().has(nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
-  const child = { name: nm.full, gender, birthYear: s.year, alive: true };
+  const child = { name: nm.full, gender, birthYear: s.year, alive: true, religion: s.religion }; // children grow up in the family's tradition
   s.children.push(child);
   s.flags._birthThisYear = true;
   return child;
@@ -1071,6 +1114,7 @@ function fertility(s, ctx) {
   if (!married) p *= ctx.country.region === 'MENA' || ctx.country.region === 'SAS' ? 0.1 : ctx.country.region === 'SSA' ? 0.9 : 0.7;
   if (female && s.edu.inSchool && !s.flags._adultEd) p *= 0.3;
   if (alive === 0 && total > 0 && total < want) p *= 1.2;
+  p *= fxOf(s).fertility ?? 1;
   if (chance(s.rng, p)) birth(s, ctx, false);
 }
 
@@ -1096,23 +1140,26 @@ function love(s, ctx) {
   }
 
   const active = pt && (pt.status === 'dating' || pt.status === 'married');
+  const fx = fxOf(s);
+  // the focus moves the plan by up to a year: family earlier, study and work later (not for child marriages, which are not chosen)
+  const ea = age + (f._marryAt >= 18 ? fx.dateShift ?? 0 : 0);
   if (!active) {
     if (age < (f._coolUntil ?? 0)) return; // cooling off after a break-up (see endRelationship)
-    if (age >= f._dateAt && age < 75 && f._marryAt < 999) {
-      const status = age >= f._marryAt ? 'married' : 'dating';
+    if (ea >= f._dateAt && age < 75 && f._marryAt < 999) {
+      const status = ea >= f._marryAt ? 'married' : 'dating';
       s.partner = makePartner(s, ctx, 'dating');
       if (status === 'married') doMarriage(s, ctx);
       else pushLog(s, 'milestone', '心動', loveText(s, ctx), applyDelta(s, { happiness: 6, social: 3 }));
-    } else if (f._marryAt >= 999 && age >= 21 && age <= 45 && !s.flags._noDating && chance(s.rng, 0.04)) {
+    } else if (f._marryAt >= 999 && age >= 21 && age <= 45 && !s.flags._noDating && chance(s.rng, 0.04 * (fx.informal ?? 1))) {
       s.partner = makePartner(s, ctx, 'dating');
       pushLog(s, 'milestone', '一段感情', '你遇見了一個讓你想花時間相處的人，雖然誰都沒有提到婚姻這個詞。', applyDelta(s, { happiness: 6, social: 3 }));
     }
     return;
   }
   if (pt.status === 'dating') {
-    if (f._marryAt < 999 && age >= f._marryAt) {
+    if (f._marryAt < 999 && ea >= f._marryAt) {
       doMarriage(s, ctx);
-    } else if (chance(s.rng, f._marryAt < 999 ? 0.07 : 0.14)) {
+    } else if (chance(s.rng, (f._marryAt < 999 ? 0.07 : 0.14) * (fx.breakup ?? 1))) {
       pushLog(s, 'event', '分手', `你和${pt.name}走到了盡頭。沒有誰對誰錯，只是兩個人看的方向不同了。`, applyDelta(s, { happiness: -7, social: -2 }));
       s.partner = null;
       if (f._marryAt < 999) { f._dateAt = age + randInt(s.rng, 1, 3); f._marryAt = Math.max(f._marryAt, f._dateAt + randInt(s.rng, 1, 3)); }
@@ -1122,7 +1169,7 @@ function love(s, ctx) {
   // Married: divorce hazard
   const hz = { EAS: 0.009, SEA: 0.008, SAS: 0.003, CAS: 0.008, MENA: 0.006, SSA: 0.008, EUR: 0.012, NAM: 0.014, LAC: 0.009, OCE: 0.012 }[ctx.country.region];
   const mult = (pt.since > s.year - 6 && s.age < 22 ? 1.8 : 1) * (s.stats.happiness < 35 ? 1.4 : 1);
-  if (chance(s.rng, hz * mult)) {
+  if (chance(s.rng, hz * mult * (fx.divorce ?? 1))) {
     const name = pt.name;
     divorce(s);
     pushLog(s, 'milestone', '離婚', `你和${name}結束了婚姻。簽字那天比想像中平靜，真正難的是之後一個人把日子過下去。`, applyDelta(s, { happiness: -9, social: -4, wealth: -3 }));
@@ -1151,7 +1198,7 @@ function doMarriage(s, ctx) {
     pushLog(s, 'milestone', '結婚', byIncome(ctx.income, {
       L: `你和${pt.name}結了婚。沒有華麗的場面，鄰居都來幫忙，晚上大家一起吃了一頓飯。`,
       LM: `你和${pt.name}結婚了。親戚們從各地趕來，場地很簡單，但每個人都笑得很大聲。`,
-      UM: `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯。`,
+      UM: `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯${drinksAlcohol(s) ? '酒' : '茶'}。`,
       H: `你和${pt.name}結婚了。婚禮之後，你們收拾好滿屋子的禮物，開始學習怎麼一起過日子。`,
     }), applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
     addHighlight(s, `與${pt.name}結婚。`);
@@ -1195,6 +1242,7 @@ export function migrate(s, code) {
 
 function statsDrift(s, ctx) {
   const st = s.stats;
+  const fx = fxOf(s);
   const le = ctx.birthView.le[s.gender];
   // Health
   let hTarget = s.age < 15 ? 90 + (s.family.wealthQ - 3) * 1.5 : expectedHealth(s.age, le);
@@ -1203,6 +1251,7 @@ function statsDrift(s, ctx) {
   hTarget += st.wealth < 50 ? (st.wealth - 50) * 0.12 : (st.wealth - 50) * 0.04;
   hTarget += (st.social - 50) * 0.04;
   if (s.age < 6 && s.family.wealthQ <= 2 && ctx.country.income !== 'H') hTarget -= 3;
+  hTarget += fx.healthT ?? 0;
   st.health = clamp(st.health + 0.35 * (hTarget - st.health) + normal(s.rng, 0, 2.2), 1, 100);
 
   // Happiness
@@ -1231,6 +1280,9 @@ function statsDrift(s, ctx) {
     else if (s.age < 60) st.knowledge = clamp(st.knowledge + 0.3 + 0.1 * eduIndex(s), 0, 100);
     else if (s.age > 75) st.knowledge = clamp(st.knowledge - 0.4, 0, 100);
   }
+
+  // Life focus: a small yearly nudge on top of the drift (the stats mean-revert, so it settles at a few points).
+  if (fx.drift) for (const k in fx.drift) st[k] = clamp(st[k] + fx.drift[k], k === 'health' ? 1 : 0, 100);
 }
 
 // ---------------------------------------------------------------------------------------------

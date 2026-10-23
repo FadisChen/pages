@@ -93,7 +93,7 @@ export default [
     weight: 1.2,
     tags: ['aging', 'body'],
     cond: (s, h) => h.male(),
-    text: (s, h) => '以前一口氣爬上五樓不成問題，現在爬到三樓就得扶著欄杆喘兩口氣。睡眠變淺、肚子變大，連最愛的啤酒下肚之後也沒那麼快樂了。你開始懷疑，自己是不是真的老了。',
+    text: (s, h) => `以前一口氣爬上五樓不成問題，現在爬到三樓就得扶著欄杆喘兩口氣。睡眠變淺、肚子變大，連最愛的${h.drinks() ? '啤酒' : '甜點'}下肚之後也沒那麼快樂了。你開始懷疑，自己是不是真的老了。`,
     choices: [
       {
         label: '約朋友固定打球或走路',
@@ -125,7 +125,7 @@ export default [
     title: '沒有鬧鐘的週一',
     ages: [55, 80],
     weight: (s, h) => (h.retired() ? 4 : 0),
-    tags: ['aging', 'retirement'],
+    tags: ['aging', 'retirement', 'hobby', 'reflection'],
     cond: (s, h) => h.retired() && !!h.recentLog('退休', 1),
     text: (s, h) => '退休後的第一個週一，你還是準時醒來，走到客廳才想起今天沒有地方要去。陽光慢慢爬過地板，你煮了一杯很慢很慢的咖啡或茶，竟然有點不知所措。',
     effects: { happiness: +2, social: -2 },
@@ -394,7 +394,7 @@ export default [
     title: '一個人的餐桌',
     ages: [50, 100],
     weight: (s, h) => (widowed(h) ? 4 : 0),
-    tags: ['aging', 'grief'],
+    tags: ['aging', 'grief', 'family'],
     cond: (s, h) => widowed(h),
     text: (s, h) => '你還是不小心煮了兩人份的飯菜。出門時你習慣回頭說「我出去了」，然後想起屋裡沒有人會應。這一年你學會了很多事，像是怎麼一個人睡在一張大床上。',
     choices: [
@@ -489,7 +489,7 @@ export default [
     title: '那首老歌',
     ages: [68, 100],
     weight: 0,
-    tags: ['aging', 'dementia', 'followup'],
+    tags: ['aging', 'dementia', 'followup', 'caregiving'],
     text: (s, h) => `${h.partnerName()}今天第一次沒有叫出你的名字。可是當收音機裡傳來你們婚禮上的那首老歌，對方輕輕握住了你的手，一直沒有放開。你在那一刻，什麼也不再追問。`,
     effects: { happiness: -2, social: +2 },
   },
@@ -543,7 +543,7 @@ export default [
     title: '需要有人照顧了',
     ages: [74, 100],
     weight: (s, h) => (s.stats.health < 50 ? 1.8 : 0.3),
-    tags: ['aging', 'care'],
+    tags: ['aging', 'care', 'caregiving'],
     text: (s, h) => '洗澡、做飯、吃藥，這些以前一眨眼就做完的事，現在都需要停下來想一想。你一直不想麻煩別人，但某天你發現，連系鞋帶都需要別人幫忙。',
     choices: [
       {
@@ -749,7 +749,7 @@ export default [
     once: false,
     cooldown: 10,
     weight: 0.35,
-    tags: ['aging', 'social', 'health'],
+    tags: ['aging', 'social', 'health', 'exercise', 'wellness', 'friends'],
     cond: (s, h) => h.urban() && h.incomeAtLeast('LM'),
     text: (s, h) => '清晨六點，公園裡已經有一群人在打太極、跳舞或做體操，音樂聲慢悠悠的。你本來只是路過，被一位阿姨拉著加入，結果發現自己的動作其實也沒那麼糟。',
     effects: { health: +2, social: +3, happiness: +2 },
@@ -776,8 +776,8 @@ export default [
     tags: ['aging', 'family'],
     cond: (s, h) => h.hasChildren(),
     text: (s, h) => h.byIncome({
-      L: '節日這天，在外地工作的孩子們都趕回來了。屋子裡擠滿了人，大家端著碗，蹲在院子裡吃，笑聲傳到隔壁。你吃得不多，卻看得很飽。',
-      LM: `節日這天，孩子們帶著水果和禮盒回來，小小的客廳擠不下，大家就把桌子搬到了門口。你被推到主位，滿臉不好意思，嘴上說「我坐哪都好」，筷子卻被${h.hasGrandchildren() ? '孫輩' : '小外甥小姪子'}塞進手裡。`,
+      L: `${h.festival()}這天，在外地工作的孩子們都趕回來了。屋子裡擠滿了人，大家端著碗，蹲在院子裡吃，笑聲傳到隔壁。你吃得不多，卻看得很飽。`,
+      LM: `${h.festival()}這天，孩子們帶著水果和禮盒回來，小小的客廳擠不下，大家就把桌子搬到了門口。你被推到主位，滿臉不好意思，嘴上說「我坐哪都好」，筷子卻被${h.hasGrandchildren() ? '孫輩' : '小外甥小姪子'}塞進手裡。`,
       UM: '全家人好不容易湊在一起吃了一頓飯，手機都難得地放在桌子邊緣。你坐在主位，看著他們說說笑笑，覺得這大概是世上最好的聲音，連湯都比平常更鮮。',
       H: `你的家人從各地飛回來，大家擠在長桌旁。${h.hasGrandchildren() ? '孫輩' : '家裡的小朋友'}輪流在你面前表演才藝，有人唱歌、有人表演魔術，你被逗得眼淚都笑了出來，連平常最嚴肅的親戚也笑到拍桌。`,
     }),
@@ -790,7 +790,7 @@ export default [
     chance: 1,
     once: false,
     cooldown: 5,
-    tags: ['aging', 'milestone'],
+    tags: ['aging', 'milestone', 'reflection'],
     milestone: true,
     cond: (s, h) => h.age() % 10 === 0,
     text: (s, h) => (h.stat('social') >= 45
@@ -804,7 +804,7 @@ export default [
     title: '想好的事',
     ages: [72, 100],
     weight: 0.7,
-    tags: ['aging', 'death'],
+    tags: ['aging', 'death', 'reflection'],
     cond: (s, h) => !h.has('wishes_written'),
     text: (s, h) => '朋友的告別式上，你突然想到：自己也該把一些事情交代清楚。喜歡什麼樣的儀式、東西要留給誰、哪些話還沒說。你拿起筆，不知道該從哪裡寫起。',
     choices: [
@@ -872,6 +872,37 @@ export default [
         result: (s, h) => `你吃了一碗年輕時最愛、後來被禁止的東西，或穿上了最亮的外套去${h.city()}走了一圈。路人回頭看你，你對他們眨了眨眼。`,
         highlight: '在晚年任性地做了一件喜歡的事。',
         ai: 1.4,
+      },
+    ],
+  },
+  // ---- Phase 4A: 還想去的地方 ----
+  {
+    id: 'aging_travel_wish',
+    title: '還想去看的地方',
+    ages: [58, 82],
+    weight: 0.5,
+    tags: ['travel', 'hobby', 'aging'],
+    cond: (s, h) => h.incomeAtLeast('LM') && h.stat('wealth') >= 35 && h.stat('health') >= 45,
+    text: (s, h) => '你列出了一張清單：還沒看過的海、想爬一次的山、想當面對某個人說聲謝謝的城市。年輕時的理由是「沒空」，現在是「還走得動」，你忽然覺得這個理由很急。',
+    choices: [
+      {
+        label: '挑最想去的一個，這一年就出發',
+        effects: { happiness: +6, health: +1, wealth: -3, social: +2 },
+        result: '你走得慢，看得久，在路邊的長椅上一坐就是一個下午。回家的行李比出發時輕，但相機（或腦海）裡的東西，滿得幾乎要溢出來。',
+        highlight: '年紀大了，仍然出發去看了一個一直想去的地方。',
+        ai: 1.8,
+      },
+      {
+        label: '把清單分成小旅行，每年一個',
+        effects: { happiness: +4, health: +1, wealth: -1 },
+        result: '你決定不貪心，一年一個，近的先去。到第三年，你發現自己最期待的，反而是規劃行程的那幾個星期。',
+        ai: 1.6,
+      },
+      {
+        label: '只留在心裡，在家看照片和地圖',
+        effects: { happiness: +1 },
+        result: '你把地圖攤在桌上，用手指一條一條走過。有人問你為什麼不去，你說：這樣就夠了。其實夠不夠，只有你自己知道。',
+        ai: 1,
       },
     ],
   },

@@ -6,6 +6,8 @@ import { CAUSES } from '../data/causes.js';
 import { lifeTable } from './mortality.js';
 import { JOBS, STAT_KEYS } from './systems.js';
 import { WEALTH_SHORT } from './birth.js';
+import { FOCUS_BY_ID, focusTimeline } from './focus.js';
+import { RELIGION_LABELS } from '../data/religion.js';
 
 export const EDU_LABELS = {
   none: '未受正式教育', primary: '小學', secondary: '中學', tertiary: '大學', graduate: '研究所',
@@ -143,6 +145,10 @@ export function getSummary(s) {
     countriesLived: countries,
     conditions: [...s.conditions],
     smoker: s.smoker,
+    religion: { id: s.religion || 'none', label: RELIGION_LABELS[s.religion] || RELIGION_LABELS.none },
+    focus: { id: s.focus || 'balance', label: (FOCUS_BY_ID[s.focus] || FOCUS_BY_ID.balance).label },
+    focusTimeline: focusTimeline(s).segments,
+    focusYears: focusTimeline(s).years,
     highlights,
     featuredHighlight: featuredHighlight(highlights),
     counts: { choices, events, milestones, years: s.age },

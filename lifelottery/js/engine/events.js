@@ -12,6 +12,7 @@ import ALL_EVENTS from '../data/events/index.js';
 import YEARLY from '../data/yearly.js';
 import { STAT_KEYS, applyDelta, pushLog, addHighlight } from './systems.js';
 import { rand, randInt, weightedIndex, chance } from './rng.js';
+import { focusEventMult } from './focus.js';
 
 export const EFFECT_KEYS = STAT_KEYS;
 
@@ -151,9 +152,12 @@ export function isEligible(s, h, ev) {
 
 function weightOf(s, h, ev) {
   const w = ev.weight;
-  if (w === undefined) return 1;
-  if (typeof w === 'function') { try { return Math.max(0, +w(s, h) || 0); } catch (e) { return 0; } }
-  return w;
+  let base;
+  if (w === undefined) base = 1;
+  else if (typeof w === 'function') { try { base = Math.max(0, +w(s, h) || 0); } catch (e) { return 0; } }
+  else base = w;
+  // life focus: events about studying, work, family, health or hobbies become likelier or rarer (focus.js, by tag)
+  return base * focusEventMult(s.focus, ev.tags);
 }
 
 function pickWeighted(s, h, list, nullWeight = 0) {
@@ -451,50 +455,61 @@ export function runEvents(s, h) {
   for (let i = s.log.length - 1; i >= 0 && s.log[i].year === s.year; i--) if (s.log[i].kind !== 'choice') entries++;
   let choiceEvent = null;
 
-  // 1. Due follow-ups
-  if (s.pending.length) {
+  // 1. Due follow-ups. The pass runs again after the chance events (2) and the regular events (4): a follow-up that
+  // an event of this very year scheduled for "0 years from now" (the 2020 pandemic -> remote school) fires in the same year.
+  let reservedByChance = false; // the reserved major event was drawn as a milestone: its condition is checked again before it is shown
+  let reserve = 0; // slot kept for the major event once step 3 has decided to draw one
+  const runDue = () => {
+    if (!s.pending.length) return;
     const keep = [];
     const due = [];
     for (const p of s.pending) (p.atAge <= s.age ? due : keep).push(p);
+    if (!due.length) return;
     s.pending = keep;
     due.sort((a, b) => a.atAge - b.atAge);
     for (const p of due) {
       const ev = BY_ID.get(p.id);
       if (!ev) continue;
       if (ev.once !== false && s.seen[ev.id] !== undefined) continue;
+      if (p.recheck && !isEligible(s, h, ev)) continue; // a milestone that was only postponed must still fit when its turn comes
       // `followCond`: the follow-up is dropped silently when it no longer fits (e.g. the child has left school meanwhile);
       // returning 'wait' keeps it for next year instead (e.g. a treatment that only exists from a certain year on)
       if (ev.followCond) {
         let ok = false;
         try { ok = ev.followCond(s, h); } catch (e) { ok = false; }
-        if (ok === 'wait') { if (s.age < 90) s.pending.push({ id: p.id, atAge: s.age + 1 }); continue; }
+        if (ok === 'wait') { if (s.age < 90) s.pending.push({ ...p, atAge: s.age + 1 }); continue; }
         if (!ok) continue;
       }
       if (isMajor(ev)) {
-        if (choiceEvent || entries >= cap) { s.pending.push({ id: p.id, atAge: s.age + 1 }); continue; }
+        if (choiceEvent || entries >= cap) { s.pending.push({ ...p, atAge: s.age + 1 }); continue; }
         choiceEvent = ev;
         entries++; // reserve its slot
-      } else if (entries < cap) { if (fireRegular(s, h, ev)) entries++; } else s.pending.push({ id: p.id, atAge: s.age + 1 });
-      if (!s.alive) return false;
+      } else if (entries + reserve < cap) { if (fireRegular(s, h, ev)) entries++; } else s.pending.push({ ...p, atAge: s.age + 1 });
+      if (!s.alive) return;
     }
-  }
+  };
+  runDue();
+  if (!s.alive) return false;
 
   const el = eligibleEvents(s, h);
 
   // 2. Chance (milestone-type) events
   for (const ev of el.chance) {
     if (entries >= cap) break;
-    if (!chance(s.rng, ev.chance)) continue;
+    if (!chance(s.rng, Math.min(1, ev.chance * focusEventMult(s.focus, ev.tags)))) continue;
     if (!isEligible(s, h, ev)) continue; // an earlier event of this pass may have changed the state
     if (isMajor(ev)) {
-      if (!choiceEvent) { choiceEvent = ev; entries++; } else s.pending.push({ id: ev.id, atAge: s.age + 1 });
+      if (!choiceEvent) { choiceEvent = ev; reservedByChance = true; entries++; } else s.pending.push({ id: ev.id, atAge: s.age + 1, recheck: true }); // postponed milestone: its condition is checked again next year
     } else if (fireRegular(s, h, ev)) entries++;
     if (!s.alive) return false;
   }
+  runDue();
+  if (!s.alive) return false;
 
   // 3. Decide on the major (choice) event first so that regular events leave room for it
   let wantMajor = !choiceEvent && s.alive && el.major.length > 0 && chance(s.rng, TUNING.majorRate * majorRateFor(s.age));
   if (wantMajor && entries >= cap) wantMajor = false;
+  reserve = wantMajor ? 1 : 0;
 
   // 4. Regular weighted events
   let n = drawRegularCount(s);
@@ -507,9 +522,15 @@ export function runEvents(s, h) {
     if (fireRegular(s, h, ev)) { entries++; n--; }
     if (!s.alive) return false;
   }
+  runDue();
+  if (!s.alive) return false;
 
-  // 5. The major event
-  if (wantMajor && s.alive) {
+  // 5. The major event (one reserved by a follow-up or a milestone is presented first)
+  if (choiceEvent && s.alive) {
+    // other events of this year may have moved the person since the milestone was drawn (a new city, a new country)
+    if (reservedByChance && !isEligible(s, h, choiceEvent)) choiceEvent = null;
+    else if (!presentChoice(s, h, choiceEvent)) choiceEvent = null;
+  } else if (wantMajor && s.alive) {
     const cands = el.major.filter((ev) => isEligible(s, h, ev));
     // a repeat with nothing new to say is skipped: try another candidate
     while (cands.length && !choiceEvent) {
@@ -519,8 +540,6 @@ export function runEvents(s, h) {
       if (presentChoice(s, h, ev)) choiceEvent = ev;
       if (!s.alive) return false;
     }
-  } else if (choiceEvent && s.alive) {
-    if (!presentChoice(s, h, choiceEvent)) choiceEvent = null;
   }
 
   // 6. Ordinary year

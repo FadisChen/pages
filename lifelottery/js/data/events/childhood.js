@@ -11,9 +11,6 @@
 //
 // All functions are total: they never assume a parent, partner or child exists unless `cond` guarantees it.
 
-const MUSLIM = new Set(['BGD', 'PAK', 'IDN', 'MYS', 'EGY', 'TUR', 'IRN', 'IRQ', 'SAU', 'DZA', 'MAR', 'TUN', 'AFG', 'UZB', 'KAZ', 'JOR', 'SYR', 'YEM',
-  'SDN', 'SOM', 'SEN', 'MLI', 'NER', 'LBY', 'AZE', 'TJK', 'TKM', 'KGZ', 'ARE', 'KWT', 'QAT', 'OMN', 'BHR', 'MRT', 'GIN', 'PSE', 'LBN', 'BRN', 'MDV']);
-
 /** The adult who is most likely there for you, as a word; safe when both parents are gone. */
 const mom = (h) => (h.parentAlive('mother') ? '媽媽' : h.parentAlive('father') ? '爸爸' : '身邊的大人');
 
@@ -65,7 +62,7 @@ export default [
     title: '打預防針的日子',
     ages: [0, 5],
     weight: 0.9,
-    tags: ['health', 'childhood'],
+    tags: ['health', 'childhood', 'vaccine', 'wellness'],
     text: (s, h) => h.byLiving({
       L: '衛生人員帶著冷藏箱走了半天的路來到村裡，大人帶著孩子排成一列。輪到你時你扯開喉嚨哭，哭聲驚動了樹上的鳥，哭完卻拿到一顆糖，馬上破涕為笑。',
       LM: '衛生所的護理師把你的手臂擦了又擦。針一下去你放聲大哭，大人一邊拍你一邊對護理師說抱歉，其實沒什麼好抱歉的，候診長椅上的孩子們全都安靜了。',
@@ -180,17 +177,9 @@ export default [
     once: false,
     cooldown: 4,
     weight: 0.9,
-    tags: ['family', 'culture'],
-    text: (s, h) => {
-      const c = s.countryCode;
-      if (h.region() === 'EAS') return '過年時家裡擠滿了親戚，桌上堆滿年菜。長輩們輪流塞紅包給你，你一邊說吉祥話，一邊偷偷算今年的收成，晚上把紅包壓在枕頭底下睡覺。';
-      if (MUSLIM.has(c)) return '節日的早晨，大人們換上新衣，家家戶戶互相拜訪。你拿到節日的零用錢和一大把糖果，滿手甜得黏答答，吃到最後，連袖子都被糖黏在一起。';
-      if (c === 'IND' || c === 'NPL') return '節日的夜裡，窗台和門口點滿了小油燈，巷子裡的鞭炮聲此起彼落。你和表兄弟姊妹跑來跑去，吃甜點吃到走不動，躺在涼涼的石階上，數著天上忽明忽暗的煙火。';
-      if (h.region() === 'LAC') return '平安夜，大家直到午夜才開飯。你撐著眼皮等到零點，在鞭炮聲和擁抱之間被親戚輪流親了好幾次，最後迷迷糊糊地在沙發上睡著，被蓋上了三條毯子。';
-      if (h.isRegion('EUR', 'NAM', 'OCE')) return '節慶的早晨你比誰都早醒，赤腳衝到客廳。包裝紙撕了一地，你卻最愛家人織的那件醜毛衣，一直穿到發臭，直到大人趁你睡著偷偷拿去洗，你隔天哭著要回來。';
-      if (h.region() === 'SSA') return '年底的家族聚會，遠方的親戚都回來了。整個院子擠滿了人，大鍋飯香氣四溢，大人聊到深夜，你在孩子堆裡玩捉迷藏，玩到被誰抱回床上都不知道。';
-      return '節慶時家裡擠滿了親戚，大人忙著張羅，你被派去搬椅子、擺碗筷，忙得像一隻小陀螺，卻能趁人不注意，偷拿到一塊最好吃的點心，躲在桌子底下慢慢吃。';
-    },
+    tags: ['family', 'culture', 'festival'],
+    // the family's own festival (religion and home country), not the country the child happens to live in
+    text: (s, h) => h.festivalScene('child'),
     effects: { happiness: +4, social: +3, wealth: +1 },
   },
   {
@@ -221,8 +210,8 @@ export default [
     title: '雨季的蚊子',
     ages: [1, 8],
     weight: 0.7,
-    tags: ['health', 'regional'],
-    cond: (s, h) => h.isRegion('SSA', 'SAS', 'SEA', 'LAC') && !h.incomeAtLeast('H') && h.yearsSince('health_dengue_fever') > 6,
+    tags: ['health', 'regional', 'disease'],
+    cond: (s, h) => h.isRegion('SSA', 'SAS', 'SEA', 'LAC') && !h.incomeAtLeast('H') && h.altitude() !== 'high' && h.yearsSince('health_dengue_fever') > 6, // mosquitoes do not live above ~1,500 m
     text: (s, h) => (h.year() >= 2005 && !h.incomeAtLeast('UM')
       ? '雨季一到，蚊子像一團團黑煙。這年家裡領到了一頂防蚊帳，大人把四個角小心繫好。你在網子裡聽著外面的嗡嗡聲，睡得特別安穩，連夢裡都沒有那些討厭的嗡嗡聲。'
       : '雨季一到，蚊子像一團團黑煙。大人點起蚊香、關緊窗戶，你的手腳還是被叮得全是紅腫的包，癢得整夜翻來覆去，隔天一大早，你數了數，光是一隻腳就有九個包。'),
@@ -236,7 +225,7 @@ export default [
     title: '那壺煮開的水',
     ages: [3, 10],
     weight: 0.8,
-    tags: ['health', 'regional'],
+    tags: ['health', 'regional', 'disease'],
     cond: (s, h) => (h.income() === 'L' || h.income() === 'LM') && h.wealthQ() <= 3,
     text: (s, h) => '雨季的水混著泥，你喝下去後肚子絞痛了兩天。從那以後，家裡多了一道工序：把水煮開、放涼，再倒進專屬的那只壺，壺蓋蓋得緊緊的，誰也不准亂動。',
     effects: { health: -3, knowledge: +1, happiness: -1 },
@@ -246,10 +235,10 @@ export default [
     title: '螢幕裡的世界',
     ages: [3, 11],
     weight: 0.9,
-    tags: ['tech', 'childhood'],
+    tags: ['tech', 'childhood', 'play'],
     cond: (s, h) => h.year() >= 2012 && h.incomeAtLeast('LM') && h.stat('wealth') > 30,
     text: (s, h) => {
-      if (h.year() >= 2040 && h.age() <= 6) return '牆上的螢幕和會回答問題的小機器人，是你最早的玩伴。你學會的第一個長句子，有一半是對著它說的，另一半是對著大人。後來你才知道，那些大人很常被你的機器人朋友「糾正發音」。';
+      if (h.year() >= 2040 && h.age() <= 6) return '牆上的螢幕和會回答問題的小機器人，是你最早的玩伴。你小時候說過的那些長長的句子，有一半是對著它說的，另一半是對著大人。後來你才知道，那些大人很常被你的機器人朋友「糾正發音」。';
       if (h.year() >= 2040) return `${h.inSchool() ? '寫功課的時候' : '想弄懂什麼的時候'}，牆上的螢幕和那個會回答問題的小機器人，是你最有耐心的夥伴。你問它「為什麼」，它從不嫌煩；後來大人教你，有些問題要先自己想過再去問，那樣得到的答案才真正算是你的。`;
       return h.byIncome({
         LM: '家裡有一支共用的手機，你總趁大人煮飯時偷看影片，每次被發現，剛好都看到最精彩的那一段，只好眼巴巴地懇求大人再讓你看完這一集。',
@@ -263,7 +252,7 @@ export default [
     id: 'childhood_first_tv',
     title: '那台電視',
     ages: [3, 10],
-    tags: ['culture', 'childhood'],
+    tags: ['culture', 'childhood', 'play'],
     cond: (s, h) => h.yearIn(1966, 1998) && (h.urban() || ['UM', 'H'].includes(h.incomeAt()) || h.year() >= 1972),
     text: (s, h) => (['UM', 'H'].includes(h.incomeAt())
       ? '客廳裡那台電視成了全家晚上的中心，你守著卡通開播的時間，一分鐘都不肯遲到，連吃飯都要端到電視前面，一邊嚼一邊盯著螢幕，湯匙好幾次戳到鼻子。'
@@ -275,7 +264,7 @@ export default [
     title: '家裡的小動物',
     ages: [4, 11],
     weight: 0.8,
-    tags: ['childhood', 'animals'],
+    tags: ['childhood', 'animals', 'play'],
     text: (s, h) => (!h.urban() && !h.incomeAtLeast('UM')
       ? `家裡的母雞孵出了小雞。你替其中一隻取了名字，每天餵牠碎米。大人說別取名字，你還是偷偷取了。每天早上，你都先去看看牠有沒有長大一點，才肯${h.inSchool() ? '去上學' : '出門幫忙'}。`
       : '你家養了一隻貓，牠對你的態度時冷時熱，卻總在你難過的時候，不吭一聲地靠在你腳邊，用暖暖的背脊貼著你的腳踝，一直待到你不哭了為止。'),
@@ -298,7 +287,7 @@ export default [
     weight: 0.8,
     tags: ['family', 'money'],
     cond: (s, h) => h.wealthQ() <= 3 && (h.siblings() >= 1 || !h.incomeAtLeast('UM')),
-    text: (s, h) => '你身上的衣服是兄姊或表親穿過的，袖口縫過兩次，膝蓋補得很整齊。新衣只在過年才有，所以你格外愛惜，連洗都捨不得用力搓，晾衣服時還要特地挑最好的位置。',
+    text: (s, h) => `你身上的衣服是兄姊或表親穿過的，袖口縫過兩次，膝蓋補得很整齊。新衣只在${h.festival()}才有，所以你格外愛惜，連洗都捨不得用力搓，晾衣服時還要特地挑最好的位置。`,
     effects: { happiness: +1, wealth: -1 },
   },
   {
@@ -316,7 +305,7 @@ export default [
     ages: [6, 11],
     weight: 0.9,
     tags: ['childhood', 'money'],
-    text: (s, h) => `大人派你去雜貨店買${h.isRegion('EAS', 'SEA') ? '醬油' : '麵包和牛奶'}，還交代找回的零錢要數清楚。你一路把硬幣在口袋裡握得發熱，回來報告「剩兩塊」時，大人笑了，說你比店老闆還會算，然後把那兩塊錢又放回你手心。`,
+    text: (s, h) => `大人派你去雜貨店買${h.isRegion('EAS', 'SEA') ? '醬油' : '麵包和牛奶'}，還交代找回的零錢要數清楚。你一路把硬幣在口袋裡握得發熱，回來報告「找回的零錢是${h.money(0.3)}」時，大人笑了，說你比店老闆還會算，然後把那幾枚硬幣又放回你手心。`,
     effects: { knowledge: +1, social: +1, happiness: +1 },
   },
   {
@@ -324,7 +313,7 @@ export default [
     title: '第一次進城',
     ages: [5, 12],
     weight: 0.8,
-    tags: ['childhood', 'rural'],
+    tags: ['childhood', 'rural', 'travel'],
     cond: (s, h) => !h.urban(),
     text: (s, h) => '大人帶你去了趟城裡。你第一次搭上電扶梯，第一次看見這麼多車同時按喇叭。回程你靠在窗邊，嘴裡還含著街上買的糖，一路沒說話。',
     effects: { knowledge: +2, happiness: +3, social: +1 },

@@ -625,14 +625,14 @@ export default [
   },
   {
     id: 'work_job_scam',
-    title: '免經驗，月入三萬',
+    title: '免經驗，高薪日領',
     ages: [18, 40],
     weight: 0.6,
     tags: ['work', 'scam', 'chain'],
     cond: (s, h) => (h.unemployed() || h.workStatus() === 'none' || h.isPoor()) && !h.incomeAtLeast('H') && !h.has('w_scammed'),
     text: (s, h) => (h.techReady(2010)
       ? '社群上的招聘貼文寫著「在家兼職，日領現金」，客服親切又有耐心，只是上工前要先匯一筆「保證金」。你知道不太對，但帳單也是真的，所以你把頁面截圖存了又刪、刪了又存。'
-      : '街上的招工告示寫著「免經驗、月入三萬」，面談時對方說先繳訓練費與保證金，馬上就能上工。你知道不太對，但帳單也是真的，所以你把告示上的電話抄了又撕、撕了又抄。'),
+      : `街上的招工告示寫著「免經驗、月入${h.money(h.annualIncome() / 12 * 2)}」，面談時對方說先繳訓練費與保證金，馬上就能上工。你知道不太對，但帳單也是真的，所以你把告示上的電話抄了又撕、撕了又抄。`),
     choices: [
       {
         label: '先查證，問清楚再說',
@@ -1813,5 +1813,39 @@ export default [
     cond: (s, h) => h.isJob('guard', 'nurse', 'caregiver', 'driver', 'factory', 'cook'),
     text: (s, h) => '輪到夜班的那週，你和日夜顛倒的家人在門口擦身而過。凌晨四點的街，路燈亮得很孤單，但你發現早班車第一班開出時，天空是粉紅色的。',
     effects: { health: -3, happiness: -1, knowledge: +1 },
+  },
+  // ---- Phase 4A: 工作之外的自己 ----
+  {
+    id: 'work_creative_evenings',
+    title: '留給自己的夜晚',
+    ages: [24, 55],
+    once: false,
+    cooldown: 10,
+    weight: 0.6,
+    tags: ['hobby', 'creative', 'art', 'work'],
+    cond: (s, h) => h.employed() && h.stat('health') >= 40,
+    text: (s, h) => `你總想著要寫點什麼、畫點什麼、做點什麼，只屬於自己的東西。${h.wageEarner() ? '下班後' : '收工後'}的晚上，被晚飯、家事和疲倦切得零零碎碎，那個念頭卻一直沒有走。`,
+    choices: [
+      {
+        label: '固定每週留兩個晚上',
+        effects: { happiness: +4, knowledge: +1, wealth: -1, health: -1 },
+        result: '你在廚房角落擺了一張小桌子。第一個月你什麼也沒做出來，第三個月開始有了成品。那些東西不一定好，但每一件都是只有你做得出來的。',
+        highlight: '在工作之餘，替自己留下了一個創作的角落。',
+        ai: 1.6,
+      },
+      {
+        label: '找一個課程或同好一起',
+        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        effects: { happiness: +3, social: +4, wealth: -2 },
+        result: '你們在每週同一天的晚上見面，輪流把作品攤在桌上，毫不留情地說實話，又毫不吝嗇地鼓掌。你發現，被看見也是一種休息。',
+        ai: 1.8,
+      },
+      {
+        label: '等有空再說',
+        effects: { happiness: -1 },
+        result: '你把這個念頭收進「以後」那個抽屜。以後，常常比想像中來得慢。有時你路過書店或工具行，會停下來看一眼，然後繼續往前走。',
+        ai: 1,
+      },
+    ],
   },
 ];

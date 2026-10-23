@@ -15,9 +15,6 @@
 // Romance events never invent a partner: they only read the one the engine created (h.hasPartner()) or tell a story about a crush.
 // All functions are total: they never assume a parent, partner or child exists unless `cond` guarantees it.
 
-const MUSLIM = new Set(['BGD', 'PAK', 'IDN', 'MYS', 'EGY', 'TUR', 'IRN', 'IRQ', 'SAU', 'DZA', 'MAR', 'TUN', 'AFG', 'UZB', 'KAZ', 'JOR', 'SYR', 'YEM',
-  'SDN', 'SOM', 'SEN', 'MLI', 'NER', 'LBY', 'AZE', 'TJK', 'TKM', 'KGZ', 'ARE', 'KWT', 'QAT', 'OMN', 'BHR', 'MRT', 'GIN', 'PSE', 'LBN', 'BRN', 'MDV']);
-
 /** Chance that something shared openly is met with acceptance, by era and surroundings (kept modest and varied, never absolute). */
 function acceptP(h) {
   let p = h.era() === 'past' ? 0.5 : h.era() === 'future' ? 0.85 : 0.72;
@@ -175,7 +172,7 @@ export default [
     ages: [13, 18],
     weight: 0.9,
     tags: ['sports', 'friends'],
-    cond: (s, h) => h.inSchool() || h.urban(),
+    cond: (s, h) => (h.inSchool() || h.urban()) && h.playsSports(),
     text: (s, h) => '球隊每天傍晚在操場練習，教練的口頭禪是：「再一次。」你的膝蓋有擦傷，汗水流進眼睛。某場比賽結束的哨音響起，全隊抱在一起時，你覺得自己屬於某個比自己更大的東西。',
     effects: { health: +2, social: +4, happiness: +3 },
   },
@@ -321,7 +318,7 @@ export default [
     ages: [18, 18],
     chance: 1,
     milestone: true,
-    tags: ['milestone', 'coming_of_age'],
+    tags: ['milestone', 'coming_of_age', 'identity'],
     text: (s, h) => h.byIncome({
       L: '你滿十八歲了。在你的家鄉，這個年紀已經是能扛起家計的人。大人替你煮了一碗麵，說：「從今天起，你的路自己走。」你吃得很慢。',
       LM: '十八歲生日那天，你領到了屬於自己的證件。大人鄭重其事地說：「你成年了。」你點頭，其實更想知道今晚晚餐吃什麼，因為整個家裡，只有你一個人把這個日子看得這麼重要。',
@@ -335,7 +332,7 @@ export default [
     title: '十五歲的舞會',
     ages: [14, 16],
     weight: 2,
-    tags: ['culture', 'coming_of_age'],
+    tags: ['culture', 'coming_of_age', 'fun'],
     cond: (s, h) => h.female() && h.isRegion('LAC'),
     text: (s, h) => '你滿十五歲了。家裡為你準備了成年禮：蓬蓬的禮服、和家人排練了好幾週的華爾茲，還有一場全家出動的大聚會。跳舞時你踩到了裙擺，所有人笑成一團，卻都為你鼓掌。',
     effects: { happiness: +5, social: +4, wealth: -2 },
@@ -835,7 +832,7 @@ export default [
     major: true,
     weight: 0.8,
     tags: ['friends', 'health'],
-    cond: (s, h) => !MUSLIM.has(s.countryCode) && (h.urban() || h.incomeAtLeast('LM')),
+    cond: (s, h) => !h.isReligion('muslim') && (h.urban() || h.incomeAtLeast('LM')),
     text: (s, h) => '朋友家的大人不在，桌上擺著一瓶沒開過的酒。有人說「就一杯嘛」，杯子在你們之間傳來傳去，剛好傳到你手上，杯壁上還留著別人的手溫。',
     choices: [
       {
@@ -1690,7 +1687,7 @@ export default [
     title: '沒有螢幕的暑假',
     ages: [14, 22],
     weight: 0,
-    tags: ['followup', 'tech'],
+    tags: ['followup', 'tech', 'hobby', 'play'],
     text: (s, h) => '那個少了螢幕的暑假，你學會了騎很遠的腳踏車、跟朋友在樹下聊到被蚊子咬，也終於讀完了一直放在床頭的那本小說。回來以後，你覺得世界好像大了一圈。',
     effects: { happiness: +3, health: +2, knowledge: +2 },
     unset: ['y_deleted_app'],
@@ -1779,6 +1776,69 @@ export default [
         effects: { knowledge: +1, happiness: -2 },
         result: '你把通知放進抽屜。多年後打開，紙張都泛黃了，你還是說不準那天的決定，是成熟，還是害怕。',
         ai: (s, h) => (h.has('c_talent_path') ? 0.3 : 1),
+      },
+    ],
+  },
+  // ---- Phase 4A: 興趣、旅行（人生重心「興趣與自我」會讓這類事件更常出現） ----
+  {
+    id: 'youth_hobby_draw',
+    title: '畫滿角落的本子',
+    ages: [10, 19],
+    weight: 0.7,
+    tags: ['hobby', 'creative', 'art', 'youth'],
+    text: (s, h) => h.byIncome({
+      L: '你用撿來的鉛筆頭在舊月曆的背面畫畫：村口的樹、市場的人、鄰居的狗。紙很快就畫滿了，你開始擦掉再畫，把每一張背面都用到幾乎透明。',
+      LM: '你有了一本小小的筆記本，每一頁的角落都被你畫滿了：朋友的側臉、窗外的屋頂、一隻停在電線上的鳥。你不敢拿給別人看，只敢在沒人的時候偷偷翻開。',
+      UM: '你的筆記本每一頁的角落都畫滿了小圖：紙上的人物、窗外的天空、朋友的側臉。有人翻到了，沒有笑你，只是在旁邊寫了一行字：「你有自己的線條。」',
+      H: '你的素描本越換越厚，書桌抽屜塞滿了畫了一半的稿子。大人說可以去學畫，你卻有點怕：把喜歡的事變成功課，會不會就不喜歡了？',
+    }),
+    choices: [
+      {
+        label: '拿給信得過的人看',
+        effects: { happiness: +3, social: +2, knowledge: +1 },
+        result: '對方看得很慢，翻到最後一頁才抬起頭，說：「你有在畫的樣子，我很喜歡。」那天你走路回家，覺得腳下的路比平常短。',
+        ai: 2,
+      },
+      {
+        label: '繼續偷偷畫，只給自己看',
+        effects: { happiness: +2, knowledge: +1 },
+        result: '你把本子藏在最深的口袋裡，畫成了每天的一個小儀式。有人問你一個人在忙什麼，你只回答：「沒什麼。」嘴角卻藏不住笑。',
+        ai: 1.4,
+      },
+      {
+        label: '把時間讓給正事和家裡的事',
+        effects: { happiness: -1, knowledge: +1 },
+        result: '你把筆記本收進抽屜，鎖上。你告訴自己以後還有時間，只是偶爾聞到鉛筆的氣味，心裡會輕輕空一下。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'youth_friends_trip',
+    title: '第一次自己出去玩',
+    ages: [15, 23],
+    weight: 0.6,
+    tags: ['travel', 'friends', 'fun', 'youth'],
+    cond: (s, h) => h.incomeAtLeast('LM') && (h.stat('wealth') >= 35 || h.inSchool()),
+    text: (s, h) => '朋友提議：趁這個週末，我們自己出去走一趟。行程亂七八糟，錢只夠搭車和一餐便宜的飯。家人叮嚀了十分鐘，你把每一句都答應了，包包裡塞滿了其實用不到的東西。',
+    choices: [
+      {
+        label: '答應，把計畫排出來',
+        effects: { happiness: +4, social: +3, wealth: -1, knowledge: +1 },
+        result: '你們迷了兩次路，吃到一碗沒人推薦卻好吃得出奇的麵，在末班車上睡成一排。回家的時候，你覺得自己比出發時大了一點點。',
+        ai: 2,
+      },
+      {
+        label: '說想去，但先談好條件',
+        effects: { happiness: +2, social: +1 },
+        result: '你和家人把行程、回家的時間、聯絡方式一條一條列出來。他們雖然皺著眉，最後還是點了頭。那趟路你守時守約，換來之後更多的自由。',
+        ai: 1.6,
+      },
+      {
+        label: '下次再說，這次不去',
+        effects: { happiness: -2, social: -1 },
+        result: '你看著朋友們傳回來的照片，一張一張放大。笑是真的，羨慕也是真的。你告訴自己，下一次，一定。',
+        ai: 0.6,
       },
     ],
   },

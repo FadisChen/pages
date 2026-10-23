@@ -24,8 +24,6 @@ const HIV_AFRICA = new Set(['ZAF', 'UGA', 'ZMB', 'ZWE', 'BWA', 'MWI', 'KEN', 'TZ
 const COASTAL_FUTURE = new Set(['BGD', 'NLD', 'IDN', 'VNM', 'EGY', 'MDV', 'FJI', 'SLB', 'PHL', 'THA', 'MMR', 'GUY', 'SUR', 'TUV', 'BEL', 'DNK', 'USA', 'JPN', 'CHN', 'IND', 'NGA', 'SEN', 'GMB', 'MOZ', 'TLS', 'CPV', 'PNG', 'HTI', 'DOM', 'CUB', 'JAM', 'TTO', 'SGP', 'TWN', 'HKG', 'ITA', 'GBR']);
 const AGING_FUTURE = new Set(['JPN', 'KOR', 'TWN', 'CHN', 'HKG', 'SGP', 'ITA', 'ESP', 'PRT', 'GRC', 'DEU', 'FIN', 'POL', 'ROU', 'BGR', 'HRV', 'LTU', 'LVA', 'EST', 'THA', 'CUB', 'URY', 'CHL', 'RUS', 'UKR', 'HUN', 'CZE', 'SVN', 'SRB', 'MAC']);
 const SEA_EXPOSURE = { BGD: 0.6, NLD: 0.5, MDV: 1, FJI: 0.7, SLB: 0.7, VNM: 0.4, IDN: 0.4, DNK: 0.3, GUY: 0.5, SUR: 0.5, CPV: 0.6, TLS: 0.4, PNG: 0.3, SGP: 0.4 };
-/** Large cities well away from the sea: no tidal flooding there (the city of a rural person is the nearest one). */
-const INLAND_CITIES = new Set(['北京', '成都', '德里', '班加羅爾', '芝加哥', '日惹', '阿布加', '伊巴丹', '卡諾', '雪爾赫特', '清邁', '孔敬', '曼德勒', '內比都', '楠普拉', '烏特勒支', '米蘭', '都靈', '伯明罕', '根特', '開羅', '路克索', '圖巴']);
 const seaExposure = (code) => SEA_EXPOSURE[code] ?? (COASTAL_FUTURE.has(code) ? 0.25 : 0);
 
 // ---- helpers ----
@@ -97,7 +95,7 @@ export default [
     title: '老師回來了',
     ages: [3, 30],
     chance: 0.6,
-    tags: ['world', 'china'],
+    tags: ['world', 'china', 'school'],
     cond: (s, h) => s.countryCode === 'CHN' && h.yearIn(1976, 1981),
     text: (s, h) => (kid(h)
       ? '廣播裡反覆播放著沉重的音樂，大人們的表情很複雜，很多話只敢在家裡小聲說。過了一陣子，學校恢復了考試，被調到鄉下的老師也一個個回來了。'
@@ -135,7 +133,7 @@ export default [
     ages: [0, 70],
     chance: 1,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => s.countryCode === 'BGD' && h.yearIn(1970, 1971) && !h.urban(),
+    cond: (s, h) => s.countryCode === 'BGD' && h.yearIn(1970, 1971) && !h.urban() && h.coastal(),
     text: (s, h) => '十一月的夜裡，風聲越來越大，海水湧進了沿海的村子。天亮時，許多房子只剩下地基，倖存的人坐在樹梢上，等著有人划船來，沒有人說話，只有水拍在樹幹上的聲音。',
     effects: (s, h) => {
       h.change('health', -6); h.change('wealth', -6); h.change('happiness', -5);
@@ -664,7 +662,7 @@ export default [
     ages: [0, 90],
     chance: 1,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => h.yearIn(2004, 2005) && TSUNAMI_2004[s.countryCode] !== undefined && h.stable('world_tsunami_2004', TSUNAMI_2004[s.countryCode] * (h.urban() ? 1 : 1.8)),
+    cond: (s, h) => h.yearIn(2004, 2005) && TSUNAMI_2004[s.countryCode] !== undefined && h.coastal() && h.stable('world_tsunami_2004', TSUNAMI_2004[s.countryCode] * (h.urban() ? 1 : 1.8)),
     text: (s, h) => '十二月的早晨，海水突然退得很遠，海灘上露出平常看不見的礁石和魚。有人好奇地走過去，隨後遠方傳來轟隆的聲音，一道牆似的海水正朝岸邊壓來。',
     choices: [
       {
@@ -698,7 +696,7 @@ export default [
     ages: [5, 90],
     chance: 0.08,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => s.countryCode === 'USA' && h.yearIn(2005, 2005),
+    cond: (s, h) => s.countryCode === 'USA' && h.yearIn(2005, 2005) && s.city === '休士頓' && h.stable('world_hurricane_katrina_2005', 0.15), // New Orleans and the Gulf coast, not every American
     text: (s, h) => '颶風登陸後，堤防潰決，南方城市大片被水淹沒。你和家人在屋頂上揮手，後來被送到體育館暫住，在那裡你學會了和陌生人分享一條毯子。',
     effects: { wealth: -6, happiness: -4, social: -1, health: -2 },
   },
@@ -832,7 +830,7 @@ export default [
     ages: [3, 90],
     chance: 0.1,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => s.countryCode === 'NZL' && h.yearIn(2010, 2011),
+    cond: (s, h) => s.countryCode === 'NZL' && h.yearIn(2010, 2011) && s.city === '基督城', // the quake struck Christchurch itself
     text: (s, h) => '午餐時間，城市中心突然劇烈搖晃，磚牆倒下、街道裂開。接下來的幾年，市中心大片被圍起來，居民們一邊整理自己的生活，一邊想像重建後的樣子。',
     effects: { wealth: -3, happiness: -3, social: +2 },
   },
@@ -901,7 +899,7 @@ export default [
     ages: [0, 95],
     chance: 1,
     tags: ['world', 'disaster', 'japan'],
-    cond: (s, h) => s.countryCode === 'JPN' && h.yearIn(2011, 2011),
+    cond: (s, h) => s.countryCode === 'JPN' && h.yearIn(2011, 2011) && (s.city === '東京' || h.stable('world_tohoku_2011', 0.15)),
     text: (s, h) => '午後兩點四十六分，大地劇烈搖動了好幾分鐘。電視畫面裡，海水吞沒了東北沿岸的城鎮，而你身處的城市則停電、斷訊，人們在街上一起等待下一個消息。',
     choices: [
       {
@@ -945,7 +943,7 @@ export default [
     ages: [3, 90],
     chance: 0.5,
     tags: ['world', 'disaster', 'climate', 'regional'],
-    cond: (s, h) => s.countryCode === 'RUS' && h.yearIn(2010, 2010),
+    cond: (s, h) => s.countryCode === 'RUS' && h.yearIn(2010, 2010) && (s.city === '莫斯科' || s.city === '喀山' || h.stable('world_russia_heat_2010', 0.25)),
     text: (s, h) => '七月的氣溫高得不尋常，森林與泥炭地四處起火，城市被濃煙裹住，連白天也要點燈。人們戴著口罩上班，一邊用濕毛巾貼住窗縫，傍晚的太陽像一顆紅色的圓盤。',
     effects: (s, h) => { h.change('health', -4); h.change('happiness', -3); if (h.age() >= 65 && h.chance(0.05)) h.addRisk(1.3, 1); },
   },
@@ -955,7 +953,7 @@ export default [
     ages: [3, 90],
     chance: 0.12,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => s.countryCode === 'PHL' && h.yearIn(2013, 2013),
+    cond: (s, h) => s.countryCode === 'PHL' && h.yearIn(2013, 2013) && h.coastal() && (s.city === '宿霧' || h.stable('world_typhoon_haiyan_2013', 0.15)),
     text: (s, h) => '史上最強的颱風之一從海上撲來，海水與狂風摧毀了沿岸的村鎮。幾天後，救援直升機的聲音才慢慢遠遠傳來，你和鄰居們一起清出一條通往市場的路。',
     effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -5); h.change('social', +2); if (h.chance(0.006)) h.die('disaster'); },
   },
@@ -1020,7 +1018,7 @@ export default [
     ages: [3, 90],
     chance: 0.5,
     tags: ['world', 'disaster', 'climate', 'regional'],
-    cond: (s, h) => s.countryCode === 'AUS' && h.yearIn(2019, 2020),
+    cond: (s, h) => s.countryCode === 'AUS' && h.yearIn(2019, 2020) && s.city !== '伯斯',
     text: (s, h) => '夏天的天空變成橘紅色，空氣裡全是煙味，連室內也聞得到。新聞每天更新著撤離的區域，你把重要的文件和寵物的鐵籠放在門口，等著下一個通知。',
     effects: (s, h) => { h.change('health', -3); h.change('happiness', -4); h.change('wealth', -2); },
   },
@@ -1125,7 +1123,7 @@ export default [
     title: '來不及見的最後一面',
     ages: [18, 100],
     weight: 0,
-    tags: ['world', 'pandemic', 'grief', 'followup'],
+    tags: ['world', 'pandemic', 'grief', 'followup', 'family'],
     followCond: (s, h) => h.age() >= 18 && (h.parentsAlive() > 0 || h.age() >= 55),
     text: (s, h) => '疫情期間，家人住進了醫院，探病時間被限制成十分鐘，隔著玻璃。後來他離開了，葬禮上只有寥寥幾個人，你用手機給遠方的親戚直播，大家一起哭。',
     effects: { happiness: -7, social: -3, health: -2 },
@@ -1242,9 +1240,15 @@ export default [
     ages: [3, 90],
     chance: 0.1,
     tags: ['world', 'disaster', 'regional'],
-    cond: (s, h) => (s.countryCode === 'TUR' || s.countryCode === 'SYR') && h.yearIn(2023, 2023),
-    text: (s, h) => '寒冷的凌晨，大地猛烈晃動，整排公寓像積木一樣垮下。天亮後，人們在冰冷的瓦礫間徒手挖掘，街上的火堆旁，每個人都在尋找自己的家人。',
-    effects: (s, h) => { h.change('wealth', -6); h.change('happiness', -6); h.change('health', -3); if (h.chance(0.015)) h.die('disaster'); },
+    // Syria: the quake zone (Aleppo, Homs) itself; Turkey: the cities of the game are outside the zone, so people there live it through relatives
+    cond: (s, h) => h.yearIn(2023, 2023) && ((s.countryCode === 'SYR' && (s.city === '阿勒坡' || s.city === '霍姆斯')) || (s.countryCode === 'TUR' && h.stable('world_turkey_quake_2023', 0.5))),
+    text: (s, h) => (s.countryCode === 'SYR'
+      ? '寒冷的凌晨，大地猛烈晃動，整排公寓像積木一樣垮下。天亮後，人們在冰冷的瓦礫間徒手挖掘，街上的火堆旁，每個人都在尋找自己的家人。'
+      : '寒冷的凌晨，電視插播地震快訊：南方好幾座城市的公寓整排垮下。你一整天打不通親戚的電話，傍晚才收到一則簡訊：「人還在。」接下來的幾週，你把捐款和冬衣一箱一箱送上車。'),
+    effects: (s, h) => {
+      if (s.countryCode === 'SYR') { h.change('wealth', -6); h.change('happiness', -6); h.change('health', -3); if (h.chance(0.015)) h.die('disaster'); }
+      else { h.change('happiness', -4); h.change('social', +2); h.change('wealth', -1); }
+    },
   },
   {
     id: 'world_sudan_2023',
@@ -1268,7 +1272,7 @@ export default [
     cooldown: 12,
     chance: 0.04,
     tags: ['world', 'future', 'climate'],
-    cond: (s, h) => h.yearIn(2030, 2100) && h.incomeAtLeast('UM'),
+    cond: (s, h) => h.yearIn(2030, 2100) && h.incomeAtLeast('UM') && (h.hotClimate() || h.climate() === 'temperate'),
     text: (s, h) => '這個夏天，氣象署連續十幾天發布高溫警報，柏油路面蒸出熱浪。學校縮短了課時，公園裡加設了降霧裝置，你學會了像在沙漠一樣，早晚才出門。',
     effects: (s, h) => { h.change('health', -3); h.change('wealth', -1); h.change('happiness', -2); if (h.age() >= 70 && h.chance(0.05)) h.addRisk(1.2, 1); },
   },
@@ -1280,7 +1284,7 @@ export default [
     cooldown: 12,
     chance: 0.05,
     tags: ['world', 'future', 'climate'],
-    cond: (s, h) => h.yearIn(2030, 2100) && lowInc(h),
+    cond: (s, h) => h.yearIn(2030, 2100) && lowInc(h) && h.hotClimate(),
     text: (s, h) => '夜裡氣溫也不降，屋裡像烤箱，大家搬到屋外或屋頂睡覺。井水一天比一天少，工地與田裡的工作都改在清晨和傍晚做，午後所有人縮在樹蔭下喘氣。',
     choices: [
       {
@@ -1376,7 +1380,7 @@ export default [
     cooldown: 15,
     chance: 0.05,
     tags: ['world', 'future', 'climate', 'regional'],
-    cond: (s, h) => h.yearIn(2035, 2100) && !INLAND_CITIES.has(s.city) && h.stable('world_sea_level', seaExposure(s.countryCode)),
+    cond: (s, h) => h.yearIn(2035, 2100) && h.coastal() && h.stable('world_sea_level', seaExposure(s.countryCode)),
     text: (s, h) => '海水一年比一年上得更高，每逢大潮，街道就積水到腳踝。社區開了好幾次會議，討論要築高堤防、改建高腳屋，還是離開這片住了幾代人的土地。',
     choices: [
       {

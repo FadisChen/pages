@@ -5,6 +5,10 @@
 // Tone: dignified and concrete, never exoticizing. Events only appear where the country, region, income group
 // and (often) rural/urban setting make them statistically plausible.
 //
+// Phase 4A: the last block (`regional_culture_*`) is about the religion and tradition of the FAMILY (h.religion(), h.festival()),
+// which stays with the person wherever they live; festival scenes come from data/religion.js through h.festivalScene().
+// Climate events are gated by the place (h.coastal(), h.climate(), h.snowy(), h.hotClimate(), h.altitude()), not by the country alone.
+//
 // Follow-up chains (schedule):
 //   regional_conflict_displacement -> regional_camp_life -> regional_new_start
 //   regional_conflict_displacement -> regional_after_the_fighting
@@ -34,20 +38,10 @@ const ZONES = {
 };
 const inZone = (s, h) => { const z = ZONES[s.countryCode]; return !!z && h.yearIn(z[0], z[1]); };
 
+/** byLiving for scenes of a city (metro, office towers): the countryside gets the lower-middle version even in a rich country. */
+const ruralDown = (h, map) => (h.urban() ? h.byLiving(map) : h.byLiving({ ...map, UM: map.LM }));
 const lowInc = (h) => h.income() === 'L' || h.income() === 'LM';
 const rural = (h) => !h.urban() && !h.displaced();
-
-/** Festival name and a short, concrete description fitted to the country. */
-function festival(s, h) {
-  const c = s.countryCode;
-  if (['CHN', 'TWN', 'KOR', 'VNM', 'SGP', 'HKG', 'MAC', 'PRK'].includes(c)) return '農曆新年到了。全家人圍著大圓桌吃年夜飯，長輩發紅包，孩子們把糖果塞滿口袋，遠方的親人也都回來了，連最少回家的堂哥也帶著一大袋禮物笑著出現在門口。';
-  if (['IND', 'NPL', 'LKA', 'BTN'].includes(c)) return '節慶的夜晚，家家戶戶點起油燈，門前用彩粉畫出圖案。你和鄰居交換甜點，孩子們在巷子裡放著小煙火，到處都是笑聲，連隔壁最嚴肅的叔叔也被拉進來，在門前畫了一朵歪歪的花。';
-  if (['PAK', 'BGD', 'IDN', 'MYS', 'EGY', 'TUR', 'IRN', 'IRQ', 'SAU', 'ARE', 'QAT', 'KWT', 'BHR', 'OMN', 'JOR', 'SYR', 'LBY', 'TUN', 'DZA', 'MAR', 'YEM', 'AZE', 'UZB', 'TJK', 'KGZ', 'TKM', 'KAZ', 'AFG', 'SOM', 'SEN', 'NER', 'MLI', 'DJI', 'PSE', 'LBN'].includes(c)) return '開齋節的早晨，你穿上新衣，和家人一起去清真寺或廣場禮拜。回家後長輩們分發小禮物，餐桌上擺滿了只在這天才吃得到的點心，鄰居的孩子也被叫進來分一份。';
-  if (['THA', 'LAO', 'KHM', 'MMR'].includes(c)) return '潑水節那幾天，街上到處是水桶和笑聲。你先替家裡的長輩輕輕灑水祈福，下一秒就被朋友淋得全身濕透，大家笑得站不直，連路過的外國遊客也被拉進戰局，笑得和大家一樣開心。';
-  if (c === 'JPN') return '新年的清晨，全家人圍著年菜，到神社排隊參拜，手裡握著熱甘酒。孩子們比較關心的是壓歲錢，大人則悄悄許下新一年的願望，而那個願望通常只有三個字：平平安安。';
-  if (h.isRegion('EUR', 'NAM', 'OCE', 'LAC') || c === 'PHL') return '節慶時分，家人從各地趕回來，屋子裡擠滿了人，烤爐一直沒停。大家交換禮物、唱舊歌，有人偷偷在廚房吃掉了一半的甜點，被抓到時笑得比誰都大聲。';
-  return '村裡一年一度的節慶到了，鼓聲與歌聲從傍晚響到深夜。大家穿上最好的衣服，帶著自家的菜聚在廣場，連平常不太說話的人也站起來跳舞。';
-}
 
 /** Wording for the local name of a big storm. */
 const stormName = (s, h) => (['IND', 'BGD', 'LKA', 'MMR', 'MDG', 'MOZ', 'AUS', 'FJI', 'PNG', 'SLB'].includes(s.countryCode) ? '氣旋' : h.isRegion('NAM', 'LAC') ? '颶風' : '颱風');
@@ -111,7 +105,7 @@ export default [
     cond: (s, h) => h.isRegion('SAS', 'SEA') || (h.isRegion('EAS') && ['CHN', 'TWN', 'KOR', 'JPN', 'VNM'].includes(s.countryCode)),
     text: (s, h) => {
       const desk = h.employed() && h.isJob('clerk', 'sales', 'technician', 'civil_servant', 'accountant', 'engineer', 'developer', 'manager', 'lawyer', 'researcher', 'teacher', 'entrepreneur');
-      const wet = h.byIncome({
+      const wet = ruralDown(h, { // narration: a villager in a middle-income country does not get the metro
         L: '雨季到了第三個月，田間的小路成了小河，學校連續停課好幾天。孩子們用塑膠袋當船在水裡追，大人則忙著墊高穀倉與檢查屋頂，一邊祈禱雨在播種前停下來。',
         LM: h.employed()
           ? '連日的大雨讓巷子淹到小腿，人力車、摩托車都在水裡慢慢地推。你把鞋子提在手上，一路光腳走到公車站，上班遲到也沒有人責怪，因為大家都在同一片水裡掙扎。'
@@ -145,7 +139,7 @@ export default [
     cooldown: 5,
     weight: 0.7,
     tags: ['regional', 'climate', 'storm'],
-    cond: (s, h) => STORMY.has(s.countryCode),
+    cond: (s, h) => STORMY.has(s.countryCode) && h.coastal(),
     text: (s, h) => `${stormName(s, h)}的警報在傍晚響起。${s.age < 14 ? h.byIncome({
       L: '大人把屋頂用繩子綁緊，把能搬的東西搬到最高處，你被擠在角落的草蓆上，聽著風聲與雨聲一直到天亮。鄰居也來了，大家擠在一起，誰也沒睡著，你卻因為人多而不怎麼害怕。',
       LM: '大人把窗戶貼上膠帶，把重要證件包進塑膠袋。風雨一整夜地敲著鐵皮，你抱著枕頭縮在大人身邊，早上整條街都是倒下的樹枝與電線，你跟著鄰居的孩子們去撿樹枝。',
@@ -166,8 +160,8 @@ export default [
     once: false,
     cooldown: 5,
     weight: 1.5,
-    tags: ['regional', 'health', 'malaria'],
-    cond: (s, h) => h.yearIn(1970, 2060) && !h.incomeAtLeast('H') && (h.isRegion('SSA') || (h.isRegion('SAS', 'SEA', 'OCE') && lowInc(h)) || ['PNG', 'SLB', 'GUY', 'SUR', 'HTI', 'BOL', 'COL', 'HND', 'NIC', 'VEN'].includes(s.countryCode)),
+    tags: ['regional', 'health', 'malaria', 'disease'],
+    cond: (s, h) => h.yearIn(1970, 2060) && !h.incomeAtLeast('H') && h.altitude() !== 'high' && (h.isRegion('SSA') || (h.isRegion('SAS', 'SEA', 'OCE') && lowInc(h)) || ['PNG', 'SLB', 'GUY', 'SUR', 'HTI', 'BOL', 'COL', 'HND', 'NIC', 'VEN'].includes(s.countryCode)),
     text: (s, h) => '雨季裡你突然發冷發熱，全身發抖，額頭卻燙得嚇人。家人說這是「雨季熱」，每一年身邊總有人要躺上幾天。你想起鄰居家那個今年沒有爬起來的孩子，心裡一陣發緊。',
     choices: [
       {
@@ -196,8 +190,8 @@ export default [
     title: '蚊帳發放日',
     ages: [1, 60],
     weight: 0.8,
-    tags: ['regional', 'health', 'malaria'],
-    cond: (s, h) => h.yearIn(2000, 2040) && lowInc(h) && h.isRegion('SSA', 'SAS', 'SEA', 'OCE'),
+    tags: ['regional', 'health', 'malaria', 'wellness'],
+    cond: (s, h) => h.yearIn(2000, 2040) && lowInc(h) && h.altitude() !== 'high' && h.isRegion('SSA', 'SAS', 'SEA', 'OCE'),
     text: (s, h) => '村口的學校院子裡擠滿了人，志工拿著名單，一戶一戶發放浸過藥劑的蚊帳。你領到那一頂時，全家人圍著它看了又看，晚上把它掛在床上，像睡進一座白色的小帳篷。',
     effects: { health: +3, happiness: +2, social: +1 },
   },
@@ -336,8 +330,8 @@ export default [
     ages: [20, 60],
     weight: 1.5,
     tags: ['regional', 'money', 'work'],
-    cond: (s, h) => lowInc(h) && h.yearIn(1985, 2060) && h.isRegion('SAS', 'SEA', 'SSA', 'LAC') && !h.has('microloan'),
-    text: (s, h) => '鄰居們組成了小小的互助小組，每週聚會一次，輪流存錢，也可以借一小筆錢做生意。她們問你要不要加入：一個人借不到的錢，一群人互相擔保，就變得可以了。',
+    cond: (s, h) => lowInc(h) && h.yearIn(1985, 2060) && h.isRegion('SAS', 'SEA', 'SSA', 'LAC') && !h.has('microloan') && (h.female() || h.stable('mixed_savings_group', 0.3)), // the groups are mostly women's
+    text: (s, h) => `鄰居們組成了小小的互助小組，每週聚會一次，輪流存錢，也可以借一小筆錢做生意。${h.female() ? '她們' : '他們'}問你要不要加入：一個人借不到的錢，一群人互相擔保，就變得可以了。`,
     choices: [
       {
         label: '加入並借款，買羊、縫紉機或進貨',
@@ -489,7 +483,7 @@ export default [
     cooldown: 8,
     weight: 0.8,
     tags: ['regional', 'work', 'sea'],
-    cond: (s, h) => COASTAL_FISH.has(s.countryCode) && h.isJob('fisher'),
+    cond: (s, h) => COASTAL_FISH.has(s.countryCode) && h.isJob('fisher') && h.coastal(),
     text: (s, h) => '天還沒亮，你和同伴們已經把船推進海裡。這幾年網裡的魚越來越少，魚的個頭也越來越小。老漁民望著海平線嘆氣，說祖父輩出海時，一網下去，船都要沉。',
     choices: [
       {
@@ -604,7 +598,7 @@ export default [
       {
         label: '留在家鄉，與鄰居互相照應',
         effects: (s, h) => { h.change('happiness', -3); h.change('health', -3); h.change('social', +3); h.set('war'); h.addRisk(1.25, 2); },
-        result: (s, h) => `你們留了下來，把地下室整理成共用的避難處，大家輪流守夜、分享食物。警報聲響起時，${h.age() < 16 ? '大人緊緊抓住你的手，一遍遍告訴你' : h.hasChildren() && h.youngestChildAge() <= 14 ? '你抓緊孩子的手，一遍遍告訴孩子' : '你抓緊身旁人的手，一遍遍告訴對方'}：「我們在一起。」`,
+        result: (s, h) => `你們留了下來，把${h.byLiving({ L: '院子裡最結實的那間屋子', LM: '最結實的那間屋子', UM: '地下室', H: '地下室' })}整理成共用的避難處，大家輪流守夜、分享食物。警報聲響起時，${h.age() < 16 ? '大人緊緊抓住你的手，一遍遍告訴你' : h.hasChildren() && h.youngestChildAge() <= 14 ? '你抓緊孩子的手，一遍遍告訴孩子' : '你抓緊身旁人的手，一遍遍告訴對方'}：「我們在一起。」`,
         schedule: [{ id: 'regional_after_the_fighting', inYears: [2, 5] }],
         ai: 1,
       },
@@ -763,13 +757,13 @@ export default [
   },
   {
     id: 'regional_extreme_cold',
-    title: '零下三十度的冬天',
+    title: '冷得刺骨的冬天',
     ages: [3, 90],
     once: false,
     cooldown: 6,
     weight: 0.8,
     tags: ['regional', 'climate', 'home'],
-    cond: (s, h) => COLD.has(s.countryCode),
+    cond: (s, h) => COLD.has(s.countryCode) && (h.climate() === 'continental' || h.climate() === 'polar'),
     text: (s, h) => h.byIncome({
       LM: '氣溫降到零下三十度，窗上結了厚厚一層冰花。家裡的爐子必須整夜添柴，鄰居們輪流到彼此的屋子取暖，水管凍裂時大家就一起拿著吹風機烤。',
       UM: '寒流來襲，暖氣管路發出咕嚕咕嚕的聲響。大家在公寓裡穿著厚毛襪，聚在廚房煮熱湯，窗外的雪一直下到凌晨，直到暖氣管最後一聲咕嚕，大家才各自回房。',
@@ -785,7 +779,7 @@ export default [
     cooldown: 6,
     weight: 0.8,
     tags: ['regional', 'climate', 'work'],
-    cond: (s, h) => HOT.has(s.countryCode),
+    cond: (s, h) => HOT.has(s.countryCode) && h.hotClimate(),
     text: (s, h) => h.byIncome({
       L: '午後氣溫超過四十度，田裡的活全改在清晨和傍晚。中午整村的人躲在樹蔭下，女人們分著一壺水，孩子們在乾涸的河床上，追著影子玩。',
       LM: '夏天最熱的那幾週，路面像煎鍋一樣冒著熱氣，工地的工人黎明前就開工，中午全員停工。你用濕布蓋在頭上，對著風扇吹，仍然流汗。',
@@ -802,7 +796,7 @@ export default [
     cooldown: 7,
     weight: 0.5,
     tags: ['regional', 'climate', 'community'],
-    cond: (s, h) => h.incomeAtLeast('UM') && (h.isRegion('NAM', 'EUR') || ['JPN', 'KOR', 'CHN'].includes(s.countryCode)),
+    cond: (s, h) => h.incomeAtLeast('UM') && h.snowy() && (h.isRegion('NAM', 'EUR') || ['JPN', 'KOR', 'CHN'].includes(s.countryCode)),
     text: (s, h) => '暴風雪來襲，整個城鎮被雪埋了半截，路被封、電被切。鄰居們帶著雪鏟和熱湯走出家門，彼此挖開車子、替老人家送暖爐，原本互相只點頭的人，這晚聊了很久。',
     effects: { social: +4, happiness: +2, wealth: -1 },
   },
@@ -865,12 +859,13 @@ export default [
   {
     id: 'regional_festival',
     title: '節慶',
-    ages: [4, 95],
+    ages: [13, 95], // children get their own scene from childhood_festival
     once: false,
     cooldown: 10,
     weight: 0.4,
-    tags: ['regional', 'community', 'family'],
-    text: (s, h) => festival(s, h),
+    tags: ['regional', 'community', 'family', 'festival'],
+    // the family's own festival and tradition (religion + home country), with a line about the surroundings when they differ
+    text: (s, h) => h.festivalScene(),
     effects: (s, h) => { h.change('happiness', +3); h.change('social', +3); h.change('wealth', h.isPoor() ? -1 : 0); },
   },
   {
@@ -892,5 +887,333 @@ export default [
     cond: (s, h) => rural(h) && h.incomeAtLeast('UM') && h.isRegion('EUR', 'EAS', 'NAM'),
     text: (s, h) => '村口的雜貨店終於貼出了「結束營業」的紙條。學校早已併校，年輕人都去了城市，街上多是和你一樣的熟面孔。你站在鐵門前，想起小時候在這裡買冰棒的錢，是五塊還是一個銅板。',
     effects: { social: -2, happiness: -2, wealth: -1 },
+  },
+  // =====================================================================================
+  // 宗教與文化（Phase 4A）：家人的信仰與傳統跟著人走，不跟著所在的國家走。
+  // 全部依 h.religion()（出生家庭的宗教／傳統）、h.festival()（家庭的節日）寫；人在別的國家時，
+  // 另外看 h.hostFestival()（周圍的人慶祝的節日）。沒有特定宗教的家庭不會遇到宗教儀式事件。
+  // =====================================================================================
+  {
+    id: 'regional_culture_festival_abroad',
+    title: '不是假日的節日',
+    ages: [18, 80],
+    once: false,
+    cooldown: 8,
+    weight: 1.3,
+    tags: ['regional', 'culture', 'festival', 'family', 'migration'],
+    cond: (s, h) => h.isMigrant() && h.yearsAbroad() >= 1,
+    text: (s, h) => `${h.festival()}快到了。在${h.countryName()}，這一天不是假日，大多數人不知道它對你的意義。${h.hostFestival() ? `街上正忙著準備他們的${h.hostFestival()}，節慶的氣氛和你記憶中的不一樣。` : ''}你把日曆翻了兩次，確認沒有記錯。`,
+    choices: [
+      {
+        label: '把這天空出來，好好過節',
+        cond: (s, h) => h.employed() || h.inSchool(),
+        effects: { happiness: +3, wealth: -1, social: +1 },
+        result: (s, h) => `你跟人說明這天要做什麼，對方愣了一下，點點頭。你在家擺出家鄉的菜，${h.techReady(2005) ? '打開視訊，讓遠方的家人一個個擠進鏡頭' : '撥了一通長途電話，讓遠方的家人一個個輪流接過話筒'}。說明自己的節日，原來也是讓別人認識你的一種方式。`,
+        ai: 1.4,
+      },
+      {
+        label: '去找同鄉或同信仰的人一起過',
+        effects: { social: +4, happiness: +3 },
+        result: (s, h) => `你循著朋友給的地址，找到一間租來的小廳堂，三十幾個人擠在一起，每人帶一道菜。那天你說了很多年沒說的母語，也聽見了很多久違的老歌，${h.hasChildren() ? '孩子們在人群裡跑來跑去，學著大人的樣子說祝福的話。' : '你發現自己並不是一個人在這裡想家。'}`,
+        ai: 2,
+      },
+      {
+        label: '安靜地過，煮一點家鄉的東西',
+        effects: { happiness: +1, social: -1 },
+        result: '你煮了一點家鄉的東西，傳了訊息給家人，然後照常過完這一天。夜裡你坐在窗邊，聽見外面也有人在慶祝別的什麼，不知為什麼，覺得世界很大，也很近。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'regional_culture_fasting',
+    title: '齋月',
+    ages: [12, 85],
+    once: false,
+    cooldown: 6,
+    weight: 1.1,
+    tags: ['regional', 'culture', 'religion', 'family'],
+    cond: (s, h) => h.isReligion('muslim'),
+    text: (s, h) => (h.religionIsMinority()
+      ? '齋月到了，你周圍的人照常吃喝、開會、午休。天亮前你吃了簡單的一餐，白天默默守著齋，日落後才和家人或朋友一起開齋。你發現自己對「需要什麼、不需要什麼」特別清楚。'
+      : '齋月到了。天還沒亮，屋子裡就有人起來備飯，日落前的最後半小時，整條街安靜得像在等一個訊號。宣禮聲一響，你和家人用一顆棗子和一杯水開了齋，所有的疲憊像被輕輕放下。'),
+    choices: [
+      {
+        label: '全程守齋，多陪伴家人',
+        effects: { health: -1, social: +3, happiness: +2 },
+        result: '白天的飢餓讓時間變得很慢，夜裡的餐桌卻比平常更熱鬧。鄰居端來的湯、深夜的禮拜、凌晨前一起吃的那頓飯，讓這個月像一條很長很暖的繩子。',
+        ai: 2,
+      },
+      {
+        label: '依身體狀況調整，改用補守或施捨代替',
+        cond: (s, h) => h.stat('health') < 65 || h.age() >= 65 || h.hasCondition('diabetes') || h.hasCondition('hypertension') || h.hasCondition('heart_disease'),
+        effects: { health: +1, social: +1, wealth: -1 },
+        result: '你和醫師、家裡懂經義的長輩談過，選擇用補守與施捨取代。有人嘀咕你不夠虔誠，更多人點頭，說這個信仰本來就教人先照顧身體。',
+        ai: 2.2,
+      },
+      {
+        label: '邀不同信仰的朋友來吃一頓開齋飯',
+        cond: (s, h) => h.religionIsMinority() || h.isMigrant(),
+        effects: { social: +4, happiness: +2 },
+        result: '朋友們笨拙地學你把棗子放進嘴裡，有人問了許多問題，你一一回答。散場時，有人說這是他們吃過最特別的一頓晚餐，你笑了很久。',
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'regional_culture_congregation',
+    title: '一起聚會的人',
+    ages: [6, 95],
+    once: false,
+    cooldown: 6,
+    weight: 0.7,
+    tags: ['regional', 'culture', 'religion', 'community'],
+    cond: (s, h) => !h.isReligion('none'),
+    text: (s, h) => h.byReligion({
+      christian: '每個週日，你和家人去教堂。有時你專心聽講道，有時只是聽身旁的人唱歌走音。散場後大家站在門口聊天，一站就是半小時，話題從天氣聊到誰家的孩子考上了學校。',
+      muslim: '週五的午後，你跟著人群走進清真寺，在隊伍裡肩並肩站好。散場後鄰居們在門口互相問候，順便打聽誰家有事需要幫忙。',
+      hindu: '傍晚，你繞到街角的小廟，點一盞燈、放一朵花。廟裡的鈴聲，是這一帶一天裡最熟悉的聲音，鄰居們也都在，順口聊起了今天的事。',
+      buddhist: '逢佛日，你去寺院供花、聽師父說法。院子裡安安靜靜，你站在樹下，什麼也沒求，只是覺得心裡鬆了一些。',
+      folk: h.isRegion('SSA')
+        ? '在老樹下，長輩請祖先喝一口水，念出家族幾代人的名字，請他們保佑今年的雨水和孩子。你站在人群後面，聽著那些不一定都懂、卻聽了一輩子的名字。'
+        : '廟口的香爐前，大家輪流上香、擲筊。你不是每次都懂儀式的意思，但喜歡那種整條街的人一起做同一件事的感覺。',
+      jewish: '週五日落前，家裡的桌上擺好了蠟燭與麵包。安息日的晚餐，全家人什麼事都不做，只是坐在一起，慢慢吃、慢慢說話。',
+      sikh: '週日的早晨，你去錫克教寺廟，在長墊子上坐了一會兒，聽誦讀與歌唱。散場後你在公共廚房幫忙揉麵，和陌生人並肩坐在地上吃飯。',
+      _: '你和同樣信仰的人聚在一個普通的房間裡，儀式很簡單，大家輪流說話，也輪流安靜。出了門，你覺得這一週可以再往前走一段了。',
+    }),
+    effects: { social: +2, happiness: +2 },
+  },
+  {
+    id: 'regional_culture_coming_of_age',
+    title: '長大的儀式',
+    ages: [9, 15],
+    weight: 1.6,
+    tags: ['regional', 'culture', 'religion', 'family', 'coming_of_age'],
+    cond: (s, h) => !h.isReligion('none', 'folk', 'other') && !(h.isReligion('jewish') && h.age() < 12) && !(h.isReligion('sikh') && h.female()),
+    text: (s, h) => h.byReligion({
+      christian: '今天你要領受堅信禮。你穿著新衣站在前排，手心冒汗。儀式很短，結束後全家人圍著你拍照，長輩塞給你一個小禮物，說：「長大了。」',
+      muslim: '今天你讀完了《古蘭經》的最後一頁。教你誦讀的人和家人坐在你身邊，鄰居端來甜點，大人們輪流對你說「真了不起」。你嘴上說沒什麼，臉卻紅得藏不住。',
+      hindu: '家裡為你辦了一場小小的儀式。長輩在你額頭點上吉祥點，把花瓣放在你手心，祝你平安長大。你緊張得背不出剛學的祈禱詞，大家笑著替你補上。',
+      buddhist: (h.male() && ['THA', 'MMR', 'LAO', 'KHM'].includes(s.homeCountryCode))
+        ? '你剃了頭、披上僧衣，在寺裡住了一段日子。早起托缽、打掃、誦經，你第一次知道什麼叫無聊，也第一次知道什麼叫安靜。回家時，長輩們看你的眼神變了。'
+        : '家人帶你到寺裡皈依，師父為你繫上一條線，祝你平安長大。你學著大人合掌的樣子，心裡想的卻是回家有沒有甜點。',
+      jewish: '十三歲生日前後，你站在會堂裡，第一次當眾朗讀經文。讀錯了一個字，全場微笑，沒有人在意；結束後大家唱歌、吃甜點，你被塞了一堆信封。',
+      sikh: '家人為你辦了繫頭巾的小儀式。長輩一圈一圈替你纏好，你站在鏡子前，覺得自己突然成了另一個人。後來你學會了自己綁，每天早上要花十分鐘。',
+      _: '家裡為你辦了一場小小的儀式，長輩輪流對你說了祝福的話。你站在人群中間，覺得自己好像突然長高了一點。',
+    }),
+    effects: { happiness: +3, social: +2, knowledge: +1 },
+  },
+  {
+    id: 'regional_culture_wedding_rite',
+    title: '儀式',
+    ages: [14, 70],
+    weight: 0, // scheduled by the marriage itself (systems.js marry), in the same year
+    tags: ['regional', 'culture', 'religion', 'marriage', 'family'],
+    followCond: (s, h) => h.married() && h.yearsMarried() <= 1,
+    text: (s, h) => h.byReligion({
+      christian: '婚禮在教堂舉行，神職人員問了那兩句話，你們答得很小聲。戒指套上去的那一刻，後排有人哭了，你也跟著紅了眼眶。',
+      muslim: `簽下婚書的那天，兩位見證人和雙方長輩都在場。誦讀祝福之後是宴席，一桌接一桌，你和${h.partnerName()}被親戚輪流拉去拍照。`,
+      hindu: `儀式持續了好幾個小時。你和${h.partnerName()}繞著聖火走了一圈又一圈，長輩邊念祝福邊撒花瓣。累歸累，你偷看對方一眼，發現對方也正偷看你。`,
+      buddhist: `雙方家人先到寺裡（或祖先牌位前）上香，師父為你們念了祝福。之後的宴席很熱鬧，你被敬了一輪又一輪的${h.drinks() ? '酒' : '茶'}。`,
+      folk: h.isRegion('SSA')
+        ? '長輩在祖先面前為你們祝福，大家唱歌、擊鼓，彩色的布料與珠串堆滿了院子。有人把你們的名字編進歌裡，一遍又一遍地唱。'
+        : '婚禮上，兩家人在祖先牌位前上香，你們向雙方長輩敬茶，長輩們塞給你們紅包，說著一串串吉祥話，你們跟著笑，也跟著鞠躬。',
+      jewish: `你和${h.partnerName()}站在華蓋下，對方把戒指戴到你手上，玻璃杯在腳下被踩碎，全場齊聲喊著「好運」。`,
+      sikh: '你們繞著聖典走了四圈，每一圈都有一段誦讀。儀式結束後，所有賓客一起坐在地上吃飯，鼓聲與歌聲響了很久。',
+      none: `沒有宗教儀式，你們在市政廳（或自家的院子裡）簽了字，朋友們鼓掌，有人哭得比你們還大聲。你和${h.partnerName()}互相看了一眼，同時笑了。`,
+      _: '儀式依你們家傳下來的方式進行，不長，但每個步驟都有人輕聲向你們解釋。你把那些話一句一句記在心裡。',
+    }),
+    effects: { happiness: +3, social: +2 },
+  },
+  {
+    id: 'regional_culture_funeral',
+    title: '最後的儀式',
+    ages: [12, 95],
+    once: false,
+    cooldown: 2,
+    max: 2,
+    weight: 0, // scheduled when a parent dies (systems.js agePeople), in the same year
+    tags: ['regional', 'culture', 'religion', 'family', 'grief'],
+    followCond: (s, h) => !!h.recentLog(['母親過世', '父親過世'], 1),
+    text: (s, h) => {
+      const he = h.recentLog('母親過世', 1) ? '她' : '他';
+      return h.byReligion({
+        christian: `守靈那晚，親友輪流上前說起${he}的故事，有人哭、有人笑出聲。第二天追思禮拜上，大家一起唱了${he}最喜歡的那首詩歌，你唱到一半，聲音就散了。`,
+        muslim: `按照習俗，遺體很快被清洗、包上白布，當天就送去安葬。親友們沉默地走在隊伍裡，家裡備好了茶水。接下來幾天，鄰居輪流來探望，一句話也不多問，只是坐在你身邊。`,
+        hindu: `家人依照習俗為${he}舉行了火葬，之後十幾天，每天都有儀式、祈禱與簡單的素食。你被一件接著一件要做的事推著走，直到最後一天，才第一次哭出聲。`,
+        buddhist: `法師來家裡誦經，親友輪流上香。接下來的七週，每隔七天，你都在牌位前點一炷香，慢慢學會把思念放進這個規律裡。`,
+        folk: h.isRegion('SSA')
+          ? `村裡的人從各地趕來，守了好幾天。長輩對著祖先唱了好幾遍${he}的名字，說${he}是回到了他們那邊。你第一次覺得，離開並不一定是消失。`
+          : `喪禮依老規矩一步一步辦：守靈、誦經、出殯。你披著孝服跟在隊伍後面，鑼鼓聲與哭聲交疊在一起，彷彿聽見很多年前${he}喊你名字的聲音。`,
+        jewish: `喪禮之後，家人在家裡坐了七天，不出門，鄰居與朋友輪流帶來食物，陪著大家一起坐。你覺得這個習俗有它的道理：悲傷需要時間，也需要有人在。`,
+        sikh: `喪禮之後的十天裡，家人在家中誦讀經文，鄰居與親友帶來飯菜。你第一次發現，被這麼多人圍著，眼淚也能流得比較自在。`,
+        none: `沒有宗教儀式，家人在小小的追思會上輪流說起${he}的故事，放了${he}愛聽的歌。散場後大家留下來收椅子，才發現彼此的眼睛都是紅的。`,
+        _: `儀式依著家裡傳下來的方式進行，簡單而安靜。你站在人群邊緣，聽著大家低聲說話，覺得${he}一定會喜歡這樣。`,
+      });
+    },
+    effects: { social: +3, happiness: +1 },
+  },
+  {
+    id: 'regional_culture_diet',
+    title: '桌上的規矩',
+    ages: [15, 80],
+    once: false,
+    cooldown: 8,
+    weight: 0.9,
+    tags: ['regional', 'culture', 'religion', 'food', 'friends'],
+    cond: (s, h) => h.isReligion('muslim', 'hindu', 'jewish', 'buddhist', 'sikh') && (h.isMigrant() || h.religionIsMinority()) && h.stable('keeps_diet', 0.7),
+    text: (s, h) => h.byReligion({
+      muslim: '朋友訂了一間餐廳，菜單上你不確定哪些可以吃。大家看著你，等你開口，服務生的筆懸在半空。',
+      hindu: '朋友聚餐點了一桌肉，你吃素。直到盤子裡只剩下配菜，大家才注意到你什麼都沒說。',
+      jewish: '朋友邀你去一間新開的餐廳，你知道那裡的菜多半不符合你家的飲食規矩。你還沒開口，對方已經熱情地替你選了一道招牌菜。',
+      buddhist: '今天是吃素的日子，旁邊的人夾了一塊肉過來，笑著說：「就一口嘛。」整桌的人都看過來。',
+      sikh: '朋友聚餐訂了烤肉店，桌上的菜你一半不能碰。你笑著說自己吃得少，肚子卻咕嚕叫了一聲，大家都聽見了。',
+      _: '朋友訂了一間餐廳，菜單上你不確定哪些是你平常會吃的。大家看著你，等你開口。',
+    }),
+    choices: [
+      {
+        label: '直接說明，點自己能吃的',
+        effects: { happiness: +2, social: +1 },
+        result: '你說明了原因，語氣平常得像在說自己愛吃什麼。出乎意料，沒有人追問，反而有人說下次選能一起吃的餐廳。你發現，把話說開，比想像中容易。',
+        ai: 2,
+      },
+      {
+        label: '事先打聽好餐廳，或自己帶',
+        effects: { happiness: +1, wealth: 0 },
+        result: '你查好了菜單，約在你熟悉的店，或者在包裡放了自己準備的食物。聚會很順利，只是你偶爾會羨慕那些走進任何餐廳都不必先想一輪的人。',
+        ai: 1.6,
+      },
+      {
+        label: '這一次不計較，隨大家',
+        effects: { happiness: -2, social: +1 },
+        result: '你吃了一點可以吃的，把剩下的推給旁人。氣氛很好，你卻在回家的路上覺得有些空，下次想再勇敢一點。',
+        ai: 0.6,
+      },
+    ],
+  },
+  {
+    id: 'regional_culture_rest_day',
+    title: '禮拜與課表',
+    ages: [10, 65],
+    once: false,
+    cooldown: 10,
+    weight: 0.8,
+    tags: ['regional', 'culture', 'religion', 'work', 'school'],
+    cond: (s, h) => (h.inSchool() || h.employed()) && (h.isReligion('muslim', 'jewish', 'christian')) && h.religionIsMinority() && !(h.isReligion('jewish') && s.countryCode === 'ISR'),
+    text: (s, h) => `${h.byReligion({ muslim: '週五中午是聚禮的時間，', jewish: '安息日從週五日落開始，', christian: '週日是禮拜的日子，', _: '你的信仰有一天是特別留給它的，' })}可是${h.inSchool() ? '課表' : '你的行程'}排得滿滿的，沒有人替這件事留位子。`,
+    choices: [
+      {
+        label: '去談一談，請對方調整時間',
+        effects: { social: +1, happiness: +2 },
+        result: '你說明這段時間對你的意義，對方愣了一下，點點頭，說可以試試看。幾週後你發現，同樣需要的人不只你一個，大家排出了一張新的輪值表。',
+        ai: 2,
+      },
+      {
+        label: '想辦法利用午休或換個時間',
+        effects: { happiness: +1, health: -1 },
+        result: '你找了最近的地方，趕在時間內回來。忙是忙了一點，但你沒有錯過它，這就夠了。',
+        ai: 1.6,
+      },
+      {
+        label: '這一陣子先放一放',
+        effects: { happiness: -2, wealth: +1 },
+        result: '你告訴自己現在不是時候。週五（或週日）的鐘點過去時，你還是看了一下錶，心裡有一塊地方輕輕地空了一下。',
+        ai: 0.5,
+      },
+    ],
+  },
+  {
+    id: 'regional_culture_pilgrimage',
+    title: '一輩子想走的一趟路',
+    ages: [35, 80],
+    weight: 0.8,
+    tags: ['regional', 'culture', 'religion', 'travel'],
+    cond: (s, h) => !h.isReligion('none', 'folk', 'other') && h.stat('wealth') >= 30 && h.stable('pilgrimage_wish', 0.35),
+    text: (s, h) => h.byReligion({
+      muslim: '你把存了很多年的錢攤在桌上算了又算，離朝覲只差一小段。家人在旁邊靜靜看著，誰也沒有先開口。',
+      hindu: '家裡的長輩一直說，一輩子要去一趟聖地。你終於攢夠了盤纏，行程表上的日期已經圈了起來。',
+      christian: '你一直想去那條朝聖路上走一趟。今年手邊終於有了一點餘裕，地圖在桌上攤了好幾天，被你畫滿了記號。',
+      buddhist: '你一直想去那座聖地的寺院看看。今年有了機會，朋友說可以同行，你把機票價格查了又查。',
+      sikh: '你想去阿姆利則的金廟看看，這件事擱了很多年。今年有人約你同行，你把行李箱從櫃子上拿了下來。',
+      jewish: '你想去耶路撒冷走一趟，站在那面牆前，這個念頭擱了很多年。今年手邊終於有了一點餘裕。',
+      _: '你一直想去一個對你有特別意義的地方走一趟。今年手邊終於有了一點餘裕，地圖在桌上攤了好幾天。',
+    }),
+    choices: [
+      {
+        label: '出發，花上這筆錢',
+        cond: (s, h) => h.stat('wealth') >= 35,
+        effects: { wealth: -4, happiness: +6, health: -1, social: +2 },
+        result: '路上你遇見許多從不同地方來的人，口音各不相同，卻在同一個地方安靜下來。回家後的很多個夜晚，你還會想起那一片安靜，想起有人遞給你一杯水。',
+        highlight: '走了一趟一輩子想去的路。',
+        ai: 1.8,
+      },
+      {
+        label: '再等一等，先照顧家人和健康',
+        effects: { happiness: -1, social: +1 },
+        result: '你把那張紙收進抽屜。有時候夜裡想起，心裡有一點酸，但眼前需要你的事確實更多。你告訴自己：還有明年。',
+        ai: 1.2,
+      },
+      {
+        label: '把這筆錢捐給社區的需要',
+        effects: { wealth: -3, social: +4, happiness: +2 },
+        result: '你把存了很久的錢交給社區裡正需要的人。收到錢的人眼眶紅了，你反而不好意思，只說了一句：「用得上就好。」那一晚你睡得很沉。',
+        ai: 1,
+      },
+    ],
+  },
+  {
+    id: 'regional_culture_ancestors',
+    title: '祖先的日子',
+    ages: [10, 95],
+    once: false,
+    cooldown: 6,
+    weight: 0.6,
+    tags: ['regional', 'culture', 'family', 'parents'],
+    cond: (s, h) => h.lunarNewYear() || (h.isReligion('folk') && h.isRegion('SSA')) || (['MEX', 'GTM'].includes(s.homeCountryCode) && h.isReligion('christian', 'folk')),
+    text: (s, h) => (h.lunarNewYear()
+      ? '清明前後，你跟著家人上山掃墓。拔草、擺供品、燒香，一邊整理墓碑一邊聽長輩講祖父母的事。你覺得活著的人和離開的人之間，還有一條細細的線沒有斷。'
+      : h.isRegion('LAC')
+        ? '十一月初，家裡的祭壇擺滿了金盞花、蠟燭與逝者愛吃的東西。你坐在墓園裡和家人一起守夜，有人彈吉他，有人笑著說起逝者生前的糗事，夜深了，每個人臉上都有光。'
+        : '在老屋前，長輩請祖先喝一口水，說出家族這一年的事。你站在旁邊，發現自己也在心裡默默報告近況，連剛換工作的事也一併說了。'),
+    effects: { social: +2, happiness: +2 },
+  },
+  {
+    id: 'regional_culture_giving',
+    title: '分出去的一份',
+    ages: [22, 90],
+    once: false,
+    cooldown: 8,
+    weight: 0.7,
+    tags: ['regional', 'culture', 'religion', 'community', 'money'],
+    cond: (s, h) => h.isReligion('muslim', 'christian', 'sikh', 'buddhist', 'hindu', 'jewish') && h.stat('wealth') >= 30,
+    text: (s, h) => h.byReligion({
+      muslim: '又到了算天課的時候。你把一年的存款與財物攤開算了一遍，數字不大，卻不容易分出去。',
+      christian: '教會的奉獻袋傳到你面前，你想起這個月才剛繳過房租與帳單，手在口袋裡停了一下。',
+      sikh: '寺廟裡的公共廚房缺人手，也缺食材。你看著鍋裡一天要餵飽幾百人的飯菜，想著自己能出多少力。',
+      buddhist: '寺裡在為一批需要幫助的家庭籌備物資，師父沒有開口要，只是把名冊放在桌上。你看了很久。',
+      hindu: '附近的廟要為節日準備給窮人家的食物，有人拿著單子挨家挨戶登記。輪到你家時，你想了想要寫多少。',
+      jewish: '社區的捐款箱放在門口，今年有幾戶人家的情況特別辛苦。你站在箱子前，把手伸進了口袋。',
+      _: '社區裡有幾戶人家今年特別辛苦，有人在門口放了一個捐款箱。你站在箱子前，把手伸進了口袋。',
+    }),
+    choices: [
+      {
+        label: '照規矩算出該給的，交給需要的人',
+        effects: { wealth: -2, social: +3, happiness: +2 },
+        result: '你把應該分出去的那一份算清楚，交給了信得過的人。收下的人沒有多說什麼，只是用雙手握了握你的手。你回家的路上，口袋輕了，肩膀也輕了。',
+        ai: 2,
+      },
+      {
+        label: '直接送給身邊認識的人',
+        effects: { wealth: -2, social: +4, happiness: +1 },
+        result: '你把東西包好，一戶一戶地送。有人客氣地推辭，有人紅了眼眶。你發現，這樣做讓你比平常更清楚鄰居家的處境，也更清楚自己的位置。',
+        ai: 1.6,
+      },
+      {
+        label: '今年手頭緊，用時間代替',
+        effects: { social: +3, health: -1, happiness: +1 },
+        result: '你沒有多少可以給，就給出整整幾個週末：搬東西、煮飯、洗碗。收工時你累得說不出話，卻覺得這一份，一點也不比錢少。',
+        ai: 1.2,
+      },
+    ],
   },
 ];

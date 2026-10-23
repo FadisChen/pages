@@ -23,7 +23,11 @@ const working = (h) => h.employed();
 
 /** A short, region-flavoured sentence about a wedding celebration (kept plain and non-stereotyping). */
 function weddingFlavor(h) {
-  if (h.isRegion('EAS')) return '喜宴上你們一桌一桌敬酒，紅包袋在櫃檯疊成了小山。';
+  if (h.isReligion('muslim')) return '兩家人把宴席辦得熱熱鬧鬧，長輩們輪流為你們祝福，賓客一桌換過一桌，孩子們在桌子底下鑽來鑽去。';
+  if (h.isReligion('sikh')) return '儀式結束後，所有賓客都坐在地上吃了一頓飯，鼓聲與歌聲響了很久。';
+  if (h.isReligion('jewish')) return '你們站在華蓋下，有人唱起古老的歌，賓客圍成圈子轉著跳舞，一圈又一圈。';
+  if (h.lunarNewYear()) return `喜宴上你們一桌一桌敬${h.drinks() ? '酒' : '茶'}，紅包袋在櫃檯疊成了小山。`;
+  if (h.isRegion('EAS')) return '儀式簡單而隆重，親友一個個上前道賀，拍照拍到你們的笑容都僵了。';
   if (h.isRegion('SEA')) return '親友從各地趕來，鄰居合力煮了一整天的菜，笑聲從院子傳到了巷口。';
   if (h.isRegion('SAS')) return '慶祝持續了好幾天，親戚把整間屋子擠得滿滿的，你換了好幾次衣服。';
   if (h.isRegion('CAS')) return '長桌從屋裡排到院子，祝福的話一輪接一輪，你已經忘了自己笑了幾次。';
@@ -338,7 +342,7 @@ export default [
     tags: ['family', 'money', 'followup'],
     text: (s, h) => (h.has('f_wedding_debt')
       ? `婚禮的錢，一部分是借來的。每個月初你和${h.partnerName()}都會對著帳本沉默一陣子，然後同時說「沒關係，慢慢還」。這句話像是兩個人共同的口頭禪。`
-      : '婚禮的開銷早已成了過去式。你們偶爾還是會翻出那天的照片，笑著數那一桌又一桌的賓客與紅包袋，也慶幸當初沒有為了面子借下太多錢。'),
+      : `婚禮的開銷早已成了過去式。你們偶爾還是會翻出那天的照片，笑著數那一桌又一桌的賓客${h.lunarNewYear() ? '與紅包袋' : '和合照'}，也慶幸當初沒有為了面子借下太多錢。`),
     effects: (s, h) => {
       if (h.has('f_wedding_debt')) { h.change('wealth', -2); h.change('happiness', -1); h.change('social', +1); }
       else { h.change('happiness', +2); h.change('social', +1); }
@@ -1276,13 +1280,13 @@ export default [
     once: false,
     cooldown: 8,
     weight: 0.5,
-    tags: ['family', 'festival'],
+    tags: ['family', 'festival', 'parents'],
     cond: (s, h) => h.parentsAlive() > 0 || h.siblings() > 0,
     text: (s, h) => h.byIncome({
-      L: '大節日那幾天，遠近的親戚都回到老家。院子裡擠滿了人，孩子滿地亂跑，大人們用方言比賽誰的故事最荒唐，深夜院子裡還有人在唱歌。',
+      L: `${h.festival()}那幾天，遠近的親戚都回到老家。院子裡擠滿了人，孩子滿地亂跑，大人們用方言比賽誰的故事最荒唐，深夜院子裡還有人在唱歌。`,
       LM: '你擠上了人滿為患的車，搭了一整天才回到老家。一進門，長輩把你拉到桌邊，筷子上已經夾了菜，說：「先吃，再說話。」你一口氣吃了三碗。',
-      UM: '節慶一到，全家聚在一起。你在廚房幫忙備菜，聽長輩說著三十年前同一個笑話，笑得比第一次聽時還大聲，忽然覺得這種重複其實很珍貴。',
-      H: `這個節日全家難得聚齊。大家一邊吃飯一邊看${h.yearIn(2008, 3000) ? '手機' : '電視'}，卻在某個時刻同時抬起頭，因為有人說起了小時候的糗事，整桌的笑聲把屋子都撐大了。`,
+      UM: `${h.festival()}一到，全家聚在一起。你在廚房幫忙備菜，聽長輩說著三十年前同一個笑話，笑得比第一次聽時還大聲，忽然覺得這種重複其實很珍貴。`,
+      H: `${h.festival()}這天全家難得聚齊。大家一邊吃飯一邊看${h.yearIn(2008, 3000) ? '手機' : '電視'}，卻在某個時刻同時抬起頭，因為有人說起了小時候的糗事，整桌的笑聲把屋子都撐大了。`,
     }),
     effects: { social: +4, happiness: +3, wealth: -1 },
   },
@@ -1360,7 +1364,7 @@ export default [
     weight: 0.7,
     tags: ['family', 'friends', 'community'],
     cond: (s, h) => !h.has('f_community') && h.stat('social') < 70,
-    text: (s, h) => `你發現自己的生活只剩下${h.employed() ? '工作和家' : '家裡的瑣事'}。鄰居邀你加入社區的活動，${h.wageEarner() ? '同事說公司附近有人在組球隊' : '朋友說附近有人在組球隊'}，教會、廟宇或清真寺有個志工小組缺人。你有點心動，也有點怕麻煩。`,
+    text: (s, h) => `你發現自己的生活只剩下${h.employed() ? '工作和家' : '家裡的瑣事'}。鄰居邀你加入社區的活動，${h.wageEarner() ? '同事說公司附近有人在組球隊' : '朋友說附近有人在組球隊'}，${h.worshipPlace() ? `${h.worshipPlace()}的` : '社區中心的'}志工小組也缺人。你有點心動，也有點怕麻煩。`,
     choices: [
       {
         label: '加入志工或社區服務團體',
@@ -1400,5 +1404,37 @@ export default [
       H: `社區的${h.yearIn(2008, 3000) ? '群組' : '佈告欄'}裡常常有人互相幫忙：找貓、借工具、送多出來的菜。你原本不太參與，卻在某個週末被一句「你有空嗎？」拉進了熱鬧裡。`,
     }),
     effects: { social: +4, happiness: +3 },
+  },
+  // ---- Phase 4A: 家人的旅行 ----
+  {
+    id: 'family_weekend_trip',
+    title: '全家出遊的週末',
+    ages: [28, 62],
+    once: false,
+    cooldown: 8,
+    weight: 0.5,
+    tags: ['travel', 'family', 'fun'],
+    cond: (s, h) => h.incomeAtLeast('LM') && h.stat('wealth') >= 35 && (h.hasPartner() || h.hasChildren()),
+    text: (s, h) => `你們難得排開了所有的事，把幾個人塞進同一輛車、同一趟火車，或同一間小小的旅館。${h.hasChildren() && h.youngestChildAge() <= 12 ? '孩子在後座問了十七次「還有多久」，' : ''}路上的風景比目的地更值得記住。`,
+    choices: [
+      {
+        label: '什麼計畫都不排，走到哪算哪',
+        effects: { happiness: +4, social: +3, wealth: -2 },
+        result: '你們錯過了一個景點，卻在路邊撿到一間不起眼的小店，店主硬塞給你們一袋水果。很多年後，家人聊起那趟旅行，第一件事都是那袋水果。',
+        ai: 1.8,
+      },
+      {
+        label: '照著計畫表，把每一站走完',
+        effects: { happiness: +2, social: +2, wealth: -2, health: -1 },
+        result: '你們準時趕上每一站，拍了很多照片，也累了很多次。回家路上大家都睡著了，只有你清醒地看著窗外，把這一趟默默收進記憶裡。',
+        ai: 1.2,
+      },
+      {
+        label: '這次不去，把錢留給更需要的事',
+        effects: { wealth: +1, happiness: -1 },
+        result: '你們在家附近散了步，吃了一頓比平常稍好的晚餐。沒有人抱怨，可是你注意到家裡最小的人，偷偷把旅遊雜誌多翻了一遍。',
+        ai: 1,
+      },
+    ],
   },
 ];

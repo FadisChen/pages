@@ -395,3 +395,54 @@ state = {
 
 - 4A 與 4C 並行；4B 等兩者完成後才開始。
 - 所有工作都遵守 2.1 獨立性要求。
+
+### 4.4 4B 追加項目（使用者確認）
+
+1. **地圖縮放**
+   - 點任一張地圖，開啟全螢幕地圖檢視，可拖曳、雙指縮放、滑鼠滾輪縮放，並有放大、縮小、重設按鈕。
+   - 小國的標記在放大後仍清楚。
+   - 支援鍵盤操作：方向鍵平移、+／− 縮放、Esc 關閉。
+   - 尊重減少動態效果的設定。
+2. **分享圖卡加地圖**
+   - 在 1080×1350 圖卡上加一張小地圖，標出出生國、住過的國家與移居路線。
+   - 版面不得溢出；留言三行與名字很長的極端情況都要檢查。
+3. **機率補上個人狀況**
+   - 主數字「約 1／N」維持母體機率，依國家平均生命表計算。
+   - 明細另加一行「以這一生的健康與風險，活到這個歲數的機率約 X%」。計算依據是引擎在這一生實際套用的個人風險乘數，在 `odds.js` 新增函式並加測試。
+   - 用一句話說明兩者差別，避免玩家混淆。
+
+## Phase 4C notes（階段 4C：地圖、機率、收藏）
+
+- **世界地圖**：`tools/build-map.mjs`（零相依）下載 world-atlas 2.0.2（npm tarball，自己解 gzip 與 tar）的 `countries-110m.json` 與 datasets/country-codes（ISO 數字碼、大洲），自己解 TopoJSON、Equal Earth 投影、以弧段為單位做 Douglas-Peucker 簡化（相鄰國家共用邊界）、切開跨日界線的環（俄羅斯、斐濟）、輸出 `js/data/worldmap.js`（約 64 KB）：`SHAPES`（ISO3 → 相對 SVG 路徑，even-odd）、`ANCHORS`（標記點）、`DOT_ONLY`、`TINY`、`CONTINENT`、`MAP_W/MAP_H`（1000×435）。173 國全有：164 個有形狀（含台灣），9 個只有圓點（香港、澳門、新加坡、巴林、模里西斯、葛摩、維德角、馬爾他、馬爾地夫）；48 個形狀太小的國家（TINY）在標示時加圓圈。南極洲略去；北賽普勒斯併入 CYP、索馬利蘭併入 SOM、科索沃為 XKX。重建：`node tools/build-map.mjs [下載目錄]`（預設 `tools/raw/map/`，已被 gitignore）。
+- **`js/ui/worldmap.js`**：`createWorldMap({ title, desc, birth, lived, route, counts, names, pulse })`。role="img" 加 `<title>`／`<desc>`，色彩全為 CSS 變數（`.wm-wrap`，用 `color-mix` 衍生，淺深色共用），寬度 100%（最大 680px）；脈動、弧線描繪動畫只用 CSS，減少動態時停在靜態終態。揭曉頁（出生地脈動）、回顧頁（出生地、住過的國家、搬家弧線）、前世記錄（依出生次數 1／2／3／4+ 分四階深淺）都使用。
+- **機率 `js/engine/odds.js`**（純函式、Node 可測）：國家（依抽籤方式與出生年的占比，用 `babyShare`）× 性別（era 調整後的出生性別比）× 家庭經濟（1/5）× 城鄉（都市化率 × 財富係數，係數複製自 birth.js，測試會抽樣 `drawBirth` 防止偏離）× 離世年齡（生命表 `S(a)·q(a)`，一歲為一格）。以「出生那一年」為條件，所以回答的是「同年出生的人裡，有多少像你」。`lifeOdds`／`oddsFromState`／`oddsFromSummary`（舊記錄缺抽籤方式時預設依新生兒人數）、`humanizeOneIn`（<10 一位小數、<100 整數、其餘兩位有效數字，≥1 萬用萬／億／兆）。引擎不產生文字；字串在 `S.odds`，格式化在 `strings.js` 的 `oneInText`。揭曉頁顯示「像你這樣的人」（不含離世年齡）；回顧頁與分享圖卡顯示完整「這樣一生的機率」；回顧頁列出各項與長條（對數刻度，長條相加即總和）。圖卡版面重排：紙張加高到 1050，機率帶放在壽命長條與曲線之間，頁尾下移。
+- **收藏與成就**：`js/ui/achievements.js`（純邏輯，24 個成就，全由前世記錄推導）、`js/ui/collectionview.js`（人生收藏卡：地圖、六格統計、大洲與年代、國家清單；成就卡：紙本印章風徽章，未解鎖為虛線，數量型成就有進度條）。回顧頁死亡後以「該筆記錄加入前後的差集 − 已通知過的」決定新成就，顯示解鎖卡與 toast。`lifelottery.achievements` 只存「已通知過」的時間戳（清除全部記錄時一併清除）；解鎖狀態永遠由記錄推導。
+- **舊記錄相容**：記錄新增選用欄位 `meta { drawMode, partnerYears }`（`session.finish` 寫入；`storage.normalizeMeta`）。缺少 `meta`、`era`、`urbanBirth`、`homeCountry.code`、`countriesLived` 等舊欄位時：用國名反查國家代碼、由出生年推年代、抽籤方式預設新生兒、金婚用「已婚或喪偶、未離婚、享年 ≥ 80」估算（享年 − 28）。e2e 有匯入舊格式記錄的檢查。
+- **其他**：`sw.js` 的 `CACHE_VERSION` 升為 `v4`，加入 4C 新檔，也補上 4A 目前新增的 `geo.js`、`money.js`、`religion.js`、`focus.js`（4B 驗收時請再核對）；`dom.js` 新增 17 個徽章圖示；`storage.js` 新增 `loadAchievementLog`／`addAchievementLog`；`about` 資料來源加一列地圖。新測試：`tests/odds.test.mjs`、`tests/worldmap.test.mjs`；`tests/e2e.mjs` 加入揭曉地圖與機率、回顧頁機率與地圖、成就 toast、分享圖卡文字（攔截 canvas `fillText`）、前世記錄收藏與舊記錄匯入。
+- **已知限制**：機率只含出生條件與離世年齡，不含人生中的選擇；離世年齡用基準生命表，不含個人風險乘數。110m 的地圖在手機上很小，太小的國家只靠圓點與脈動圈辨認；沒有縮放。成就「金婚」對喪偶者的年數是估計。
+
+## Phase 4A notes（階段 4A：人生重心、宗教與文化、城市地理、當地貨幣）
+
+- **人生重心（PLAN 4.2）**：新檔 `js/engine/focus.js`（數字全集中在 `FOCUS_FX` 與 `FOCUS_EVENT_MULT`）。`state.focus`（預設 `balance`）與 `state.focusHistory [{ age, focus }]`；`life.js` 匯出 `FOCI`、`availableFoci(s)`、`setFocus(s, id)`（不合法回到 `balance`，同年再改會取代同一列，改回前一個重心會移除該列，並清掉 `flags._focusPrompt`）、`autoFocus(s)`（依年齡、處境、財富、健康挑一個合理的重心；用種子的雜湊而不是亂數，所以重複呼叫答案相同、也不影響人生的其他部分）。6、12、18、25、40、60 歲進入新階段的那一年，`advanceYear` 回傳 `focusPrompt: true` 並設 `flags._focusPrompt`（存檔後仍在；`setFocus` 或下一次 `advanceYear` 清除）；`advanceYear(s, { auto: true })` 會自己 `setFocus(s, autoFocus(s))`（測試要強制重心時用 `{ auto: true, autoFocus: false }`）。重心超過開放年齡（學業 30 歲後）會在 `advanceYear` 自動回到 `balance`。`getStatus` 多了 `focus`、`focusLabel`、`foci`、`focusPrompt`、`religion`；`getSummary` 多了 `focus`、`focusTimeline`（連續片段 `{ fromAge, toAge, focus, label }`）、`focusYears`、`religion`。舊存檔沒有 `focus`／`focusHistory`／`religion`，`deserialize` 會補成 `balance`、單列歷史、並用種子雜湊抽出宗教（與新人生同一套抽法）。
+- **重心的影響**：(1) 每年狀態微調（±0.2–1.5，之後會均值回歸，穩態約為 3–4 倍）與健康目標；(2) 系統機率（皆在 ±25% 內）：輟學、念完中學後升大學、入學、成年後重返教育（學業）、關係與婚姻的時程（家庭提早一年、學業與工作延後）、分手與離婚、生育、解僱、換跑道、退休、吸菸開始／戒菸、慢性病發病、收入百分位目標（工作 +0.06，約 +10% 收入）、死亡風險（工作 +3%）；(3) 事件權重：`events.js` 以事件的 `tags` 查 `FOCUS_EVENT_MULT`，乘數乘在一起後夾在 0.6–1.8，並同樣套用在 `chance` 型事件的機率上。詞彙與細節見 `js/engine/README.md` 第 3 節。
+- **事件標籤**：標籤本來是自由標記，這次整理出詞彙（study／work／family／wellness／trouble／self 六類，見 README）：替 50 則事件補上對應標籤（健檢、疫苗、運動、作息、興趣、旅行、創作、照顧者、獨立等），新增 19 則事件：8 則興趣、旅行與健康習慣（`youth_hobby_draw`、`youth_friends_trip`、`work_creative_evenings`、`family_weekend_trip`、`health_morning_walk`、`health_sleep_routine`、`health_cooking_change`、`aging_travel_wish`）與下述 11 則宗教與文化事件。現在 592 則事件中約 75% 至少對一種重心有反應，每種重心都有 ≥ 15 則事件變得更常出現（學業 81、工作 154、家庭 147、健康 19、興趣 84 則；健康重心同時讓疾病、意外、慢性病、成癮類事件的權重降到 0.8–0.88）。
+- **模擬結果（3000 段人生、同樣的種子、每年強制同一個重心；`tests/focus.test.mjs` 用 2000 段做同樣的方向檢查）**：
+  | 重心 | 30 歲受教年數 | 大學比例 | 30–50 歲年收入（2011 國際元） | 平均死亡年齡 | 平均子女數 |
+  | --- | --- | --- | --- | --- | --- |
+  | balance | 9.28 | 23.8% | 11,508 | 66.5 | 2.27 |
+  | study | 10.13 | 36.5% | 12,168 | 66.6 | 2.18 |
+  | work | 9.12 | 20.2% | 13,209 | 65.2 | 2.07 |
+  | family | 9.17 | 21.3% | 11,312 | 66.5 | 2.39 |
+  | health | 9.26 | 23.9% | 11,797 | 67.8 | 2.27 |
+  | self | 9.26 | 23.9% | 11,948 | 66.7 | 2.22 |
+  | 自動選擇 | 9.61 | 27.2% | 12,178 | 66.5 | 2.21 |
+  40 歲時：健康重心的健康值 +5、家庭重心的人際 +7.7／幸福 +5、興趣重心的幸福 +6、學業重心的知識 +10、工作重心的健康 −3／財富 +3.7。健康重心讓壽命多約 1.3 年、工作重心少約 1.3 年（自動選擇與 balance 的平均壽命相同，校準後各國平均死亡年齡與預期壽命相差在 ±1.5 歲內）（符合 4.2「最多 1–2 年」）。
+- **宗教與文化層**：新檔 `js/data/religion.js`（檔頭標明為估計值：Pew 風格的各國宗教組成，173 國全有，另有 76 個語言／文化群的覆寫，例如豪薩人 → 穆斯林、伊博人 → 基督徒、印度的旁遮普人 → 錫克教、馬來西亞的華人 → 佛教與民間信仰）。九類：基督宗教、伊斯蘭教、印度教、佛教、民間信仰與傳統宗教、猶太教、錫克教、沒有特定宗教、其他。`state.religion` 在出生時用種子雜湊抽出（過去年代「沒有宗教」的比例較低，未來較高），移居後不變，`addChild` 把它寫進 `child.religion`。helper：`religion()`、`isReligion(...)`、`byReligion({...})`（備用鍵 `_`）、`festival()`（依宗教與**原籍國**；農曆新年、開齋節、宰牲節、排燈節、德賽節、加隆岸節、聖誕節、復活節、潑水節、柬埔寨新年、衛塞節、白節、新薯節、逾越節、瓦薩基節、新年）、`festivalInfo()`、`festivalKey()`、`lunarNewYear()`、`hostFestival()`（所在地多數人的節日；與自家相同則為 null）、`festivalScene(kind)`（60–160 字的節日場景，異鄉生活與「周圍人過別的節日」各自多一句）、`religionIsMinority()`、`worshipPlace()`、`drinks()`、`playsSports()`。節慶與儀式事件改用家庭的傳統：`childhood_festival`、`regional_festival`、`family_festival_gathering`、`aging_family_table`、「平凡的一年」的思鄉句、新衣「只在過年才有」、婚宴的紅包與敬酒、青少年第一杯酒；新增 11 則 `regional_culture_*` 事件（異鄉的節日、齋月、每週聚會、長大的儀式、婚禮儀式、喪禮、飲食規矩、禮拜日與課表衝突、朝聖、祖先的日子、佈施／天課）。婚禮與雙親過世會在同一年自動排入對應的儀式事件（`marry()`、`agePeople()` 寫入 `pending`）。尼泊爾印度教徒在卡達：`festival()` 為德賽節、`hostFestival()` 為開齋節，場景裡「街上的人也在準備他們的開齋節」，不會變成自己過開齋節。
+- **城市地理**：新檔 `js/data/geo.js`（估計值）：492 個城市全部標註 `{ coast, alt: low|mid|high, climate: tropical|arid|temperate|continental|polar|highland }`（近海 220／內陸 272；低 371／中 86／高 35；熱帶 172、溫帶 111、乾旱 87、大陸 85、高地 36、極地 1），另有各國的主要氣候（鄉下人用）。helper：`place()`、`coastal()`、`climate()`、`altitude()`、`highAltitude()`（≥ 1500 公尺）、`snowy()`、`hotClimate()`、`byClimate({...})`。`world.js` 的 `INLAND_CITIES` 已移除；颱風／風暴季需近海、海平面上升需近海、海嘯需近海、極寒需大陸或極地氣候、暴風雪需下雪的氣候、熱浪需熱帶／乾旱／大陸氣候、瘧疾與登革熱不發生在高海拔、漁民只出現在近海。世界事件中只影響特定地點的災難（基督城地震、東京的東日本大地震、颶風卡崔娜、海燕、俄羅斯 2010 熱浪、土耳其與敘利亞地震等）也改用城市或機率限制。
+- **當地貨幣**：新檔 `js/data/money.js`（購買力平價、通膨與貨幣名稱皆為估計值）：`h.money(usdPpp, { round })` 把 2011 國際元（`h.annualIncome()` 的單位）換成當地、當年的自然金額：`新台幣兩萬元`、`2.5 萬日圓`、`1,200 奈拉`、`400 美元`；台灣、中國、香港、澳門用國字，其餘用阿拉伯數字加「萬」；歐元區國家在加入歐元前用舊貨幣（馬克、法郎、里拉…）；過去年代金額較小、未來較大。換掉了求職詐騙廣告的「月入三萬」（標題改為「免經驗，高薪日領」，金額為月收入的兩倍）與孩子跑腿的「剩兩塊」；匯款句子也用當地貨幣。
+- **疫情時序**：`runEvents` 的「到期後續事件」階段現在跑三次（里程碑前、里程碑後、一般事件後），所以事件在本年排入 `inYears: [0, 0]` 的後續會在同一年觸發（受每年 3 條上限約束，超出的順延一年）；`seed_pandemic_2020` 的遠距上課與遠距工作改為 `[0, 0]`，約 93% 的遠距上課落在 2020 年。順帶修了兩個潛在問題：被順延的里程碑型事件（`pending[].recheck`）與被保留位置的里程碑事件在真的出現前會再檢查一次條件（否則人可能在同一年已經搬離了適用的城市）。
+- **一致性稽核**：toddler 規則現在抓得到「你學會的第一個長句子」（4 歲起；「最早的玩伴」到 6 歲仍可），對應的事件文字改寫；新增規則 `festival`（節日與宗教詞須符合家庭的傳統，農曆新年只給 `lunarNewYear()` 的家庭；寫「周圍的人」的句子不算）、`climate`（雪、颱風、海嘯、出海與居住地不符）、`drink`（不喝酒的人不會有啤酒、敬酒、宿醉）。「平凡的一年」由 177 句增至 260 句（+83），涵蓋喪偶的異鄉人、難民、慢性病（癌症、憂鬱、氣喘／肺病、心臟病、關節炎、糖尿病、失能、HIV、失智）、45 歲後失業者、單親、照顧者、鄉下長者、高所得退休者、孤兒、童工、家庭主婦、學生家長、匯款的移工、同性伴侶、無子女夫妻、各行業、氣候／海岸／高度、各信仰的日常、1955–1975 與未來年代。其他修正：女性互助小組不再邀請男性、衝突時的「地下室」依處境改寫、球賽受傷只發生在有運動習慣的人（`playsSports()`）、啤酒與敬酒依 `drinks()`、中老年「最愛的啤酒」等。
+- **檢查與校準**：`node tools/calibrate-risk.mjs 30000 4` 重跑（自動選擇的重心也在裡面；約 11 分鐘），`data/riskref.js` 已更新：校準後 TWN／JPN／USA／IND／BRA／CHN／DEU 平均死亡年齡與預期壽命相差在 ±0.5 歲內，NGA +1.5；`npm test` 118 項全過（含一致性稽核內容旗標為 0），`node tests/e2e.mjs` 42 項全過、零 console 錯誤，`node tools/coherence-scan.mjs 2000 p4a` 只剩 1 筆（單年 5 條，全是系統行：雙親同年過世、暫別職場、心動、新生命）。人工閱讀了 8 段完整人生（尼日鄉下女性、尼泊爾男性（印度教、工作重心）、日惹穆斯林女性（家庭重心）、台南男性（1982、民間信仰）、拉巴斯男性（基督徒、興趣重心）、索馬利亞鄉下女性（移居瑞典）、斯德哥爾摩 2043 年女性（無宗教、健康重心）、多倫多錫克教男性、泰國清邁鄉下佛教男性），修掉：衝突時的地下室、「過年」穿新衣、女性互助小組邀男性、雨季的捷運給村民、拉巴斯的瘧疾、婚禮儀式晚一年出現、同一段節日場景在童年出現兩次等。
+- **新檔**：`js/engine/focus.js`、`js/data/religion.js`、`js/data/geo.js`、`js/data/money.js`（`sw.js` 已列入）、`tests/focus.test.mjs`、`tests/culture.test.mjs`；`tools/read-life.mjs` 新增 `--focus`、`--religion`、`--city` 選項並印出宗教、地點與重心。
+- **給 4B 的提示**：重心的 UI 字串用 `FOCI[i].label／desc`；階段提示用 `advanceYear` 的 `focusPrompt`（或 `getStatus(s).focusPrompt`），玩家選擇用 `setFocus(s, id)`，自動抉擇用 `setFocus(s, autoFocus(s))`；回顧頁的時間軸用 `getSummary(s).focusTimeline`（階段名稱可用 `FOCUS_STAGES`，在 `focus.js`）；`getStatus(s).foci` 只含目前年齡開放的重心。
+- **已知限制**：宗教只在出生時抽、不會改信或與伴侶不同；每個家庭只有一個主要節日；地理以城市為單位（鄉下人用附近城市的海岸與高度加國家的主要氣候）；貨幣換算用單一係數與簡單通膨；重心沒有「精力總量」限制，只有微調。

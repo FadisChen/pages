@@ -55,6 +55,8 @@ export function snapshot(s) {
     wealthQ: s.family.wealthQ, migrant: s.countryCode !== s.homeCountryCode,
     names: [pt && pt.name, s.family.mother.name, s.family.father.name, ...s.children.map((c) => c.name)].filter((n) => n && n.length >= 2),
     flags: Object.keys(f).filter((k) => !k.startsWith('_') && f[k]).join(','),
+    religion: s.religion, festivalKey: HELP.makeHelpers(s).festivalKey(), homeRegion: BY_CODE[s.homeCountryCode].region,
+    coast: HELP.makeHelpers(s).coastal(), climate: HELP.makeHelpers(s).climate(), drinks: HELP.makeHelpers(s).drinks(),
   };
 }
 
@@ -429,12 +431,14 @@ export const RULES = [
     check(snap, text) {
       if (snap.age < 4) return [];
       return scan(text, TODDLER_RE, snap, (c) => {
-        if (!c.self && snap.kids === 0) return false;
+        // "你學會的第一個長句子": a relative clause with 你 as its subject is about you, although selfContext reads "…的" as somebody's possession
+        const youClause = /你[^，。；、的]{1,5}的$/.test(c.prefix);
+        if (!c.self && !youClause && snap.kids === 0) return false;
         if (snap.youngestKid >= 0 && snap.youngestKid <= 4 && snap.kids) return false; // own toddler
         if (snap.grand > 0) return false;
-        if (!c.self) return false;
+        if (!c.self && !youClause) return false;
         if (c.memory || c.hypo) return false;
-        if (/^(最早的玩伴|第一個長句子)$/.test(c.word) && snap.age <= 6) return false; // still little
+        if (c.word === '最早的玩伴' && snap.age <= 6) return false; // still little ("第一個長句子" is a two-year-old's milestone: flagged from age 4)
         return `age ${snap.age}`;
       });
     },
@@ -578,6 +582,67 @@ export const RULES = [
       });
     },
   },
+  {
+    id: 'festival', desc: '節日、宗教詞與家庭的宗教／傳統不符（尼泊爾印度教徒不會過開齋節、非華人家庭不會過農曆新年，除非是在寫周圍的人）',
+    check(snap, text) {
+      const key = snap.festivalKey, rel = snap.religion;
+      const westernSecular = (rel === 'none' || rel === 'other') && ['EUR', 'NAM', 'OCE', 'LAC'].includes(snap.homeRegion);
+      const TERMS = [
+        [/開齋節|宰牲節|齋戒月|齋月|開齋/, () => rel === 'muslim', '穆斯林節日'],
+        [/排燈節|德賽節|加隆岸節/, () => rel === 'hindu', '印度教節日'],
+        [/復活節|平安夜|聖誕|耶誕/, () => rel === 'christian' || key === 'xmas_secular' || key === 'easter' || westernSecular || ['KOR', 'JPN', 'PHL'].includes(snap.home), '基督教節日'],
+        [/農曆新年|春節|年夜飯|清明/, () => key === 'lunar', '農曆新年'],
+        [/壓歲錢|除夕/, () => key === 'lunar' || key === 'newyear_jp', '新年的壓歲錢與除夕'],
+        [/潑水節|柬埔寨新年|寮國新年/, () => key === 'songkran' || key === 'khmer_ny', '東南亞佛教新年'],
+        [/衛塞節/, () => key === 'vesak', '衛塞節'],
+        [/逾越節/, () => rel === 'jewish', '猶太節日'],
+        [/瓦薩基節/, () => rel === 'sikh', '錫克教節日'],
+        [/新薯節/, () => key === 'newyam', '新薯節'],
+        [/白節|查幹薩爾/, () => key === 'tsagaan', '白節'],
+      ];
+      const hits = [];
+      for (const [re, ok, what] of TERMS) {
+        if (ok()) continue;
+        hits.push(...scan(text, re, snap, (c) => {
+          if (!c.self || c.hypo) return false; // "街上的人也在準備他們的開齋節" is about the others; hypothetical talk is fine
+          if (/街上|周圍|四周|身邊的人|鄰居|同事|同學|朋友|當地|電視|新聞|商店|櫥窗|別人|大家都|人們|路過/.test(c.sentence)) return false;
+          return `${what}，但家庭的宗教是 ${rel}、節日是 ${key}`;
+        }));
+      }
+      return hits;
+    },
+  },
+  {
+    id: 'climate', desc: '雪、颱風、海嘯、出海等詞與居住地的氣候、海岸不符（沿用 data/geo.js 的城市資料）',
+    check(snap, text) {
+      const hits = [];
+      const others = /新聞|電視|廣播|報導|遠方|北方|山上|另一個國家|異國|旅行|度假|滑雪|聽說|書上|照片|明信片/;
+      if (!['continental', 'highland', 'polar'].includes(snap.climate)) {
+        hits.push(...scan(text, /暴風雪|積雪|下雪|雪地|冰雪|雪鏟|雪人|落雪|飄雪|大雪/, snap, (c) => {
+          if (!c.self || c.hypo || c.memory || others.test(c.sentence)) return false;
+          return `氣候是 ${snap.climate}`;
+        }));
+      }
+      if (!snap.coast) {
+        hits.push(...scan(text, /颱風|颶風|氣旋|(?<!金融)海嘯|漲潮|海平面|出海|漁港|漁船/, snap, (c) => {
+          if (!c.self || c.hypo || c.memory || others.test(c.sentence)) return false;
+          return '住在內陸';
+        }));
+      }
+      return hits;
+    },
+  },
+  {
+    id: 'drink', desc: '不喝酒的人（穆斯林家庭等）出現喝酒、敬酒、宿醉等自己的行為',
+    check(snap, text) {
+      if (snap.drinks) return [];
+      return scan(text, /啤酒|敬酒|乾杯|酒吧|宿醉|喝醉|紅酒|葡萄酒|小酌/, snap, (c) => {
+        if (!c.self || c.hypo || c.memory || c.negated) return false;
+        if (/拒絕|不喝|沒喝|不碰|滴酒不沾|婉拒|戒|推掉|不勝酒力/.test(c.sentence)) return false;
+        return `不喝酒（${snap.religion}）`;
+      });
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -591,6 +656,7 @@ export const ALLOW = [
   { rule: 'school', event: 'childhood_teacher_persuades', rare: true, word: '老師', reason: 'follow-up of the choice "ask the teacher to talk to the family"; the visit happens in the gap between primary and secondary school' },
   { rule: 'toddler', event: 'childhood_new_baby', word: '搖籃', reason: 'the cradle is the new baby sibling\'s, not the player\'s' },
   { rule: 'school', event: 'migration_after_graduation', word: '同學', reason: 'follow-up that narrates the graduation of the studies abroad' },
+  { rule: 'climate', event: 'world_hurricane_mitch_1998', word: '颶風', reason: 'the title names the storm; its rains flooded all of Central America, inland as well, and the text describes mudslides and rivers' },
   { rule: 'school', event: 'world_china_after_cr', reason: 'news-level description of schools reopening nationwide, not the player\'s own class' },
 ];
 

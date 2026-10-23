@@ -13,6 +13,7 @@ import { causeWeights, CAUSES, causeSentence } from '../data/causes.js';
 import { eraView } from '../data/eras.js';
 import { rand, weightedIndex, pick, clamp } from './rng.js';
 import RISK_REF from '../data/riskref.js';
+import { fxOf } from './focus.js';
 
 export const MAX_AGE = 120;
 
@@ -146,6 +147,7 @@ export function rawRiskMultiplier(s, country, view) {
     if (c) lg += Math.log(1 + (c.risk - 1) * access * 0.6);
   }
   lg += Math.log(s.riskMult);
+  lg += fxOf(s).risk ?? 0; // life focus (health focus lowers the risk a little, work focus raises it)
   const temp = s.flags._risks;
   if (temp && temp.length) for (const [m, until] of temp) if (until > s.age) lg += Math.log(m);
   if (s.flags._birthThisYear && s.gender === 'F') lg += { L: 0.35, LM: 0.2, UM: 0.1, H: 0.03 }[country.income];

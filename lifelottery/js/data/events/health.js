@@ -51,7 +51,7 @@ export default [
     cooldown: 6,
     weight: 0.6,
     tags: ['health', 'illness', 'regional'],
-    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'OCE') && h.yearsSince('childhood_mosquito_season') > 6,
+    cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'OCE') && h.altitude() !== 'high' && h.yearsSince('childhood_mosquito_season') > 6,
     text: (s, h) => `雨季裡蚊子特別多，你突然高燒，骨頭像被拆開又裝回去一樣痛。${h.byIncome({
       L: '鄰居合力把你抬去診所，護理人員只能叫你多喝水，並一直盯著你的血小板。',
       LM: '診所替你驗了血，叮嚀你多喝水、別亂吃退燒藥，一週之後你才慢慢有了力氣。',
@@ -106,7 +106,7 @@ export default [
     title: '剩下的兩個月藥',
     ages: [15, 70],
     weight: 0,
-    tags: ['health', 'followup'],
+    tags: ['health', 'followup', 'illness'],
     text: (s, h) => '咳嗽停了，體重也回來了一些。可是藥袋裡還剩下兩個月的份量，領藥的路途又遠又累，農忙的季節也快到了。你看著那一小袋藥發呆，不知道該怎麼辦。',
     choices: [
       {
@@ -130,7 +130,7 @@ export default [
     once: false,
     cooldown: 6,
     weight: 0.8,
-    tags: ['health', 'access'],
+    tags: ['health', 'access', 'illness'],
     cond: (s, h) => !h.urban() && !h.incomeAtLeast('H'),
     text: (s, h) => '半夜裡你燒得滿臉通紅，家人摸著你滾燙的額頭。最近的診所要翻過一座山，天色還很黑，路上沒有半盞燈，連雞都還沒有醒，你不知道該不該現在就出發。',
     choices: [
@@ -203,7 +203,7 @@ export default [
     title: '復原的日子',
     ages: [15, 95],
     weight: 0,
-    tags: ['health', 'followup'],
+    tags: ['health', 'followup', 'wellness'],
     text: (s, h) => '術後第二個禮拜，你第一次自己走到窗邊，看見樓下的小孩在追一隻貓，陽光落在你的手背上，暖暖的。那一刻你覺得，活著原來可以這麼輕。',
     effects: { health: +4, happiness: +3, social: +1 },
   },
@@ -403,7 +403,7 @@ export default [
     once: false,
     cooldown: 10,
     weight: (s, h) => 0.5 + (h.hasCondition('depression') ? 1.5 : 0) + (h.stat('happiness') < 35 ? 0.7 : 0),
-    tags: ['health', 'mental'],
+    tags: ['health', 'mental', 'illness'],
     text: (s, h) => '你連續好幾週提不起勁，連起床都像在爬山。以前喜歡的事變得沒味道，吃飯也像在嚼蠟，你卻對旁人說「沒事，只是累了」，笑得很用力。',
     choices: [
       {
@@ -481,7 +481,7 @@ export default [
     title: '喘不過氣的那一刻',
     ages: [15, 55],
     weight: 0.4,
-    tags: ['health', 'mental'],
+    tags: ['health', 'mental', 'illness'],
     text: (s, h) => '在擁擠的地方，你的心臟忽然狂跳，手心全是汗，覺得自己快要昏倒。幾分鐘後一切又退去，旁邊的人什麼都沒發現，你卻從此不敢再走進同一個地方，也沒辦法向誰解釋。',
     choices: [
       {
@@ -512,7 +512,7 @@ export default [
     once: false,
     cooldown: 3,
     weight: (s, h) => (h.recentLog(['母親過世', '父親過世'], 1) ? 4 : 0),
-    tags: ['health', 'mental', 'grief'],
+    tags: ['health', 'mental', 'grief', 'family'],
     cond: (s, h) => h.recentLog(['母親過世', '父親過世'], 1),
     text: (s, h) => `喪事辦完了，親友各自回到自己的生活，屋子忽然安靜得讓人不習慣。吃飯時你還是不小心照著${heOf(h)}的習慣，多拿了一副碗筷，才想起來${heOf(h)}不會來了。`,
     choices: [
@@ -543,7 +543,7 @@ export default [
     once: false,
     cooldown: 12,
     weight: 0.3,
-    tags: ['health', 'mental'],
+    tags: ['health', 'mental', 'lifestyle'],
     text: (s, h) => '凌晨三點，你盯著天花板，腦袋裡的待辦清單像跑馬燈一樣停不下來。窗外偶爾有車經過，你開始懷疑，是不是只有自己在這個時間醒著。',
     effects: { health: -2, happiness: -2 },
   },
@@ -798,7 +798,7 @@ export default [
     once: false,
     cooldown: 10,
     weight: (s, h) => (h.hasCondition('cancer') ? 3 : 0),
-    tags: ['health', 'cancer'],
+    tags: ['health', 'cancer', 'illness'],
     cond: (s, h) => h.hasCondition('cancer'),
     text: (s, h) => `醫師把檢查結果攤在桌上，語氣很慢很輕，你聽見自己的心跳比他的聲音還大。${h.byIncome({
       L: '治療需要到遠方的大城市，家人已經在算路費與住宿費。',
@@ -920,7 +920,7 @@ export default [
     once: false,
     cooldown: 12,
     weight: 0.35,
-    tags: ['health'],
+    tags: ['health', 'wellness', 'checkup'],
     text: (s, h) => s.age < 14 ? h.byLiving({
       L: '一顆蛀牙痛了好幾個月，你用鹽水漱口、咬著濕布忍耐。最近的牙醫在遠遠的鎮上，大人一直說等哪天趕集時順路帶你去，可是賣完東西之後，總是累得誰也走不動。',
       LM: '半夜牙痛得你哭了起來。隔天大人帶你在診所排了一個多小時的隊，牙醫直接把牙拔了。你含著棉花回家，大人買了一支冰棒給你，說這是勇敢的獎勵。',
@@ -1017,7 +1017,7 @@ export default [
     once: false,
     cooldown: 15,
     weight: (s, h) => (h.hasCondition('hiv') ? 3 : 0),
-    tags: ['health', 'hiv'],
+    tags: ['health', 'hiv', 'chronic'],
     cond: (s, h) => h.hasCondition('hiv'),
     text: (s, h) => (h.yearIn(1983, 1995)
       ? '診斷書上寫著的病名，在這個年代幾乎沒有藥可以醫，也很少人願意談論。你坐在診間外，聽著走廊盡頭的電視聲，想著該怎麼對家人開口。'
@@ -1083,7 +1083,8 @@ export default [
     once: false,
     cooldown: 6,
     weight: 0.3,
-    tags: ['health', 'accident'],
+    tags: ['health', 'accident', 'sports'],
+    cond: (s, h) => h.playsSports(), // the ball game with friends: not everybody has the time or the field (a mother of five in a Sahel village, a child labourer)
     text: (s, h) => '你在球場上為了搶一顆球，膝蓋以奇怪的角度轉了一下。隊友七手八腳地把你抬到場邊，你痛得齜牙咧嘴，卻還是問了一句：「那球進了沒？」',
     effects: (s, h) => { h.change('health', -3); h.change('social', +1); h.change('happiness', -1); },
   },
@@ -1094,7 +1095,7 @@ export default [
     once: false,
     cooldown: 8,
     weight: 0.5,
-    tags: ['health', 'road'],
+    tags: ['health', 'road', 'accident'],
     cond: (s, h) => h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'EAS'),
     text: (s, h) => '聚會散得很晚，雨剛停，路面亮晶晶的。你的摩托車停在巷口，頭盔掛在後視鏡上，眼皮重得像灌了鉛，而回家的路還有四十分鐘，路上幾乎沒有一盞路燈。',
     choices: [
@@ -1140,7 +1141,7 @@ export default [
     title: '一步一步練習',
     ages: [12, 90],
     weight: 0,
-    tags: ['health', 'followup'],
+    tags: ['health', 'followup', 'exercise', 'wellness'],
     text: (s, h) => '復健室的鏡子前，你扶著欄杆反覆練習走路，汗水流進眼睛。第三個月，你第一次不扶欄杆走完整條走廊，治療師在一旁拍手，你有點害羞。',
     effects: { health: +4, happiness: +2, social: +1 },
   },
@@ -1183,7 +1184,7 @@ export default [
     once: false,
     cooldown: 8,
     weight: 0.25,
-    tags: ['health'],
+    tags: ['health', 'checkup', 'wellness'],
     cond: (s, h) => h.incomeAtLeast('UM') && h.stat('health') > 55,
     text: (s, h) => '檢查報告寄到家裡，所有數字都在標準範圍內。你拿著那張紙站在客廳，不知道該跟誰分享，最後把它貼在冰箱上，每次開冰箱都偷偷高興一下。',
     effects: { health: +1, happiness: +3 },
@@ -1195,7 +1196,7 @@ export default [
     once: false,
     cooldown: 10,
     weight: 0.3,
-    tags: ['health', 'tech'],
+    tags: ['health', 'tech', 'checkup'],
     cond: (s, h) => h.yearIn(2021, 2200) && (h.incomeAtLeast('LM') || !h.urban()),
     text: (s, h) => h.byIncome({
       L: '社區診所有了一台共用的平板，護理人員讓你透過視訊跟遠方的醫師說話。你不必再翻山越嶺花一整天，當天就拿到了處方和藥，護理人員還笑說：「以後看醫師都不用背乾糧了。」',
@@ -1204,5 +1205,98 @@ export default [
       H: '你在客廳用手機跟家庭醫師視訊，醫師看了你的紅疹，開了藥膏，十分鐘結束。你一邊覺得這樣真方便，一邊又莫名懷念起從前苦等的候診室，和裡面那些愛聊天的老人家。',
     }),
     effects: { health: +2, wealth: +1, happiness: +1 },
+  },
+  // ---- Phase 4A: 把身體當回事（人生重心「健康」會讓這類事件更常出現） ----
+  {
+    id: 'health_morning_walk',
+    title: '每天早晨的三十分鐘',
+    ages: [28, 78],
+    once: false,
+    cooldown: 12,
+    weight: 0.6,
+    tags: ['health', 'exercise', 'habit', 'wellness'],
+    cond: (s, h) => h.stat('health') >= 35 && !h.displaced(),
+    text: (s, h) => `你的身體最近一直在小聲提醒你：爬樓梯會喘、坐久了腰痠。${h.climate() === 'tropical' || h.climate() === 'arid' ? '趁著太陽還沒升起，' : ''}你想起以前有人說過，健康不是一次買到的，而是每天存進去的。`,
+    choices: [
+      {
+        label: '每天固定出門走三十分鐘',
+        effects: { health: +4, happiness: +2, social: +1 },
+        result: '起初你只能走到街角，一個月後能繞完整個社區。路上總會遇到同樣的人，點頭、揮手，後來變成互相問候的朋友。',
+        ai: 2.2,
+      },
+      {
+        label: '找朋友一起，互相督促',
+        effects: { health: +3, social: +4, happiness: +2 },
+        result: '你們約在固定的地方碰面。有人遲到，有人臨時放鴿子，但只要有一個人到，就不會是一個人在走。半年後，你們的話題從抱怨變成了計畫。',
+        ai: 2,
+      },
+      {
+        label: '等忙完這一陣子再說',
+        effects: { health: -1, happiness: -1 },
+        result: '這一陣子總是接著下一陣子。直到某天爬樓梯時膝蓋發出一聲脆響，你才發現，「以後」不會自己變成「現在」。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'health_sleep_routine',
+    title: '睡眠欠的帳',
+    ages: [20, 68],
+    once: false,
+    cooldown: 12,
+    weight: 0.5,
+    tags: ['health', 'lifestyle', 'habit'],
+    text: (s, h) => `你發現自己習慣把睡眠當成最後一個被犧牲的項目：${h.hasChildren() && h.youngestChildAge() <= 6 ? '孩子、' : ''}工作、手邊的螢幕，輪流把你的夜晚吃掉一小口。這幾天你連一杯水都拿不穩，才驚覺該還帳了。`,
+    choices: [
+      {
+        label: '訂下固定的睡覺和起床時間',
+        effects: { health: +3, happiness: +2, social: -1 },
+        result: '前兩週很難熬，你看著夜裡的那段空白發呆。第三週，早上的頭腦像被擦乾淨的窗，連早餐都變得好吃了。',
+        ai: 2,
+      },
+      {
+        label: '白天找時間小睡，補一點是一點',
+        effects: { health: +1, happiness: +1 },
+        result: '你在午後找到一個安靜的角落睡了二十分鐘。這樣不是辦法，卻讓你撐過了最難的一個星期。',
+        ai: 1.4,
+      },
+      {
+        label: '咖啡和意志力，撐過去再說',
+        effects: { health: -3, happiness: -1 },
+        result: '你多喝了兩杯咖啡，把鬧鐘調早。幾週後你的脾氣變得短，身體也開始用奇怪的方式抗議。',
+        ai: 0.8,
+      },
+    ],
+  },
+  {
+    id: 'health_cooking_change',
+    title: '回到廚房',
+    ages: [24, 72],
+    once: false,
+    cooldown: 12,
+    weight: 0.5,
+    tags: ['health', 'diet', 'lifestyle', 'home'],
+    cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+    text: (s, h) => '你算了一下，這幾個月有一半的晚餐是隨便對付過去的：外食、泡麵、站在流理台前吃剩菜。身體沒有說什麼，但鏡子裡的臉色會替它說。',
+    choices: [
+      {
+        label: '每週固定下廚幾天，慢慢學新菜',
+        effects: { health: +3, happiness: +2, wealth: +1, knowledge: +1 },
+        result: '你從三道最簡單的菜開始。第一次炒焦了，第三次被家人誇好吃，第十次，你發現自己居然在煮飯時哼起了歌。',
+        ai: 2,
+      },
+      {
+        label: '找人合夥輪流備餐',
+        effects: { health: +2, social: +3, wealth: +1 },
+        result: '你和鄰居或同事輪流多煮一份，分著吃。省下的錢不多，省下的力氣卻不少，餐桌邊也多了幾個可以閒聊的人。',
+        ai: 1.4,
+      },
+      {
+        label: '維持現狀，偶爾提醒自己',
+        effects: { health: -1 },
+        result: '你說下週開始。下週接著下週。直到哪天體檢報告讓你重新排了一次優先順序。',
+        ai: 1,
+      },
+    ],
   },
 ];

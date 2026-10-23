@@ -45,7 +45,7 @@ export default [
     cooldown: 4,
     // Poorer, rural children get sick more often; weight is a function of the state.
     weight: (s, h) => 0.6 + (h.wealthQ() <= 2 ? 0.8 : 0) + (h.urban() ? 0 : 0.3),
-    tags: ['health', 'childhood'],
+    tags: ['health', 'childhood', 'illness'],
     text: (s, h) => `你燒了好幾天，渾身發燙。${h.byIncome({
       L: '家人輪流用濕布替你擦身體，走了半天的路才找到診所，藥錢是向鄰居借的。',
       LM: `${h.parentsLabel()}背著你去了衛生所，護理師說再晚一點就麻煩了。`,
@@ -221,7 +221,7 @@ export default [
     id: 'seed_peer_pressure',
     title: '遞過來的菸',
     ages: [14, 19],
-    tags: ['youth', 'health'],
+    tags: ['youth', 'health', 'addiction'],
     major: true,
     cond: (s, h) => !h.isSmoker(),
     text: (s, h) => `${h.inSchool() ? '放學後' : '天黑後'}，朋友們躲在後巷。有人遞過來一根菸，笑著說：「試一下嘛，大家都有。」所有人的眼睛都在看你。`,
@@ -287,7 +287,7 @@ export default [
     id: 'seed_leave_home',
     title: '離開家鄉的那天',
     ages: [17, 24],
-    tags: ['youth', 'migration'],
+    tags: ['youth', 'migration', 'independence'],
     major: true,
     cond: (s, h) => !h.has('left_home') && h.eduYears() >= 6 && !h.married(),
     text: (s, h) => h.byIncome({
@@ -389,7 +389,7 @@ export default [
     once: false,
     cooldown: 4,
     weight: 0.7,
-    tags: ['social'],
+    tags: ['social', 'fun'],
     cond: (s, h) => h.incomeAtLeast('UM') || h.urban(),
     text: (s, h) => `朋友的朋友辦了一場派對，音樂太大聲，你在陽台跟一個陌生人聊了一整晚。第二天頭很痛，但${h.year() >= 2005 ? '手機' : '通訊錄'}裡多了一個之後會聯絡很多年的名字。`,
     effects: { social: +4, happiness: +2, health: -1 },
@@ -734,7 +734,7 @@ export default [
     ages: [20, 80],
     once: false,
     cooldown: 6,
-    tags: ['migration', 'followup'],
+    tags: ['migration', 'followup', 'family'],
     cond: (s, h) => h.isMigrant(),
     text: (s, h) => `${h.countryName()}的冬天特別長。你在廚房煮了一鍋家鄉的湯，一口喝下去，眼淚就掉在碗裡。${h.wageEarner() ? '同事' : '鄰居'}問你怎麼了，你說：「沒事，辣椒太辣。」`,
     effects: { happiness: -3, social: -1 },
@@ -749,7 +749,7 @@ export default [
     ages: [35, 75],
     once: false,
     cooldown: 6,
-    tags: ['health'],
+    tags: ['health', 'checkup', 'wellness'],
     cond: (s, h) => h.incomeAtLeast('LM') && !h.isPoor(),
     text: (s, h) => '單位安排了健康檢查。你躺在儀器上，聽著護理師的腳步聲來來去去。幾週後，報告寄來了，醫生圈出了幾個需要追蹤的數字。',
     effects: (s, h) => {
@@ -762,7 +762,7 @@ export default [
     id: 'seed_health_scare',
     title: '胸口的悶痛',
     ages: [38, 80],
-    tags: ['health'],
+    tags: ['health', 'illness'],
     major: true,
     once: false,
     cooldown: 10,
@@ -861,8 +861,8 @@ export default [
     // The aftermath is told through follow-ups of this event (each checks in its followCond that it still fits), so
     // nobody meets "the vaccine queue" or "the reopening" in a life where the pandemic never happened.
     schedule: [
-      { id: 'world_pandemic_remote_school', inYears: [0, 1], p: 0.8 },
-      { id: 'world_pandemic_work', inYears: [0, 1], p: 0.7 },
+      { id: 'world_pandemic_remote_school', inYears: [0, 0], p: 0.8 }, // the same year: schools closed in the spring of 2020
+      { id: 'world_pandemic_work', inYears: [0, 0], p: 0.7 },
       { id: 'world_pandemic_vaccine', inYears: [1, 2], p: 0.8 },
       { id: 'world_pandemic_bereavement', inYears: [0, 2], p: 0.25 },
       { id: 'world_pandemic_long', inYears: [1, 4], p: 0.12 },
@@ -932,7 +932,7 @@ export default [
     cooldown: 4,
     weight: (s, h) => 0.6 + Math.max(0, (s.age - 65) * 0.04),
     tags: ['aging', 'loss'],
-    text: (s, h) => '收到訃告的那天，你把它放在桌上看了很久。年輕時和你一起騎車、喝酒、吵架的人，又少了一個。你發現自己能說話的對象越來越少。',
+    text: (s, h) => `收到訃告的那天，你把它放在桌上看了很久。年輕時和你一起騎車、${h.drinks() ? '喝酒' : '喝茶'}、吵架的人，又少了一個。你發現自己能說話的對象越來越少。`,
     effects: { happiness: -4, social: -4 },
   },
   {

@@ -193,6 +193,7 @@ test('enroll: quiet enrolments never drop out by themselves and write no system 
     for (let y = 0; y < 4 && s.alive; y++) advanceYear(s, { auto: true });
     if (!s.alive) continue;
     if (s.edu.inSchool) continue; // a later event ("back to school") started the next level and replaced the plan: not what is tested here
+    if (s.log.slice(logLen).some((e) => /結業|證書/.test(e.title))) continue; // a night-class certificate event closed the enrolment on its own
     assert.equal(s.edu.inSchool, false, 'finished in 3 school-years-pairs');
     assert.ok(s.edu.years >= 12);
     assert.ok(s.flags.adult_diploma > 0, 'adult_diploma flag');

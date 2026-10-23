@@ -6,6 +6,7 @@
 //   autoChoose(state)                 -> same as choose, picking by each choice's `ai` weight
 //   serialize(state) / deserialize(text)
 //   getPendingChoice(state), getStatus(state)
+//   FOCI, availableFoci(state), setFocus(state, id), autoFocus(state)      (life focus, see focus.js)
 //
 // One tick (advanceYear) resolves: survival of the year just lived -> age/year increment ->
 // yearly systems -> events. Death therefore records the age at the *start* of the fatal year
@@ -17,9 +18,16 @@ import { drawBirth } from './birth.js';
 import { dies, drawCause } from './mortality.js';
 import { initSystems, runSystems, ctxOf, pushLog, STAT_KEYS, JOBS } from './systems.js';
 import { runEvents, resolveChoice, autoPickIndex, getPendingChoice } from './events.js';
-import { makeHelpers, recordDeath } from './helpers.js';
+import { makeHelpers, recordDeath, hash01 } from './helpers.js';
+import { drawReligion, RELIGION_LABELS } from '../data/religion.js';
+import { FOCI, FOCUS_BY_ID, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus, ensureFocus, lapseFocus } from './focus.js';
 
-export { getPendingChoice };
+export { getPendingChoice, FOCI, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus };
+
+/** Family religion of a life, drawn from a hash of the seed (no random numbers are used, so nothing else in the life moves). */
+function religionOf(seed, country, group, era, birthYear, name) {
+  return drawReligion(country, group, era, hash01(`${seed}|religion|${birthYear}|${name}`));
+}
 
 export const STATE_VERSION = 1;
 
@@ -74,6 +82,9 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
     gender: b.gender,
     name: { given: b.name.given, family: b.name.family, full: b.name.full },
     family: { wealthQ: b.wealthQ, siblings: b.siblings, mother: b.parents.mother, father: b.parents.father },
+    religion: religionOf(seed, b.country.code, b.poolKey, b.eraKey, b.birthYear, b.name.full),
+    focus: 'balance',
+    focusHistory: [{ age: 0, focus: 'balance' }],
     stats: { health: 90, happiness: 60, knowledge: 2, wealth: 50, social: 55 },
     edu: { level: 'none', inSchool: false, years: 0 },
     work: { status: 'child', job: null, yearsWorked: 0 },
@@ -103,12 +114,13 @@ function finishYear(s) {
 
 /**
  * Advance one year. If a choice is pending it is returned unchanged (resolve it first).
- * With `{ auto: true }` pending choices are resolved automatically (used by simulations).
+ * With `{ auto: true }` pending choices are resolved automatically and the life focus is chosen at each stage prompt
+ * (used by simulations; `{ auto: true, autoFocus: false }` leaves the focus alone so a test can force one).
  * @returns {{ entries: object[], pendingChoice: object|null, died: boolean }}
  */
-export function advanceYear(s, { auto = false } = {}) {
-  if (!s.alive) return { entries: [], pendingChoice: null, died: true };
-  if (s.flags._choice) return { entries: [], pendingChoice: s.flags._choice, died: false };
+export function advanceYear(s, { auto = false, autoFocus: autoF = auto } = {}) {
+  if (!s.alive) return { entries: [], pendingChoice: null, died: true, focusPrompt: false };
+  if (s.flags._choice) return { entries: [], pendingChoice: s.flags._choice, died: false, focusPrompt: !!s.flags._focusPrompt };
 
   const start = s.log.length;
   const ctx = ctxOf(s);
@@ -118,18 +130,26 @@ export function advanceYear(s, { auto = false } = {}) {
     const cause = drawCause(s, ctx.home, ctx.birthView, s.settings.era);
     recordDeath(s, cause);
     s.statHistory.push(snapshotRow(s));
-    return { entries: s.log.slice(start), pendingChoice: null, died: true };
+    return { entries: s.log.slice(start), pendingChoice: null, died: true, focusPrompt: false };
   }
 
   // 2. Age up, then yearly systems and events
   s.age += 1;
   s.year += 1;
+  // Life focus: one that is no longer open at this age lapses to 'balance'; a new life stage asks for a focus (the prompt
+  // stays in flags._focusPrompt until setFocus answers it, so a reload still shows it). Auto play picks one itself.
+  lapseFocus(s);
+  delete s.flags._focusPrompt;
+  if (FOCUS_PROMPT_AGES.includes(s.age)) {
+    s.flags._focusPrompt = true;
+    if (autoF) setFocus(s, autoFocus(s));
+  }
   runSystems(s);
   const h = makeHelpers(s);
   runEvents(s, h);
   finishYear(s);
 
-  if (!s.alive) return { entries: s.log.slice(start), pendingChoice: null, died: true };
+  if (!s.alive) return { entries: s.log.slice(start), pendingChoice: null, died: true, focusPrompt: false };
   if (auto) {
     let guard = 0;
     while (s.flags._choice && s.alive && guard++ < 3) {
@@ -137,7 +157,7 @@ export function advanceYear(s, { auto = false } = {}) {
       s.statHistory[s.statHistory.length - 1] = snapshotRow(s);
     }
   }
-  return { entries: s.log.slice(start), pendingChoice: s.flags._choice || null, died: !s.alive };
+  return { entries: s.log.slice(start), pendingChoice: s.flags._choice || null, died: !s.alive, focusPrompt: !!s.flags._focusPrompt };
 }
 
 /** Resolve the pending choice with the given option index (index into `pendingChoice.options`). */
@@ -147,7 +167,7 @@ export function choose(s, optionIndex) {
   const h = makeHelpers(s);
   resolveChoice(s, h, optionIndex);
   if (s.statHistory.length) s.statHistory[s.statHistory.length - 1] = snapshotRow(s);
-  return { entries: s.log.slice(start), pendingChoice: null, died: !s.alive };
+  return { entries: s.log.slice(start), pendingChoice: null, died: !s.alive, focusPrompt: !!s.flags._focusPrompt };
 }
 
 /** Let the engine choose according to the `ai` weights of the pending choice. */
@@ -175,6 +195,9 @@ export function deserialize(text) {
   if (!BY_CODE[s.countryCode] || !BY_CODE[s.homeCountryCode]) throw new Error('Invalid save: country');
   for (const k of ['stats', 'edu', 'work', 'family', 'flags', 'seen']) if (!s[k] || typeof s[k] !== 'object') throw new Error(`Invalid save: ${k}`);
   for (const k of ['children', 'conditions', 'pending', 'log', 'statHistory', 'highlights']) if (!Array.isArray(s[k])) throw new Error(`Invalid save: ${k}`);
+  // Saves from before Phase 4A: no life focus (balance) and no family religion (drawn now from the seed, like a new life)
+  ensureFocus(s);
+  if (!RELIGION_LABELS[s.religion]) s.religion = religionOf(s.seed, s.homeCountryCode, s.flags._pool, s.settings && s.settings.era, s.birthYear, s.name && s.name.full);
   return s;
 }
 
@@ -207,5 +230,11 @@ export function getStatus(s) {
     conditions: [...s.conditions],
     smoker: s.smoker,
     alive: s.alive,
+    religion: s.religion,
+    religionLabel: RELIGION_LABELS[s.religion] || '',
+    focus: s.focus,
+    focusLabel: (FOCUS_BY_ID[s.focus] || FOCUS_BY_ID.balance).label,
+    foci: availableFoci(s).map((f) => ({ id: f.id, label: f.label, desc: f.desc })),
+    focusPrompt: !!s.flags._focusPrompt,
   };
 }

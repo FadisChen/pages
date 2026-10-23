@@ -9,12 +9,18 @@
 import { BY_CODE } from '../data/countries.js';
 import { eraView, incomeGroupAt } from '../data/eras.js';
 import { CAUSES } from '../data/causes.js';
+import { RELIGION_LABELS, majorityReligion, festivalFor, festivalScene, worshipPlace } from '../data/religion.js';
+import { placeGeo } from '../data/geo.js';
+import { moneyText } from '../data/money.js';
+import { FOCUS_BY_ID } from './focus.js';
 import { describeCause } from './mortality.js';
-import { rand, between, randInt, chance, pick, clamp } from './rng.js';
+import { rand, between, randInt, chance, pick, clamp, hash01 } from './rng.js';
+
+export { hash01 };
 import {
   STAT_KEYS, EDU_LEVELS, JOBS, ctxOf, annualIncome, applyDelta, pushLog, addHighlight, incomeAtLeast, byIncome, aliveKids,
   startJob, loseJob, retire, setPartner, newPartner, endRelationship, marry, divorce, addChild, addCondition, removeCondition,
-  migrate, leaveSchool, enroll, inTertiary, setUrban, setCity,
+  migrate, leaveSchool, enroll, inTertiary, setUrban, setCity, stableFlip, drinksAlcohol,
 } from './systems.js';
 
 /**
@@ -37,14 +43,6 @@ export function recordDeath(s, causeId) {
   delete s.flags._choice;
   const when = s.age < 1 ? `在 ${s.year} 年離開，還不滿一歲` : `在 ${s.year} 年離開，享年 ${s.age} 歲`;
   pushLog(s, 'death', `${s.name.given}離開了`, `${s.name.full}${when}。${text}`);
-}
-
-/** Deterministic number in [0, 1) from a string (FNV-1a plus a final avalanche so similar strings differ). */
-export function hash01(str) {
-  let x = 2166136261;
-  for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
-  x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16;
-  return (x >>> 0) / 4294967296;
 }
 
 /** The i-th living child (the i-th child at all if none is alive). */
@@ -129,6 +127,126 @@ export class Helpers {
   /** Years since the last move to another country (Infinity if the person never moved). */
   yearsAbroad() { const y = this.s.flags._movedAt; return y === undefined ? Infinity : this.s.year - y; }
   hasLivedIn(code) { return !!this.s.flags._countries && this.s.flags._countries.includes(code); }
+
+  // ---- religion & culture (the religion/tradition of the FAMILY, which stays with the person wherever they live) ----
+  /** The family's religion or tradition: 'christian' | 'muslim' | 'hindu' | 'buddhist' | 'folk' | 'jewish' | 'sikh' | 'none' | 'other'. */
+  religion() { return this.s.religion || 'none'; }
+  /** True if the family religion is one of these ids: h.isReligion('muslim'), h.isReligion('hindu', 'sikh'). */
+  isReligion(...ids) { return ids.includes(this.religion()); }
+  /** Zh-Hant name of the family religion ('伊斯蘭教', '沒有特定宗教' ...). */
+  religionLabel() { return RELIGION_LABELS[this.religion()] || ''; }
+  /** Pick a text by the family religion: h.byReligion({ muslim: '…', christian: '…', _: '…' }). The fallback key is `_` (or `default`), else ''. */
+  byReligion(map) {
+    const r = this.religion();
+    if (map[r] !== undefined) return map[r];
+    if (map._ !== undefined) return map._;
+    return map.default !== undefined ? map.default : '';
+  }
+  /** { name, key, dish } of the family's main festival, from the religion and the HOME country (what the family celebrates, wherever the person lives). */
+  festivalInfo() { return festivalFor(this.religion(), this.s.homeCountryCode, this.homeCountry().region); }
+  /** Name of the family's main festival: 排燈節, 德賽節, 開齋節, 宰牲節, 聖誕節, 復活節, 農曆新年, 潑水節, 新年 ... */
+  festival() { return this.festivalInfo().name; }
+  /** Stable id of the family's festival ('lunar', 'eid', 'tabaski', 'diwali', 'dashain', 'christmas', 'easter', 'songkran', 'newyear' ...). */
+  festivalKey() { return this.festivalInfo().key; }
+  /** Does the family keep the lunar new year (農曆新年)? True for most Chinese, Korean and Vietnamese families, wherever they live. */
+  lunarNewYear() { return this.festivalKey() === 'lunar'; }
+  /** Main festival of the religion most people around the person follow in the current country, or null when it is the family's own. */
+  hostFestival() {
+    const c = this.country();
+    const maj = majorityReligion(c.code);
+    if (maj === this.religion()) return null;
+    const f = festivalFor(maj, c.code, c.region);
+    return f.name === this.festival() ? null : f.name;
+  }
+  /**
+   * A short scene of the family's main festival for the person's age group (kind: 'child' | 'adult' | 'elder'; default by age),
+   * 60-160 characters. Someone living in another country gets a sentence about keeping the festival far from home, and one who
+   * lives among people with a different main festival gets a sentence about noticing theirs (a Nepali Hindu in Qatar celebrates
+   * Dashain at home while Eid goes on around him).
+   */
+  festivalScene(kind) {
+    const s = this.s;
+    const k = kind || (s.age < 13 ? 'child' : s.age >= 65 ? 'elder' : 'adult');
+    const info = this.festivalInfo();
+    let text = festivalScene(info, s.homeCountryCode, this.homeCountry().region, k);
+    if (k !== 'child' && s.countryCode !== s.homeCountryCode) {
+      const call = this.techReady(2005) ? '視訊' : '長途電話';
+      text += k === 'adult'
+        ? `你人在${this.countryName()}，這天不是假日，你忙完手邊的事才補過節；${call}那頭的家人剛擺好桌，你端起自己煮的那一盤，好像也坐在同一張桌旁。`
+        : `你人在${this.countryName()}，離家很遠，晚輩特地打${call === '視訊' ? '視訊' : '長途電話'}陪你過節，你對著話筒一個一個叫他們的名字。`;
+    }
+    const host = this.hostFestival();
+    if (host && k !== 'child') text += `街上的人也在準備他們的${host}，氣氛和你記憶中的不太一樣，你看著，並不覺得被排開，只是更清楚自己是從哪裡來的。`;
+    return text;
+  }
+  /** Is the family's religion a minority where they live now (a different religion is the majority of the current country)? */
+  religionIsMinority() { return majorityReligion(this.country().code) !== this.religion(); }
+  /** Word for the family's place of worship ('教堂', '清真寺', '廟', '佛寺', '猶太會堂', '錫克教寺廟'); '' for a family without one. */
+  worshipPlace() { return worshipPlace(this.religion(), this.s.homeCountryCode); }
+
+  // ---- geography of the place the person lives (see data/geo.js) ----
+  /** { coast, alt, climate } of the current home. Rural people live near their city: its coast and altitude, the country's dominant climate. */
+  place() { return placeGeo(this.s.countryCode, this.s.city, this.s.urban); }
+  /** Is the home on or near the coast (within ~50 km, or a tidal port)? Gate for sea-level, storm-surge and typhoon events. */
+  coastal() { return this.place().coast; }
+  /** 'tropical' | 'arid' | 'temperate' | 'continental' | 'polar' | 'highland'. */
+  climate() { return this.place().climate; }
+  /** Altitude class of the home: 'low' (< 500 m) | 'mid' | 'high' (>= 1,500 m). */
+  altitude() { return this.place().alt; }
+  /** Lives at 1,500 m or more (Bogota, Addis Ababa, La Paz, Kathmandu valley is just under). */
+  highAltitude() { return this.place().alt === 'high'; }
+  /**
+   * Pick a text by climate: h.byClimate({ tropical: '…', arid: '…', temperate: '…', continental: '…', highland: '…', polar: '…' }).
+   * Missing keys fall back along highland -> continental -> temperate, polar -> continental -> highland, then to `_`/default or ''.
+   */
+  byClimate(map) {
+    const FALL = { highland: ['continental', 'temperate'], polar: ['continental', 'highland'], continental: ['temperate'], arid: ['tropical', 'temperate'], tropical: ['arid', 'temperate'], temperate: ['continental'] };
+    const c = this.climate();
+    if (map[c] !== undefined) return map[c];
+    for (const f of FALL[c] || []) if (map[f] !== undefined) return map[f];
+    return map._ !== undefined ? map._ : map.default !== undefined ? map.default : '';
+  }
+  /** Does it snow where the person lives (continental, highland or polar climate)? */
+  snowy() { const c = this.climate(); return c === 'continental' || c === 'highland' || c === 'polar'; }
+  /** Can heat waves hit (tropical, arid or continental climate)? */
+  hotClimate() { const c = this.climate(); return c === 'tropical' || c === 'arid' || c === 'continental'; }
+
+  // ---- lifestyle assumptions that depend on the person and the culture (stable per life) ----
+  /**
+   * Does this person drink alcohol (beer with friends, a toast at the wedding)? Decided once per life: very unlikely in a Muslim
+   * family, unlikely in many Hindu, Sikh and Buddhist families, less likely for women and in the countries where nobody drinks much.
+   */
+  drinks() { return drinksAlcohol(this.s); }
+  /**
+   * Plays team or street sports regularly (the ball game with friends where a knee gets twisted)? Decided once per life: likelier
+   * for the young, for boys and men, in school or with some money; rare for a mother of several children or a child labourer.
+   */
+  playsSports() {
+    const s = this.s;
+    if (s.age < 8 || s.age > 55 || this.displaced()) return false;
+    let p = this.male() ? 0.65 : 0.38;
+    if (s.age < 16 && this.employed()) p *= 0.3; // a child labourer has no afternoons for a ball game
+    if (s.age > 45) p *= 0.3; else if (s.age > 35) p *= 0.5;
+    if (this.isPoor() && !this.inSchool()) p *= 0.6;
+    if (this.childCount() >= 3) p *= 0.2; else if (this.hasChildren() && this.youngestChildAge() <= 5) p *= 0.4;
+    if (this.female() && this.isRegion('SAS', 'MENA') && s.age >= 15) p *= 0.5;
+    return this.stable('plays_sports', p);
+  }
+
+  // ---- money in the local currency (see data/money.js) ----
+  /**
+   * Natural zh-Hant amount in the local currency for `usdPpp` international dollars (constant 2011 PPP dollars, the unit of
+   * h.annualIncome()), priced for the current country and calendar year: h.money(2000) -> '新台幣四萬元' in Taiwan,
+   * '2.5 萬日圓' for 200 in Japan, '300 美元' in the US. `{ round }`: omitted/true = a natural round figure, false = exact
+   * units, a number = multiple of that many local units. Use h.money(h.annualIncome() / 12 * 1.5) for "a month's pay and a half".
+   */
+  money(usdPpp, opts) { return moneyText(this.s.countryCode, this.s.year, usdPpp, opts); }
+
+  // ---- life focus ----
+  /** Current life focus id: 'balance' | 'study' | 'work' | 'family' | 'health' | 'self'. */
+  focus() { return this.s.focus || 'balance'; }
+  isFocus(...ids) { return ids.includes(this.focus()); }
+  focusLabel() { return (FOCUS_BY_ID[this.focus()] || FOCUS_BY_ID.balance).label; }
 
   // ---- identity & situation ----
   stat(k) { return this.s.stats[k]; }
@@ -249,9 +367,7 @@ export class Helpers {
    * affected by the 2004 tsunami", which several events must agree on). Use a distinct key per question.
    */
   stable(key, p = 0.5) {
-    if (!(p > 0)) return false;
-    if (p >= 1) return true;
-    return hash01(`${this.s.seed}|${this.s.birthYear}|${this.s.name.full}|${key}`) < p;
+    return stableFlip(this.s, key, p);
   }
 
   // ---- state changes ----
