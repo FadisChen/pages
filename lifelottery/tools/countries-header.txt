@@ -1,0 +1,42 @@
+// GENERATED FILE - do not edit by hand. Rebuild with:
+//   node lifelottery/tools/fetch-raw.mjs && node lifelottery/tools/build-data.mjs
+//
+// Per-country statistics for 人生籤 Life Lottery (173 countries/territories with population >= 500k).
+//
+// SOURCES (all open data, fetched from raw.githubusercontent.com; the OWID/UN/WHO/World Bank
+// websites themselves are not reachable from the build sandbox):
+//   pop            OWID covid-19-data "owid-covid-latest.csv" (UN WPP-derived, 2022). Fallback: Gapminder/UN 2016 x 1.06.
+//   le {F,M}       Both-sexes life expectancy at birth: OWID covid file (UN WPP, 2019 - pre-pandemic).
+//                  Sex split: OWID "Female minus male life expectancy at birth" (UN WPP 2017 revision, latest year 2015).
+//   imr            Infant mortality, per 1000 live births: IHME Global Burden of Disease 2017 (via OWID datasets).
+//   u5mr           Under-5 mortality, per 1000: UN IGME / CME Info (via OWID datasets), 2017.
+//   births         Births per year = IHME infant deaths 2017 / IHME IMR 2017, scaled by pop(2022)/pop(2016),
+//                  and by tfr/tfr2015 where the TFR was replaced (see below).
+//   tfr            Gapminder fertility v12 (UN WPP 2015 revision), year 2015. Where this differs from the UN WPP 2024
+//                  figure (recalled) by more than 0.2 the WPP 2024 value is used and 'tfr' is listed in est.
+//   school {F,M}   Expected years of schooling, UNDP 2018 (latest 2017), split by sex with an income-group prior adjusted by
+//                  OWID "mean years of schooling, women 15-49" vs Barro-Lee/UNDP adult mean (a heuristic - see build-data.mjs).
+//   gdp            GDP per capita PPP in constant 2011 international $ (OWID covid file, latest year ~2019).
+//   poverty        % of population below $1.90/day (OWID covid file, latest available year). Missing: est.
+//   urban          Urban share of population 2020 (UN World Urbanization Prospects 2018, via OWID datasets).
+//   srb            Males per 100 female births (Chao et al. 2019 / UN WPP, latest year 2017).
+//   smoke {F,M}    % of adults who smoke (OWID covid file; fallback IHME GHDx 2012 daily-smoker prevalence).
+//   suicide        Age-standardised suicide rate per 100k, mean of both sexes (IHME GBD 2017).
+//   marryAge {F,M} Mean age at first marriage (UN, "Estimated average age at marriage", latest survey/census year).
+//   pop1970        Gapminder/UN population in 1970 (used to weight the 'past' era draw). Fallback pop x 0.6.
+//   le1970         Gapminder/UN long-run life expectancy, year 1970 (both sexes).
+//   imr1970        UN IGME under-5 mortality 1970 x (imr/u5mr today, clamped 0.5-0.88).
+//   le2050         MODEL: avg + max(1.5, (88 - avg) * 0.32), capped at 89 - an approximation of the UN WPP 2024 medium
+//                  variant convergence. Same rule for every country (not listed in est).
+//   income         World Bank FY2025 income group, recalled.
+//   cities         Representative cities (zh-Hant), curated.
+//
+// ESTIMATED FIELDS (no open dataset was reachable): tertiary (UNESCO UIS gross enrolment, latest year ~2018-2022),
+// road (WHO Global Status Report on Road Safety, deaths per 100k, ~2019-2021), childMarriage (UNICEF, % of women 20-24
+// married before 18, latest survey), homicide (UNODC, per 100k, ~2020-2022). These four are my best recollection and are
+// listed in est for EVERY country. Any other field that fell back to a recalled value or an income-group median is
+// also named in that country's `est` array (e.g. Taiwan, which OWID's covid file omits).
+//
+// FIELD UNITS: pop (people), births (per year), le/school (years), imr/u5mr (per 1000 live births), tfr (children per woman),
+// tertiary/poverty/urban/childMarriage/smoke (%), gdp (2011 int-$ PPP), srb (males per 100 females at birth),
+// homicide/road/suicide (per 100k per year).
