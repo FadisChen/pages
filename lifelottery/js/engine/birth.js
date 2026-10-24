@@ -3,9 +3,11 @@
 
 import { COUNTRIES, BY_CODE } from '../data/countries.js';
 import { eraView, drawWeight, worldView, resolveEra, birthYearFor, eraSpan, ERA_LABELS } from '../data/eras.js';
-import { drawGroup, makeName, getPool, composeName, motherFamilyToken } from '../data/names.js';
+import { drawGroup, makeName, getPool, composeName, motherFamilyToken, GROUP_KEYS } from '../data/names.js';
 import { lifeTable } from './mortality.js';
 import { rand, randInt, poisson, normal, clamp, weightedIndex } from './rng.js';
+import { placePhrases } from './place.js';
+import { RELIGION_LABELS } from '../data/religion.js';
 
 export const WEALTH_LABELS = ['最貧困的五分之一', '偏低的五分之一', '中等的五分之一', '偏高的五分之一', '最富裕的五分之一'];
 export const WEALTH_SHORT = ['赤貧', '清寒', '小康', '寬裕', '富裕'];
@@ -90,13 +92,73 @@ function makeParents(rng, country, view, birthYear, wealthQ, siblings, groupKey,
   };
 }
 
+export const START_VERSION = 1;
+
+const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
+const cleanParent = (p) => (p && typeof p === 'object' && typeof p.alive === 'boolean' && isInt(p.age, 12, 95) && isStr(p.name, 80) ? { alive: p.alive, age: p.age, name: p.name } : null);
+
+/**
+ * Validate and clean the "start" of a life (the `birth` object of createLife / the album's `meta.birth`):
+ *   { v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ,                 <- always (a partial start)
+ *     poolKey, name:{ given, family, full, givenToken, familyToken }, siblings,
+ *     mother:{ alive, age, name }, father:{ ... }, religion, business }                  <- the rest (a complete start)
+ * Returns the clean object with `full: boolean`, or null when even the partial start is unusable (unknown country, ...).
+ */
+export function normalizeBirth(b) {
+  if (!b || typeof b !== 'object') return null;
+  const country = BY_CODE[b.countryCode];
+  if (!country) return null;
+  if (b.gender !== 'M' && b.gender !== 'F') return null;
+  if (!isInt(b.wealthQ, 1, 5) || !isInt(b.birthYear, 1800, 2200) || typeof b.urban !== 'boolean') return null;
+  const eraKey = ['past', 'present', 'future'].includes(b.eraKey) ? b.eraKey : null;
+  if (!eraKey) return null;
+  const out = {
+    v: START_VERSION, eraKey, birthYear: b.birthYear, countryCode: country.code, gender: b.gender, wealthQ: b.wealthQ, urban: b.urban,
+    city: typeof b.city === 'string' && country.cities.includes(b.city) ? b.city : '',
+    full: false,
+  };
+  const n = b.name;
+  const mother = cleanParent(b.mother), father = cleanParent(b.father);
+  const complete = GROUP_KEYS.includes(b.poolKey) && out.city
+    && n && typeof n === 'object' && isStr(n.full, 80) && isStr(n.given, 80) && typeof n.family === 'string' && n.family.length <= 80
+    && typeof n.givenToken === 'string' && typeof n.familyToken === 'string'
+    && isInt(b.siblings, 0, 11) && mother && father && RELIGION_LABELS[b.religion];
+  if (!complete) return out;
+  return {
+    ...out, full: true, poolKey: b.poolKey, siblings: b.siblings, mother, father, religion: b.religion,
+    name: { given: n.given, family: n.family, full: n.full, givenToken: n.givenToken, familyToken: n.familyToken },
+    business: typeof b.business === 'boolean' ? b.business : undefined,
+  };
+}
+
+/** The draw result for a complete start (fresh copies: the parents are mutated as the life goes on). */
+function birthFromStart(nb) {
+  return {
+    eraKey: nb.eraKey, birthYear: nb.birthYear, country: BY_CODE[nb.countryCode], gender: nb.gender, wealthQ: nb.wealthQ, urban: nb.urban, city: nb.city,
+    poolKey: nb.poolKey, name: { ...nb.name }, siblings: nb.siblings,
+    parents: { mother: { ...nb.mother }, father: { ...nb.father } },
+    religion: nb.religion, business: nb.business,
+  };
+}
+
 /**
  * Draw everything that defines the start of a life.
- * `opts` may force { countryCode, gender, urban, wealthQ, birthYear } (used by tests and "replay" tools).
+ * `opts` may force { countryCode, gender, urban, wealthQ, birthYear, eraKey, city } (used by tests and tools), or carry a whole
+ * `birth` (the start of an earlier life: "same start, live again", see normalizeBirth).
  * `rng` is the life's PRNG state array.
  */
 export function drawBirth(rng, settings, opts = {}) {
-  const eraKey = resolveEra(settings.era, () => rand(rng));
+  if (opts.birth) {
+    // "Same start, live again": reuse the start of an earlier life (see normalizeBirth). A complete start consumes no random numbers at
+    // all, so everything after it comes from the new seed; an incomplete one (an old album record) forces what it knows and draws the rest.
+    const nb = normalizeBirth(opts.birth);
+    if (!nb) throw new Error('Invalid birth');
+    if (nb.full) return birthFromStart(nb);
+    const { birth, ...rest } = opts;
+    return drawBirth(rng, settings, { ...rest, eraKey: nb.eraKey, birthYear: nb.birthYear, countryCode: nb.countryCode, gender: nb.gender, wealthQ: nb.wealthQ, urban: nb.urban, city: nb.city || undefined });
+  }
+  const eraKey = opts.eraKey || resolveEra(settings.era, () => rand(rng));
   // Past: 1955-1990, future: 2040-2070 (uniform); the present era is the current year.
   const span = eraSpan(eraKey);
   const offset = span > 1 ? randInt(rng, 0, span - 1) : 0;
@@ -108,7 +170,7 @@ export function drawBirth(rng, settings, opts = {}) {
   const wealthQ = opts.wealthQ || randInt(rng, 1, 5);
   const pUrban = clamp((view.urban / 100) * URBAN_BY_WEALTH[wealthQ - 1], 0.01, 0.99);
   const urban = opts.urban ?? rand(rng) < pUrban;
-  const city = country.cities[Math.floor(rand(rng) * country.cities.length)];
+  const city = opts.city || country.cities[Math.floor(rand(rng) * country.cities.length)];
 
   // Culture group: a country may hold several (Nigeria: Hausa / Yoruba / Igbo ...), drawn by population share.
   const poolKey = drawGroup(country.code, () => rand(rng), country.region);
@@ -142,6 +204,7 @@ export function describeBirth(s) {
   const schoolAvg = (view.school.F + view.school.M) / 2;
   const mode = s.settings.drawMode || 'births';
   const birthCity = s.flags._birthCity ?? s.city, birthUrban = s.flags._birthUrban ?? s.urban; // the place of BIRTH, not today's
+  const place = placePhrases(country.name, birthCity, birthUrban);
   return {
     name: s.name.full,
     year: s.birthYear,
@@ -155,7 +218,8 @@ export function describeBirth(s) {
     income: country.income,
     city: birthCity,
     urban: birthUrban,
-    placeText: birthUrban ? `${birthCity}` : `${birthCity}附近的鄉村`,
+    placeText: place.short,
+    placeFull: place.full,
     gender: s.gender,
     genderLabel: GENDER_LABELS[s.gender],
     wealthQ: s.family.wealthQ,

@@ -324,7 +324,7 @@ export default [
   { ages: [8, 90], cond: (s, h) => h.highAltitude(), text: (s, h) => '高處的早晨冷得很乾淨，你呼出的氣在眼前變成一小團白霧。走快一點就會喘，你早就學會了慢慢走。' },
   { ages: [8, 90], cond: (s, h) => h.climate() === 'highland' && !h.highAltitude(), text: (s, h) => '山上的天氣一天變三次：早晨披外套，中午捲袖子，傍晚又得把外套找出來。你已經不覺得奇怪了。' },
   { ages: [6, 90], cond: (s, h) => h.coastal() && h.climate() !== 'polar', text: (s, h) => '海風把鹽味留在曬衣繩上的衣服上。你已經習慣了，甚至離開幾天之後，會想念這種鹹鹹的味道。' },
-  { ages: [6, 80], cond: (s, h) => h.climate() === 'tropical' && h.urban(), text: (s, h) => '夜裡的城市熱得像一鍋湯，你把窗戶全部打開，聽著遠處的車聲和誰家的電視，慢慢睡著。' },
+  { ages: [6, 80], cond: (s, h) => h.climate() === 'tropical' && h.urban(), text: (s, h) => `夜裡的城市熱得像一鍋湯，你把窗戶全部打開，聽著遠處的車聲和誰家的${h.techReady(1960) ? '電視' : '收音機'}，慢慢睡著。` },
   { ages: [10, 90], cond: (s, h) => h.climate() === 'arid' && h.urban(), text: (s, h) => '中午的街道空蕩蕩的，所有人都躲進室內，到了傍晚，整座城市才像被重新打開，人聲和燈光一起冒出來。' },
 
   // ---- 信仰與傳統的日常（不寫節日名，寫每天的小事） ----

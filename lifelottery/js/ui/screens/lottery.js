@@ -70,7 +70,7 @@ export default function mount(ctx, root) {
     el('h2', { id: 'birth-country', class: 'birth-country', 'data-step': '1' }, b.countryName),
     el('div', { class: 'birth-map', 'data-step': '1' }, createWorldMap({ title: S.map.birthTitle(b.countryName), desc: S.map.birthDesc(b.countryName), birth: b.countryCode, pulse: true, legend: [['', S.map.legendBirth]], caption: b.countryName }).node),
     el('dl', { class: 'facts' }, facts.map(([k, v], i) => el('div', { class: 'fact', 'data-step': String(2 + i) }, el('dt', null, k), el('dd', null, v)))),
-    el('p', { class: 'birth-line', 'data-step': '6' }, L.bornIn(b.name, `${b.countryName}的${b.placeText}`)),
+    el('p', { class: 'birth-line', 'data-step': '6' }, L.bornIn(b.name, b.placeFull)),
   );
 
   const hundred = el('section', { class: 'card hundred', 'data-step': '7', 'aria-labelledby': 'hundred-title' },
@@ -91,8 +91,12 @@ export default function mount(ctx, root) {
   const beginBtn = el('button', { class: 'btn btn-primary btn-lg btn-block', type: 'button', 'data-action': 'begin' }, icon('arrowRight'), L.begin);
   beginBtn.addEventListener('click', () => ctx.go('/life'));
 
+  // 重活: this life repeats the start of an earlier one
+  const rp = ctx.session.replay;
+  const replayNote = rp ? el('p', { class: 'replay-line', 'data-role': 'replay-note' }, el('span', { class: 'replay-badge', 'aria-label': S.replay.badgeAria(rp.n) }, icon('replay', 'icon icon-inline'), S.replay.badge), ' ', S.replay.lotteryNote(rp.n, !!rp.partial)) : null;
+
   const reveal = el('div', { class: 'reveal', hidden: true },
-    el('header', { class: 'screen-head' }, el('p', { class: 'eyebrow' }, S.landing.eyebrow), el('h1', null, L.revealed)),
+    el('header', { class: 'screen-head' }, el('p', { class: 'eyebrow' }, S.landing.eyebrow), el('h1', null, L.revealed), replayNote),
     card, hundred, odds, compare,
     el('div', { class: 'sticky-cta' }, beginBtn),
   );
@@ -115,7 +119,7 @@ export default function mount(ctx, root) {
         later(() => steps.filter((n) => n.dataset.step === String(i)).forEach((n) => n.classList.add('show')), 350 * i);
       }
     }
-    announce(`${L.revealed}。${L.bornIn(b.name, `${b.countryName}的${b.placeText}`)}`);
+    announce(`${L.revealed}。${L.bornIn(b.name, b.placeFull)}`);
     const h = reveal.querySelector('h1');
     h.setAttribute('tabindex', '-1');
     h.focus({ preventScroll: true });

@@ -207,6 +207,8 @@ function lintSources() {
     if (/^(index\.html|sw\.js|manifest\.webmanifest|css\/|js\/(main|strings|storage|theme-init)\.js|js\/ui\/|icon\.svg|icons\/)/.test(rel)) {
       for (const m of text.matchAll(/https?:\/\/[^\s'"`)<>]+/g)) {
         if (/^https?:\/\/(www\.w3\.org\/2000\/svg|1in8b\.life)/.test(m[0])) continue;
+        // the share-preview meta of index.html must be absolute for crawlers (README: "分享預覽"); it is never fetched by the game
+        if (rel === 'index.html' && /^https:\/\/fadischen\.github\.io\/pages\/lifelottery\//.test(m[0])) continue;
         problems.push(`${rel}: external URL ${m[0]}`);
       }
     }
@@ -1246,6 +1248,301 @@ try {
       await p2.waitForFunction(() => parseInt(document.querySelector('.life-age').textContent, 10) >= 2);
       await ctx2.close();
     });
+    await ctx.close();
+  }
+
+  // =========================================================================================
+  // Phase 5E: same start, live again · load speed · share preview · small fixes
+  // =========================================================================================
+  console.log('\nPhase 5E: same start again, load speed, share preview, small fixes');
+  {
+    const REPLAY_SHOTS = process.env.LL_SHOTS5E || SHOTS;
+    fs.mkdirSync(REPLAY_SHOTS, { recursive: true });
+    const ctx = await browser.newContext({ viewport: MOBILE, deviceScaleFactor: 2, colorScheme: 'light', acceptDownloads: true });
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE.replace(/\/$/, '') }).catch(() => {});
+    await ctx.addInitScript(() => {
+      navigator.canShare = (d) => !!(d && d.files && d.files.length);
+      navigator.share = async (d) => { window.__shared = { n: d.files.length, text: d.text, title: d.title }; };
+    });
+    const page = await ctx.newPage();
+    watch(page, 'phase5e');
+    const album = () => page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.album') || '{"records":[]}').records);
+    const facts = () => page.evaluate(() => ({
+      country: document.querySelector('.birth-country').textContent.trim(),
+      line: document.querySelector('.birth-line').textContent.trim(),
+      facts: [...document.querySelectorAll('.facts .fact')].map((f) => f.textContent.replace(/\s+/g, ' ').trim()),
+      year: document.querySelector('.birth-card .eyebrow').textContent.trim(),
+    }));
+
+    await step('landing: the page paints without fetching the engine or any event text; they arrive once the page is idle', async () => {
+      const seen = [];
+      page.on('request', (r) => { if (/\/js\/(engine|data\/(events|yearly|names|religion|geo|money|riskref|causes|conditions))/.test(r.url())) seen.push({ t: Date.now(), url: r.url() }); });
+      await page.goto(`${BASE}?seed=e2e-replay-1&debug=fast`);
+      await page.waitForSelector('.ticker-num');
+      await page.waitForTimeout(250);
+      assert(seen.length === 0, `heavy modules requested before the page was idle: ${seen.map((s) => s.url).join(', ')}`);
+      assert((await page.$$('link[rel="modulepreload"]')).length === 8, 'only the first-paint modules are preloaded at load');
+      assert(await page.$('template#preload-later'), 'the heavy modulepreload links wait in an inert template');
+      await page.waitForFunction(() => !document.getElementById('preload-later'), null, { timeout: 15000 });
+      await page.waitForFunction(() => document.querySelectorAll('link[rel="modulepreload"]').length >= 59);
+      await page.waitForTimeout(500);
+      assert(seen.some((s) => /events\/index\.js/.test(s.url)), 'the event texts are fetched in the background afterwards');
+      const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      const listed = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].length;
+      assert(listed === 59 || listed >= 59, `index.html lists the modules (${listed})`);
+    });
+
+    await step('setup: the 60-minute option explains its slow pace and the speed-ups; short and standard do not', async () => {
+      await page.click('[data-action="start"]');
+      await page.waitForSelector('.setup-form');
+      assert(await page.$eval('[data-role="pace-long-hint"]', (n) => n.hidden), 'hint hidden while 60 minutes is not chosen');
+      await page.check('#pace-long');
+      const hint = await page.$eval('[data-role="pace-long-hint"]', (n) => ({ hidden: n.hidden, text: n.textContent }));
+      assert(!hint.hidden && hint.text.includes('慢') && hint.text.includes('慢慢讀') && hint.text.includes('2×') && hint.text.includes('4×') && hint.text.includes('按住'), `hint: ${JSON.stringify(hint)}`);
+      assert((await page.getAttribute('#pace-long', 'aria-describedby')) === 'pace-long-hint', 'the radio is described by the hint');
+      assert((await page.textContent('label[for="pace-long"]')).includes('節奏較慢'), 'the tile itself says it is slower');
+      await shot(page, 'phase5e', 'setup-long-hint', { full: false });
+      await page.check('#pace-short');
+      assert(await page.$eval('[data-role="pace-long-hint"]', (n) => n.hidden), 'hint hidden again');
+      await noHScroll(page, 'setup with the hint');
+    });
+
+    // ---- the first life, played on auto-choice
+    let first = null;
+    await step('life 1: a summary with a 同一起點 card and no 重活 marker; the record keeps its start', async () => {
+      await page.check('#pace-short');
+      await page.check('#era-past');
+      await page.check('#autoChoice');
+      await page.click('button[type="submit"]');
+      await waitHash(page, /#\/lottery/);
+      await page.waitForSelector('.birth-country', { state: 'visible' });
+      assert(!(await page.$('[data-role="replay-note"]')), 'an ordinary life has no 重活 note on the reveal');
+      first = await facts();
+      await page.click('[data-action="begin"]');
+      await waitHash(page, /#\/death/, 120000);
+      await page.click('[data-action="to-summary"]');
+      await page.waitForSelector('.review-hero');
+      assert(!(await page.$('[data-role="replay-badge"]')) && !(await page.$('[data-role="replay-compare"]')), 'no badge or comparison on the first life');
+      assert(await page.$('[data-role="replay-cta"] [data-action="replay"]'), 'the replay button is there');
+      assert((await page.textContent('[data-role="replay-cta"]')).includes('同一起點，再活一次'), 'button text');
+      const rec = (await album())[0];
+      assert(rec.meta.birth && rec.meta.birth.v === 1 && rec.meta.birth.name.full && rec.meta.birth.mother && rec.meta.birth.father && typeof rec.meta.birth.business === 'boolean', `meta.birth: ${JSON.stringify(rec.meta.birth)}`);
+      assert(!rec.meta.replay, 'the first life is not a replay');
+    });
+
+    let second = null;
+    await step('replay from the summary: the reveal says 重活 and shows the same country, place, gender, wealth, name and year', async () => {
+      const prevName = await page.textContent('.review-hero h1');
+      await page.click('[data-action="replay"]');
+      await waitHash(page, /#\/lottery/);
+      await page.waitForSelector('[data-role="replay-note"]');
+      await page.waitForSelector('.birth-country', { state: 'visible' });
+      const note = await page.textContent('[data-role="replay-note"]');
+      assert(note.includes('重活') && note.includes('同一起點的第 2 世') && note.includes('名字與家人都和上一世一樣'), `note: ${note}`);
+      second = await facts();
+      assert(JSON.stringify(second) === JSON.stringify(first), `same start:\n${JSON.stringify(first)}\n${JSON.stringify(second)}`);
+      assert(second.line.includes(prevName.trim()), 'the same name');
+      const save = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.save')));
+      assert(save.replay && save.replay.n === 2 && save.replay.prev && save.replay.start === save.replay.prev, `save wrapper: ${JSON.stringify(save.replay)}`);
+      assert(save.state.flags._fix && typeof save.state.flags._fix.family_business === 'boolean', 'the family-business answer is carried over');
+      assert(save.state.seed !== (await album())[0].id, 'a new seed');
+      await noHScroll(page, 'lottery (replay)');
+      await shot(page, 'phase5e', 'replay-lottery', { full: false });
+    });
+
+    await step('a reload in the middle of the replayed life keeps it a 重活', async () => {
+      await page.click('[data-action="begin"]');
+      await waitHash(page, /#\/life/);
+      await page.waitForSelector('.life-name');
+      await page.reload();
+      await page.waitForSelector('.life-name');
+      const save = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.save')));
+      assert(save.replay && save.replay.n === 2, 'the replay link survives the reload');
+    });
+
+    await step('life 2 summary: 重活 badge with a link to the previous life, and the comparison (lifespan, education, children, focus, odds, opening)', async () => {
+      await waitHash(page, /#\/death/, 120000);
+      await page.click('[data-action="to-summary"]');
+      await page.waitForSelector('[data-role="replay-compare"]');
+      const badge = await page.textContent('[data-role="replay-badge"]');
+      assert(badge.includes('重活') && badge.includes('同一起點的第 2 世'), `badge: ${badge}`);
+      const prevHref = await page.getAttribute('[data-role="replay-prev"]', 'href');
+      const recs = await album();
+      assert(recs.length === 2 && prevHref === `#/album/${encodeURIComponent(recs[recs.length - 1].id)}`, `link to the previous life: ${prevHref}`);
+      assert((await page.textContent('[data-role="replay-prev"]')).startsWith('上一世：'), 'link text');
+      const rows = await page.evaluate(() => [...document.querySelectorAll('[data-role="replay-compare"] tbody tr')].map((r) => ({ key: r.dataset.row, label: r.querySelector('th').textContent, prev: r.children[1].textContent.trim(), now: r.children[2].textContent.trim() })));
+      assert(rows.map((r) => r.key).join() === 'lifespan,education,children,focus,odds,opening', `rows: ${rows.map((r) => r.key)}`);
+      assert(rows.every((r) => r.prev && r.now), `no empty cell: ${JSON.stringify(rows)}`);
+      assert(/^\d+ 歲$|^不滿一歲$/.test(rows[0].prev) && /^(\d+ 歲|不滿一歲)/.test(rows[0].now), `lifespan cells: ${JSON.stringify(rows[0])}`);
+      assert(/^約 1／/.test(rows[4].prev) && /^約 1／/.test(rows[4].now), `odds cells: ${JSON.stringify(rows[4])}`);
+      assert(rows[5].prev.endsWith('。') && rows[5].now.endsWith('。') && rows[5].prev.length > 10 && rows[5].now.length > 10, `the opening sentences: ${JSON.stringify(rows[5])}`);
+      const rec = recs[0];
+      assert(rec.meta.replay && rec.meta.replay.n === 2 && rec.meta.replay.prev === recs[recs.length - 1].id, `record link: ${JSON.stringify(rec.meta.replay)}`);
+      assert(JSON.stringify(rec.meta.birth) === JSON.stringify(recs[recs.length - 1].meta.birth), 'the second record holds the very same start');
+      assert(rec.summary.name === recs[recs.length - 1].summary.name, 'same name');
+      await noHScroll(page, 'summary with the comparison');
+      await page.locator('[data-role="replay-compare"]').screenshot({ path: path.join(REPLAY_SHOTS, 'replay-compare-mobile-light.png') });
+      await page.locator('.review-hero').screenshot({ path: path.join(REPLAY_SHOTS, 'replay-hero-mobile-light.png') });
+      await page.setViewportSize({ width: 1100, height: 900 });
+      await page.waitForTimeout(250);
+      await noHScroll(page, 'summary with the comparison (desktop)');
+      await page.locator('[data-role="replay-compare"]').screenshot({ path: path.join(REPLAY_SHOTS, 'replay-compare-desktop-light.png') });
+      await page.setViewportSize(MOBILE);
+    });
+
+    await step('the badge links to the previous life; its page has no 重活 marker and offers the replay', async () => {
+      await page.click('[data-role="replay-prev"]');
+      await page.waitForFunction(() => /#\/album\//.test(location.hash) && !document.querySelector('[data-role="replay-badge"]') && document.querySelector('.review-hero'));
+      assert(!(await page.$('[data-role="replay-badge"]')), 'the first life is not a 重活');
+      assert(await page.$('[data-action="replay"]'), 'replay offered in the album detail too');
+      assert((await page.textContent('[data-role="replay-cta"]')).includes('沿用這一世的出生地、性別、家境、名字與家人'), 'full-start hint');
+    });
+
+    await step('third life from the album detail: the 同一起點活過三次 achievement unlocks; the album marks both replays', async () => {
+      await page.click('[data-action="replay"]');
+      await waitHash(page, /#\/lottery/);
+      await page.waitForSelector('[data-role="replay-note"]');
+      assert((await page.textContent('[data-role="replay-note"]')).includes('同一起點的第 3 世'), 'third life of the start');
+      await page.click('[data-action="begin"]');
+      await waitHash(page, /#\/death/, 120000);
+      await page.click('[data-action="to-summary"]');
+      await page.waitForSelector('[data-role="replay-compare"]');
+      const toastText = await page.evaluate(() => document.querySelector('#toast .toast-ach')?.textContent || '');
+      assert(toastText.includes('同一起點活過三次'), `achievement toast: ${toastText}`);
+      assert((await page.$$('.unlock-card .badge.is-earned')).length >= 1, 'unlock card');
+      assert((await page.textContent('[data-role="replay-badge"]')).includes('第 3 世'), 'badge says the 3rd life');
+      const recs = await album();
+      assert(recs.length === 3 && recs[0].meta.replay.n === 3 && recs[0].meta.replay.start === recs[1].meta.replay.start, 'three records on one start');
+      await page.goto(`${BASE}#/album`);
+      await page.waitForSelector('.album-card');
+      assert((await page.$$('.album-card .tag-replay')).length === 2, 'two cards carry the 重活 tag');
+      const ach = await page.evaluate(() => [...document.querySelectorAll('.ach-card .badge.is-earned')].map((b) => b.dataset.id));
+      assert(ach.includes('same_start_3'), `earned: ${ach}`);
+      // lives and novelty still count: three lives were read
+      const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.seenEvents')));
+      assert(seen && seen.lives === 3, `cross-life counts include the replays: ${seen && seen.lives}`);
+    });
+
+    await step('deleting the previous life leaves the badge without a link (and no comparison)', async () => {
+      const recs = await album();
+      await page.evaluate((id) => { const raw = JSON.parse(localStorage.getItem('lifelottery.album')); raw.records = raw.records.filter((r) => r.id !== id); localStorage.setItem('lifelottery.album', JSON.stringify(raw)); }, recs[0].meta.replay.prev);
+      await page.goto(`${BASE}#/album/${encodeURIComponent(recs[0].id)}`);
+      await page.reload();
+      await page.waitForSelector('.review-hero');
+      assert((await page.textContent('[data-role="replay-badge"]')).includes('上一世的記錄已經刪除'), 'gone notice');
+      assert(!(await page.$('[data-role="replay-compare"]')) && !(await page.$('[data-role="replay-prev"]')), 'no comparison, no link');
+    });
+
+    await step('an old record (no meta.birth) can still be replayed: place, gender, wealth and year are kept, the rest redrawn', async () => {
+      const old = await page.evaluate(async () => {
+        const { createLife, advanceYear, autoChoose } = await import('./js/engine/life.js');
+        const { getSummary } = await import('./js/engine/summary.js');
+        const s = createLife({ era: 'past' }, 'old-record-1', { countryCode: 'BRA', urban: false });
+        let guard = 0;
+        while (s.alive && guard++ < 140) { const r = advanceYear(s); if (r.pendingChoice) autoChoose(s); }
+        const sum = getSummary(s);
+        const rec = { id: 'old-1', savedAt: Date.now() - 5000, message: '', summary: sum };
+        const raw = JSON.parse(localStorage.getItem('lifelottery.album') || '{"v":1,"records":[]}');
+        raw.records.unshift(rec);
+        localStorage.setItem('lifelottery.album', JSON.stringify(raw));
+        return { country: sum.homeCountry.name, gender: sum.gender, year: sum.birthYear, city: sum.birthCity, wealth: sum.wealthShort };
+      });
+      await page.goto(`${BASE}#/album/old-1`);
+      await page.reload();
+      await page.waitForSelector('[data-role="replay-cta"]');
+      assert((await page.textContent('[data-role="replay-cta"]')).includes('這是比較早的記錄'), 'partial hint');
+      await page.click('[data-action="replay"]');
+      await waitHash(page, /#\/lottery/);
+      await page.waitForSelector('.birth-country', { state: 'visible' });
+      const f = await facts();
+      const note = await page.textContent('[data-role="replay-note"]');
+      assert(f.country === old.country && f.facts.some((x) => x.includes(old.city)) && f.year.includes(String(old.year)) && f.facts.some((x) => x.includes(old.gender === 'M' ? '男性' : '女性')), `kept: ${JSON.stringify(f)} vs ${JSON.stringify(old)}`);
+      assert(f.facts.some((x) => x.includes('近郊的鄉村')), `the countryside is kept: ${JSON.stringify(f.facts)}`);
+      assert(note.includes('其餘重新抽') && !note.includes('名字與家人都和上一世一樣'), `partial note: ${note}`);
+      const save = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.save')));
+      assert(save.replay.partial === true && save.replay.prev === 'old-1' && save.replay.start === 'old-1', JSON.stringify(save.replay));
+    });
+
+    await step('replay with a life in progress asks first; cancel keeps it', async () => {
+      // the partial replay from the previous step is still alive (age 0)
+      await page.goto(`${BASE}#/album/${encodeURIComponent((await album())[0].id)}`);
+      await page.waitForSelector('[data-action="replay"]');
+      await page.click('[data-action="replay"]');
+      await page.waitForSelector('dialog.confirm[open]');
+      assert((await page.textContent('dialog.confirm[open]')).includes('重活會捨棄它'), 'confirm text');
+      await page.click('[data-confirm="cancel"]');
+      assert((await page.evaluate(() => !!localStorage.getItem('lifelottery.save'))), 'the life in progress is kept');
+      assert(/#\/album\//.test(await hash(page)), 'still on the album detail');
+      await page.click('[data-action="replay"]');
+      await page.click('[data-confirm="ok"]');
+      await waitHash(page, /#\/lottery/);
+      await page.waitForSelector('[data-role="replay-note"]');
+    });
+
+    await step('records that cannot be lived again (unknown country) show no button', async () => {
+      await page.evaluate(() => {
+        const raw = JSON.parse(localStorage.getItem('lifelottery.album'));
+        const r = JSON.parse(JSON.stringify(raw.records[raw.records.length - 1])); r.id = 'nowhere-1'; r.summary.homeCountry = { code: '', name: '未知' }; delete r.meta;
+        raw.records.push(r);
+        localStorage.setItem('lifelottery.album', JSON.stringify(raw));
+        localStorage.removeItem('lifelottery.save');
+      });
+      await page.goto(`${BASE}#/album/nowhere-1`);
+      await page.reload();
+      await page.waitForSelector('.review-hero');
+      assert(!(await page.$('[data-action="replay"]')) && !(await page.$('[data-role="replay-cta"]')), 'no replay offered');
+    });
+
+    await step('share: Web Share and copy both carry the page URL', async () => {
+      await page.goto(`${BASE}?x=1#/album`);
+      await page.waitForSelector('.album-card');
+      await page.click('.album-card .album-link');
+      await page.waitForSelector('#share-canvas');
+      await page.click('[data-action="share-card"]');
+      await page.waitForFunction(() => window.__shared);
+      const shared = await page.evaluate(() => window.__shared);
+      assert(shared.text.includes(BASE) && shared.text.includes('人生籤') && !shared.text.includes('#') && !shared.text.includes('?x=1'), `shared text: ${shared.text}`);
+      await page.click('[data-action="copy-share-text"]');
+      await page.waitForSelector('#toast .toast');
+      const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => null));
+      if (copied !== null) assert(copied === shared.text, `copied text equals the shared text: ${copied}`);
+      assert((await page.textContent('#toast')).includes('已複製'), 'toast');
+    });
+
+    await step('open graph and twitter meta: zh-Hant title and description, a 1200x630 image that loads', async () => {
+      await page.goto(`${BASE}#/about`);
+      const m = await page.evaluate(() => {
+        const get = (sel) => document.querySelector(sel)?.getAttribute('content') || '';
+        return {
+          type: get('meta[property="og:type"]'), locale: get('meta[property="og:locale"]'), title: get('meta[property="og:title"]'), desc: get('meta[property="og:description"]'),
+          image: get('meta[property="og:image"]'), w: get('meta[property="og:image:width"]'), h: get('meta[property="og:image:height"]'), alt: get('meta[property="og:image:alt"]'),
+          card: get('meta[name="twitter:card"]'), tImage: get('meta[name="twitter:image"]'), tTitle: get('meta[name="twitter:title"]'),
+        };
+      });
+      assert(m.type === 'website' && m.locale === 'zh_TW' && /人生籤/.test(m.title) && /[一-鿿]{10}/.test(m.desc), JSON.stringify(m));
+      assert(m.card === 'summary_large_image' && m.tImage === m.image && m.tTitle === m.title && m.w === '1200' && m.h === '630' && m.alt.length > 5, JSON.stringify(m));
+      const local = m.image.replace('https://fadischen.github.io/pages/lifelottery/', '');
+      const dims = await page.evaluate(async (src) => new Promise((resolve) => { const i = new Image(); i.onload = () => resolve([i.naturalWidth, i.naturalHeight]); i.onerror = () => resolve(null); i.src = src; }), local);
+      assert(dims && dims[0] === 1200 && dims[1] === 630, `og-image.png is 1200x630: ${dims}`);
+    });
+
+    await step('rural birthplaces read 「印度孟買近郊的鄉村」 on the reveal, never 「…的…附近的鄉村」', async () => {
+      let found = null;
+      for (let i = 0; i < 30 && !found; i++) {
+        await page.evaluate(() => { localStorage.removeItem('lifelottery.save'); });
+        await page.goto(`${BASE}?country=IND&seed=rural-${i}&debug=fast#/setup`);
+        await page.click('button[type="submit"]');
+        await page.waitForSelector('.birth-line', { state: 'visible' });
+        const t = await facts();
+        if (t.line.includes('近郊的鄉村')) found = t;
+        else assert(!/附近的鄉村/.test(t.line), t.line);
+      }
+      assert(found, 'a rural start among 30 seeds');
+      assert(/^你叫.+，出生在印度.+近郊的鄉村。$/.test(found.line) && !/印度的/.test(found.line), `line: ${found.line}`);
+      assert(found.facts.some((f) => /近郊的鄉村$/.test(f) && !f.includes('印度')), `place fact: ${JSON.stringify(found.facts)}`);
+      assert(!(await page.textContent('.screen-lottery')).includes('附近的鄉村'), 'no old phrasing anywhere on the reveal');
+    });
+
     await ctx.close();
   }
 

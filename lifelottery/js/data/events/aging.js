@@ -221,7 +221,7 @@ export default [
     ages: [50, 82],
     weight: 1.2,
     tags: ['aging', 'family'],
-    cond: (s, h) => h.has('grandparent'),
+    cond: (s, h) => h.has('grandparent') && h.hasChildren(),
     text: (s, h) => `${h.childName(0)}開口問你：「${h.hasPartner() ? '爸媽，你們' : h.male() ? '爸，你' : '媽，你'}願不願意幫忙帶孩子？」你想起當年自己的手忙腳亂，也想起自己的體力早已不是從前，一邊答應，一邊低頭算算每天的行程。`,
     choices: [
       {
@@ -642,7 +642,7 @@ export default [
       {
         label: '掛斷電話，打給家人確認',
         effects: { happiness: +1, social: +2 },
-        result: (s, h) => `你深吸一口氣，掛掉電話，撥給${h.hasGrandchildren() ? '孫輩的爸媽' : h.hasChildren() ? '孩子' : h.hasPartner() ? h.partnerName() : '一位親近的人'}。對方笑著說：「我沒事啊，你被騙了？」你們一起笑出來，這件事成了家族的故事。`,
+        result: (s, h) => `你深吸一口氣，掛掉電話，撥給${h.hasGrandchildren() ? '孩子，問孫輩是不是平安' : h.hasChildren() ? '孩子' : h.hasPartner() ? h.partnerName() : '一位親近的人'}。對方笑著說：「沒事啊，大家都好好的，你被騙了？」你們一起笑出來，這件事成了家族的故事。`,
         ai: 3,
       },
       {
@@ -737,7 +737,7 @@ export default [
       {
         label: '把錢留給孩子，自己省一點',
         effects: { wealth: +2, happiness: -1, social: +1 },
-        result: '你把簡介放回抽屜。孩子知道後有點難過，說：「爸媽，你們也該為自己活。」你笑著說：「下次吧。」下次，總是會再有下次。',
+        result: (s, h) => `你把簡介放回抽屜。孩子知道後有點難過，說：「${h.hasPartner() ? '爸媽，你們' : h.male() ? '爸，你' : '媽，你'}也該為自己活。」你笑著說：「下次吧。」下次，總是會再有下次。`,
         ai: 0.8,
       },
     ],

@@ -659,3 +659,75 @@ state = {
 
 - 5D 與 5E 並行。`PLAN.md`、`README.md` 只能小範圍修改。
 - 結束時 `npm test`、`node tests/e2e.mjs`、`tests/e2e-pacing.mjs`、`tests/e2e-eulogy.mjs` 都要通過。
+
+## Phase 5E notes（階段 5E：同一起點再活一次、載入速度、分享預覽、無障礙）
+
+- **同一起點，再活一次**：
+  - 引擎：`birthOf(state)`（`life.js`）把一段人生的起點取成純 JSON：出生年與年代、國家、城市、城鄉、性別、家境五分位、文化群組與名字（含名字的 token）、手足數、雙親（名字、**出生時**的年紀與是否在世）、家庭信仰、家裡有沒有生意。起點在人生裡不會改變（雙親除外：出生時年紀 = 現在年紀 − 活過的年數，出生時是否在世 = 現在在世、或日誌裡有「母親／父親過世」），所以任何年紀、死後、重新載入後取出的都一樣。`createLife(settings, seed, { birth })` 完全沿用它：完整的起點**不消耗任何亂數**，之後的一切（逐年亂數、事件、死亡）都來自新種子；`normalizeBirth(b)`（`birth.js`）驗證，不可用回 `null`（`createLife` 丟 `Invalid birth`），只有基本欄位的回 `full: false`（舊記錄，見下）。沒有 `birth` 時位元組完全不變：300 個種子（四種年代、兩種抽籤方式）的 `serialize()` 雜湊在改動前後相同（`tests/replay.test.mjs` 另測有／無 `birth: undefined`、70 年後的人生）。
+  - 「家裡有沒有生意」由 `stableFlip(seed, …)` 決定，會隨新種子變；為了沿用，`createLife` 在重活的人生裡寫 `flags._fix = { family_business }`，`systems.js` 的 `stableFlip` 多讀一行（只有 `_fix` 有該鍵時才改答案）。**這是 5D 擁有的檔案裡唯一的改動**（2 行）。
+  - 相簿：記錄的 `meta.birth`（`storage.cleanStart` 只檢查形狀，不載入引擎）與 `meta.replay = { prev, start, n, partial? }`（重活的是哪一筆記錄、這個起點最早的記錄、同一起點的第幾世）。`start` 是最早那筆記錄的 id，所以前面的人生被刪掉也算得出「同一起點」的次數。進行中的存檔的外層多存 `replay`（`loadSave` 回傳，重新整理後仍是重活）；`state` 本身沒有新欄位。
+  - 舊記錄（沒有 `meta.birth`）：按鈕仍然顯示，用摘要重建**部分起點**（出生年／年代、國家、城市、城鄉、性別、家境），名字、文化群組、手足、雙親、信仰重新抽，說明文字會寫明；國家無法辨認的記錄不顯示按鈕。起點壞掉（`normalizeBirth` 為 null）時，按鈕會退回部分起點，再不行才顯示錯誤。部分起點的人生再被重活時，用的是它自己完整的起點（名字與第一世不同）。
+  - 介面（`ui/replayview.js`）：回顧頁與前世記錄詳細頁底部的「想再試一次嗎？」卡片與「同一起點，再活一次」按鈕（`data-action="replay"`；有進行中的人生時要確認）；開始後抽籤揭曉頁多一行「重活」徽章與說明；重活的人生的回顧頁，標題下有徽章（第幾世）與「上一世：名字」連結（上一世被刪就寫「上一世的記錄已經刪除」），生平卡之後是「和上一世比較」表：享年（附多活／少活幾年）、學歷、子女、主要重心（時間軸裡年數最長的）、這樣一生的機率、生平開頭（第一句）；手機寬度（< 560px）每列改成兩欄的小卡。前世記錄的清單卡加「重活」標籤。`summary.js` 的離開清理改成只有 `session.recordId === rec.id` 才 `discard()`，否則從回顧頁開始的新人生會被自己的清理丟掉。
+  - 成就 `same_start_3`「同一起點活過三次」（icon `replay`）：同一個 `start` 的記錄 ≥ 3 筆；共 25 個成就。新鮮度與 `seenEvents` 照舊（每一世各算一次，e2e 檢查三世之後 `lives: 3`；重活也帶 `novelty`）。
+- **載入速度**：
+  - 原本首頁靜態 import `session.js` → `life.js` → 全部事件文字，一開始就要 43 個請求、約 1.4 MB 才看得到畫面。現在 `session.js` 以 `import()` 載入引擎（`life.js`、`summary.js`），`restore()`／`start()` 改為 async，路由 `resolve()` 也是；首頁只靠 8 個小模組（約 175 KB 未壓縮）。引擎與事件文字（約 1.2 MB）在頁面閒下來（`load` 後 0.8 秒，`requestIdleCallback`，資料節省模式不做）、玩家把指標移到「開始投胎」或進設定頁時才下載。`landing` 以外的畫面本來就是 `import()`。
+  - `tools/build-preload.mjs` 走 `js/main.js` 的 import 圖（靜態 `import`／`export … from`、字面 `import('…')`，路由的 `import(\`./ui/screens/${name}.js\`)` 視為整個資料夾），把 59 個模組寫成 `<link rel="modulepreload">`，放在 `<body>` 結尾、模組腳本之前的標記註解之間：首頁用的 8 個直接列出，其餘 51 個放在 `<template id="preload-later">` 裡（不會執行），`session.warm()` 在上述時機把它們複製進 `<head>`，讓整個引擎平行下載、不必一層一層 import。`tests/pwa.test.mjs` 檢查：清單與 import 圖完全一致、`js/` 下每個模組（除了經典腳本 `theme-init.js`）都在其中（沒有死碼）、首頁的 8 個模組不含引擎或事件資料、`--check` 的輸出等於檔案。`node tools/build-preload.mjs [--check]`。
+  - 量測（`tools/measure-load.mjs`，Playwright，冷快取、Service Worker 關閉、本機 http-server〔HTTP/1.1、不壓縮〕＋CDP 節流，中位數，「就緒」＝出現「開始投胎」按鈕）：
+
+    | | 無節流 | 快速 4G（9 Mbit/s、60 ms） | 慢速 4G（1.6 Mbit/s、150 ms） |
+    | --- | --- | --- | --- |
+    | 之前：FCP／就緒／load／請求數 | 72／325／215 ms／43 | 236／1919／1725 ms／43 | 764／9067／8438 ms／43 |
+    | 之後：FCP／就緒／load／請求數 | 80／132／77 ms／12 | 356／411／357 ms／11 | 1516／2040／1513 ms／12 |
+
+    就緒時間縮短 59%／79%／78%，到就緒為止傳輸的資料 413／1462／1561 KB → 90／167／169 KB。**取捨**：節流的連線上，首頁預載的 8 個模組會和樣式表搶頻寬，FCP（只有頂端列與背景）反而晚了 0.1–0.75 秒；試過把預載放在 `<head>`、延到第一個畫面之後（`LL_PRELOAD=fp-raf`：FCP 244／652 ms，但就緒 876／1879 ms）、或拿掉 `countries.js`（就緒 875／1866 ms），都不如現在的設計（就緒最快）。HTTP/2 與壓縮（GitHub Pages）下頻寬競爭小得多，這個差距在實機上應該更小，但沒有量到。「所有模組一次預載」（`LL_PRELOAD=all`）最糟：FCP 1.9／9.2 秒，這就是為什麼其餘模組放在 `<template>` 裡。
+- **分享預覽**：`index.html` 有 `og:type／site_name／locale(zh_TW)／title／description／url／image(+type、width、height、alt)` 與 `twitter:card(summary_large_image)／title／description／image／image:alt`；預覽圖 `og-image.png`（1200×630、約 430 KB）由 `tools/build-og-image.mjs` 以 Playwright 渲染 `tools/og-image.html`（深色夜空、月亮、籤筒、大字「人生籤」與三顆標籤；沒有外部資源；字型是系統字型，在這個環境是文泉驛正黑）。**相對的 `og:image` 行不通**（Facebook、X、LINE 等爬蟲不解析相對網址），所以三個網址都是 `https://fadischen.github.io/pages/lifelottery/…`；README 說明搬到別處時要改這三個網址；e2e 的隔離掃描對 `index.html` 允許這個前綴。分享圖卡的 Web Share 文字改為 `shareText(record)`（一句話＋換行＋遊戲網址，網址取自目前頁面的 `origin + pathname`），另有「複製分享文字」按鈕（`navigator.clipboard`，退回 `execCommand`）；e2e 檢查兩者都含網址、不含 `#`／`?`。`og-image.png` 不放進 sw 預先快取（只給爬蟲用）。
+- **無障礙**：`tests/a11y.mjs`（獨立的 Playwright 腳本；沒裝 axe-core 時印出說明並以 0 結束；`--strict` 連 moderate／minor 也算失敗；`--verbose` 列出每個節點）。axe-core 4.14.0 只裝在 `lifelottery/node_modules`（`npm install --no-save axe-core`，`lifelottery/.gitignore` 排除）。審查範圍：首頁、設定頁（開著 60 分鐘提示）、抽籤揭曉、人生（階段卡、選擇卡、家人抽屜）、離世、回顧（含分享圖卡）、全螢幕地圖、前世記錄清單與詳細頁、重活的抽籤與回顧（比較表）、關於，淺色與深色、手機（390px）與桌面（1280px）各一輪，外加三段額外的人生各三張選擇卡與回顧（隨機內容裡的 chips、結果、里程碑），共 80 個畫面。**之前**（只有手機寬度、26 個畫面）：critical 4、serious 190、moderate 4、minor 4（節點數）。**之後**：0／0／0／0。修正：
+  - `button-name`（critical）：窄螢幕只有圖示的「家人」按鈕加 `aria-label`。
+  - `aria-prohibited-attr`（79 個節點）：人生時間軸 chips（`<span aria-label>`）改成「隱藏的視覺文字＋`sr-only` 的完整說明」。
+  - `aria-allowed-role`＋`listitem`（49 個節點）：`<ol role="log">` 不合法，改成 `<div role="log">` 包著 `<ol>`（即時朗讀的行為不變）。
+  - `heading-order`：時間軸條目標題 `h3` → `h2`（頁面標題是 h1）。
+  - `label-content-name-mismatch`（46 個節點）：品牌連結與主題按鈕的 `aria-label` 沒有包含看得見的字（現在品牌用內容當名字，主題按鈕的名字是「主題：自動（跟隨系統）」等，包含畫面上的「自動／淺色／深色」）；前世記錄卡片連結的 `aria-label` 拿掉，卡片文字就是名字。
+  - `color-contrast`（16 個節點＋之後抽到的 chips）：淺色主題 `--muted` #6c6354 → #625a4b、`--gold` #b07d1e → #82590c、`--good` #34724a → #286640、`--bad` #b03a26 → #9c3220；人生重心「平衡」色塊改用 `--muted`（文字對比 5.7:1）；離世畫面永遠是夜空（`body::before`），但 `<html>` 仍是淺色底，axe 因此用淺底量深色字，現在離世路由時 `html` 底色也是夜空（`html:has(> body[data-route="death"])`，順便不會在過度捲動時露出淺色邊）。
+  - axe 只量自動可判斷的項目：被標為 incomplete 的（例如漸層底上的文字）沒有人工複查，鍵盤操作與螢幕閱讀器的實際體驗也沒有用真正的輔具測過。
+- **小修**：鄉村地名統一由 `engine/place.js` 的 `placePhrases(國家, 城市, 城鄉)` 產生：「印度孟買近郊的鄉村」（抽籤揭曉的「出生地」欄位是「孟買近郊的鄉村」，生平同樣）；城市名已含國名的不重複（「墨西哥城」「墨西哥城近郊的鄉村」，原本是「墨西哥的墨西哥城」），城市就是國家的（香港、新加坡、澳門）寫「香港的鄉村」。「誕生」那一行日誌（`life.js`）刻意沒改（「…附近的鄉下」），因為改了會讓所有舊種子的 `serialize()` 不同。設定頁：60 分鐘選項寫「約 60 分鐘・節奏較慢」，選到時多出一段說明（較慢、適合喜歡慢慢讀的人、可用 2×／4× 或按住畫面〔電腦：按住 Shift〕加速；`aria-describedby` 連到選項）。
+- **測試**：`tests/replay.test.mjs`（12 項，約 5 秒）：無 `birth` 時位元組不變、`birthOf` 在任何年紀與死後都一樣且可經 JSON 往返、重活沿用所有起點欄位（80 段）且新種子的人生不同、同起點同種子是同一生、家庭生意兩種答案都沿用、173 個國家全部可重活到死、部分起點、壞資料被拒、地名寫法（含全部國家的全部城市）、生平的「近郊的鄉村」、儲存的正規化、成就。`tests/pwa.test.mjs` 多 3 項（preload 清單、首頁不載入引擎、og meta 與預覽圖尺寸）。`tests/e2e.mjs` 多 15 項：首頁不請求引擎、閒下來後才載入、設定頁提示、三世重活（抽籤頁相同、重新整理後仍是重活、徽章與連結、比較表六列、第三世的成就、清單標籤、`seenEvents.lives`）、刪掉上一世、舊記錄的部分起點、進行中的人生要確認、無法重活的記錄沒有按鈕、分享與複製含網址、og／twitter meta 與圖片能載入、鄉村地名。
+- **驗證**：`npm test` 191 項全過（5D 同時在改的檔案也在其中）；`node tests/e2e.mjs` 83 項、`tests/e2e-pacing.mjs` 17 項、`tests/e2e-eulogy.mjs` 20 項全過、零 console 錯誤；`node tests/a11y.mjs --strict` 通過（80 個畫面）。
+- **已知限制**：重活的 `meta.replay.n` 是「同一起點目前相簿裡的記錄數 + 1」，刪掉中間的記錄再重活，編號可能和先前重複；部分起點（舊記錄）的名字與第一世不同，所以「同一起點」的三世在名字上不一致；比較表的「生平開頭」只取第一句，兩世的第一句常常很像（出身一樣）；`session.restore()` 在直接開 `#/life` 時要先下載引擎（畫面空白一下，之前是首頁就載好）；FCP 的取捨見上。
+
+## Phase 5D notes（階段 5D：家人連續性）
+
+使用者回報「父母雙亡後，在結婚時卻又出現」。原因有三：稽核器的 `parents_dead` 只比對直接的字（爸爸／媽媽／父母）；「回憶」豁免太鬆（整句只要出現「以後」「終於」「曾」就放行，連現在式的「母親說，…」也過關）；而且它不看伴侶不在時的「你們」「爸媽」、也不看成人選項結果裡的小孩場景。5D 把稽核器改成「家人的存歿與數量」都要對得上，再用它找出並修掉所有真正的矛盾。
+
+- **稽核器（`tests/lib/coherence.mjs`）**：
+  - **家人規則**（都用 `famScan`）：`parents_dead`（改寫：單方或雙方已歿；間接說法「兩家人、兩邊／雙方的長輩、家長、父母的老家／回老家、回娘家」；只剩一位時寫「爸媽／父母」也算）、`couple_gone`（沒有伴侶、離婚、喪偶卻有孩子說「爸媽，你們…」、「你們夫妻／倆」、「孩子的爸／媽」）、`partner_gone`（加上伴侶的名字）、`kids_dead`（孩子都已過世卻寫「你的孩子」，或寫已歿孩子的名字）、`kids_count`（「兩個孩子／兒子／女兒／孫子」與實際不符）、`kid_gender`（沒有活著的兒子卻寫「你的兒子」）、`siblings_count`（「兩個哥哥」、只有一個手足卻寫「手足們」）、`adult_childish`（成人出現零用錢、放學、寫功課、被家人罵、叫家長）、`young_elder`（40 歲以下出現退休、孫子、養老）、`parent_pronoun`（「媽媽…他的臉」）。
+  - **豁免改成以子句為單位**（`famCtx`／`windowAround`）：回憶要有明確的過去詞（想起、當年、小時候、記得、教的、說過、曾經…）出現在關鍵字前兩個子句到後一個子句；悼念詞（過世、葬禮、墓、牌位、相片、空位、少了…）看前後各兩個子句；假設詞（如果、希望、打算…）只看關鍵字**之前**。所以「母親說，這是為了他們以後可以選擇」不再因為下一個子句的「以後」過關。「你說「我媽在等我」」（說話的是主角）不算引言豁免；孩子或鄰居的引言仍可豁免。
+  - **精準豁免**：伴侶的父母（公婆、岳父母、對方／伴侶／〈名字〉的爸媽）、孩子的爸媽、「各自的媽媽」、「孫輩的爸媽」（＝主角的孩子）、你是學校「家長」（有孩子的人）、去墓前或老屋或找手足親戚的「回老家」、父母給孩子零用錢、在校門口放學接孩子；`selfContext2` 把「你和曾子怡的婚禮上」的曾子怡算成「你」這一邊（舊的 `selfContext` 會把婚禮上的人名當成第三者，所以婚禮句被放過）；家人名字用整句遮罩（子女的全名包含伴侶的單名時不算）；生平（eulogy）這種整段回顧的句子不當成現在式（`RETRO`）。
+  - **壓力測試**：`applyStress(s, st)`／`stressFor(j)`（八分之七的人生在指定年齡讓父母、伴侶或孩子靜靜離開：孤兒、單親、喪偶、離婚、喪子）、`lifeConfigs(n, { stress, novelty })`（四分之三的人生帶 novelty 計數 1–3，每個事件的每種寫法都會輪到）；`tools/coherence-scan.mjs` 加 `--stress`、`--novelty`。
+- **旗標數（`node tools/coherence-scan.mjs 3000 …`，新稽核器跑修改前的內容／修改後）**：
+
+  | 規則 | 自然人生 3000 段（前 → 後） | 壓力＋寫法輪替 3000 段（前 → 後） |
+  | --- | --- | --- |
+  | `parents_dead` | 1120 → 0 | 3030 → 0 |
+  | `siblings_count` | 442 → 0 | 489 → 0 |
+  | `adult_childish` | 164 → 0 | 151 → 0 |
+  | `parent_pronoun` | 115 → 0 | 123 → 0 |
+  | `couple_gone` | 15 → 0 | 12 → 0 |
+  | `kids_dead` | 12 → 0 | 5 → 0 |
+  | `partner_gone`（名字） | 0 → 0 | 2 → 0 |
+  | `tv`（既有規則，新抓到一句） | 0 → 0 | 1 → 0 |
+  | 合計（不含單年 5 條的 `density`） | 1868 → 0 | 3813 → 0 |
+
+  舊稽核器對舊內容是 0。修改後另外跑了 3 × 6000 段（壓力＋寫法輪替）：只剩 `density` 單年 5 條（既有的軟規則）、一筆 `dup_event`（前後兩個伴侶抽到同一個名字）、一筆 `tv`（已修）。第一輪探查（誤報不算進上表）一共出現 8 種誤報，都已改成規則的豁免：`你們一家`、`你們兩個月`、「要是你爸媽還在」的引言、祖父母的書包、校門口的家長與放學、父母收零用錢、成人進修的「放學後」、姓「曾」的人名被當成「曾經」。
+- **修正的分類**（約 30 個事件、系統行與變體）：
+  1. **婚禮**：系統的結婚行（所有所得層）加上依雙親存歿與宗教的一句話（雙親俱歿：伊斯蘭＝前一天到墓地唸一段祈禱；基督教＝牧師在禱詞裡提到過世的爸媽、叔叔陪你走到台前；印度教／錫克教＝神龕前點一盞燈；佛教／民間信仰＝牌位前上香、主桌留兩個位子；猶太教＝華蓋旁點一盞小燈；其他＝空位與相片），替你主婚的是叔叔／姑姑／舅舅／阿姨／伯父（40 歲以前）、年紀最長的手足（之後）、或沒有人（你和對方自己牽著手敬酒）；只剩一位時由還在的那位坐主桌、旁邊替過世的那位留一個位子；再婚只輕輕提一句「這一次…」。UM 層的「兩家人擠在同一桌」在雙親俱歿時改成「對方那邊的親友擠了一整桌」（`weddingFolk()`）；對方的父母是否健在由伴侶年齡決定（`partnerParentsGone()`），可以寫成「雙方過世的父母…四個空位」。事件 `seed_wedding_planning`、`regional_culture_wedding_rite`、`family_wedding_day`／`weddingFlavor`、`family_wedding_custom`、`family_matchmaker`、`family_arranged_decision`、`family_meet_parents`（帶對象回家見爸媽 → 去見最近的親人、到墓前說「我帶人來見你們了」）同樣分支。
+  2. **回老家／節慶**：`family_festival_gathering`（改名「返鄉過節」，主文與三種寫法在雙親俱歿時改成手足與親戚、爸媽以前坐的位子沒人去坐）、`family_after_divorce`（搬回「沒人住的老屋」）、`health_cancer_treatment`（「回家鄉吃一碗麵」，沒有孫輩就不寫陪孫子）。
+  3. **現在式的過世親人**：`regional_pastoral_move`（母親說 → 營地裡的老人說）、`regional_cookstove`、`regional_borehole_well`、`world_china_reform_era`、`childhood_corner_boys`（「我媽在等我」→「家裡的人在等我」）、`youth_orphan_home`（已婚或已有孩子的孤兒不再被「收留」）。
+  4. **伴侶不在了**：`aging_last_trip`（「爸媽，你們也該為自己活」依伴侶分支）、`aging_grandchild_care`（沒有活著的孩子就不發生）、`aging_scam_call`（「撥給孫輩的爸媽」→「撥給孩子，問孫輩是不是平安」）、`family_wedding_debt`（離婚或喪偶後不再追著還婚禮的債）。
+  5. **數量與性別**：`family_sibling_reunion`、`seed_parent_illness`（標題「父母病了」→「至親病倒了」）、`family_parent_estate`（只有一個手足不寫「手足們」）；`seed_grandchild`（女兒說「我要當媽媽了」，不再是「爸爸」）；`childhood_parent_abroad`（媽媽…她）；`health_postpartum_low` 與育兒事件改用還活著的最小孩子（新 helper `youngestChildName()`）。
+  6. **年齡錯置**：`regional_power_cut`（70 歲的「零用錢」→ 菜錢，端湯的是鄰居或伴侶）、`youth_music_obsession`／`youth_family_money_talk`（已婚或已就業的青年用「私房錢」，`pocketMoney()`）、`health_flu_season` 的變體（「大人煮了薑湯」→「有人煮了薑湯」）、`sys:心動`（成人進修的人是「下課」不是「放學」）、`work_civil_exam` 的「退休金」不再被誤抓。
+  7. **系統行**：畢業典禮（只剩一位：「也想起沒能看到這一天的父親／母親」；都不在：「心裡對他們說了一聲『我畢業了』」）、第一個孩子（只剩一位：「你第一個打電話告訴母親…」；都不在：「你想起過世的爸媽，在心裡對他們說：『你們的家，又多了一個人。』」）、童婚（雙親都不在時是「親戚替你決定了婚事」）、伴侶取名會避開自己、父母與子女的全名（`makePartner` 只有撞名時才多抽，不改變一般人生）、`yearly:243`（1960 年代低所得城市沒有電視）。
+- **新 helper（共 12 個，現共 150 個，見 `js/engine/README.md` 的「Family continuity」）**：`parentsPresent() parentsGone() oneParent() parentsOr(fallback) parentLeft() byParents({…}) standIn() partnerParentsGone() weddingFolk() weddingAbsence() youngestChildName() pocketMoney()`；`systems.js` 匯出 `parentsPresent / standInKin / partnerParentsGone / weddingAbsence / weddingFolk`。
+- **回歸測試**（`tests/coherence.test.mjs`，15 → 37 項）：每個實例都有「規則抓得到舊文字、放過新文字」與「真正的事件在該狀態下渲染後通過所有家人規則」兩種檢查（婚禮、雙方長輩、家長、回老家、母親說、只剩一位的「父母」、公婆／岳父母不誤報、「爸媽，你們」、孫輩的爸媽、伴侶名字、孩子的數量／存歿／性別、手足、零用錢與退休）；28 個事件在雙親俱歿時逐一渲染；宗教（9）× 雙親（4）× 年齡（3）的婚禮句；500 段有壓力的人生驗證第一個孩子與畢業典禮的句子、孤兒婚禮不出現「兩家人」且一定提到缺席的雙親；800 段壓力＋寫法輪替的固定種子稽核為 0（同時驗證壓力情境真的產生孤兒、喪偶、離婚、喪子的人生）。
+- **人工閱讀**：完整讀了 9 段人生（種子 `r5d-N`，例如 `node tools/read-life.mjs --seed=r5d-534 --era=past --draw=population`；偶數編號用 `population`、奇數用 `births`）：534（上海 1956，4 歲喪母、10 歲喪父，25 歲與 62 歲兩次婚禮）、3（班加羅爾，雙親俱歿、兩個孩子早逝）、69（尼泊爾，5 歲喪母的 15 歲童婚新娘）、642（馬達加斯加，12 歲與 15 歲相繼喪親、11 個孩子）、307（加爾各答穆斯林，婚前雙亡、離婚再婚）、558（里昂，10 歲喪母、33 歲喪父、離婚再婚、喪偶）、446（伊斯蘭馬巴德 2069）、15（喀山，24 與 26 歲喪親）、363（9 歲早夭的孤兒）；另用 grep 檢視 90 與 199 的家人相關行。讀出並修掉：媽媽配「他」的代名詞、女兒說「我要當爸爸了」、已婚的 16 歲孤兒被「收留」、大人煮薑湯給 43 歲的人、第二次婚禮重複擺相片、「1962 年低所得城市聽見誰家的電視」。
+- **驗證**：`npm test` 191 項全過（約 4.5 分鐘；含新增的 22 項家人連續性測試）；`node tests/e2e.mjs` 83 項全過、零 console 錯誤；`node tools/coherence-scan.mjs 3000 final1`（自然人生）內容旗標 0，`3000 fin2 --stress --novelty` 內容旗標 0，另外三組各 6000 段（`--stress --novelty`）只剩上述的 `density`、一筆撞名、一筆 `tv`（已修）。校準：沒有改任何死亡風險、事件的 `addRisk` 或系統機率（只動文字、四個事件條件與一個後續事件條件），所以在複本上跑了 `node tools/calibrate-risk.mjs 30000 1` 比對：各格參考值與現行 `riskref.js` 的平均相對差 3.7%（最大 0.36），同樣方法跑未修改的 HEAD 是 3.5%（最大 0.26），差距落在抽樣雜訊內，所以沒有更新 `riskref.js`。
+- **已知限制**：手足只有數量，沒有各自的存歿；對方的父母只用年齡決定是否健在，不會出現在別的事件；「回老家」只有在父母已歿且整句沒有手足、親戚、老屋或墓時才抓，所以「回老家」在別的語境仍可能寫成父母家；`couple_gone` 只抓明確的詞（爸媽，你們／你們夫妻／孩子的爸），一般的「你們」不抓；`MEM_STRONG` 的過去詞表是人工整理的，新的回憶說法要補進去；`sw.js` 的快取版本在 5E 的檔案內，資料檔改了之後要一併升版（5D 沒有動）。

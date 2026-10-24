@@ -79,7 +79,7 @@ export default [
     weight: 0.9,
     tags: ['culture', 'friends'],
     text: (s, h) => {
-      if (h.year() < 1990) return '你把零用錢存起來，只為了買一卷錄音帶。夜裡你把收音機貼在耳邊，等主持人點播那首歌，按下錄音鍵的手指都在抖，連呼吸聲都怕被錄進去。';
+      if (h.year() < 1990) return `你把${h.pocketMoney()}存起來，只為了買一卷錄音帶。夜裡你把收音機貼在耳邊，等主持人點播那首歌，按下錄音鍵的手指都在抖，連呼吸聲都怕被錄進去。`;
       if (h.year() < 2008) return '你和朋友交換 CD 與隨身聽，耳機一人一邊。同一首歌你聽了兩百遍，歌詞背到連夢話都在唱。';
       return '你的播放清單裡，每首歌都有一段故事：哪天哭過、哪天考砸、哪天好像戀愛了。你把清單分享給朋友，有人回「這首不錯」，你卻高興了一整晚。';
     },
@@ -645,9 +645,9 @@ export default [
         ai: (s, h) => (h.isPoor() ? 1.6 : 0.9),
       },
       {
-        label: '把自己的零用錢交出去',
+        label: '把自己存的錢交出去',
         effects: { wealth: +1, social: +1, happiness: +1 },
-        result: '你把存了很久的零用錢放在桌上，一句話也沒說。大人沉默很久，把錢推回你面前：「我們會想辦法的。」',
+        result: (s, h) => `你把存了很久的${h.pocketMoney()}放在桌上，一句話也沒說。大人沉默很久，把錢推回你面前：「我們會想辦法的。」`,
         ai: 1.2,
       },
       {
@@ -695,7 +695,7 @@ export default [
     major: true,
     weight: 8,
     tags: ['family', 'hardship'],
-    cond: (s, h) => h.has('orphan'),
+    cond: (s, h) => h.has('orphan') && !h.married() && !h.hasChildren(),
     text: (s, h) => '父母都不在了。親戚們在客廳商量你要去誰家，彼此客氣得過了頭。你坐在角落，聽著自己的名字在別人的嘴裡被傳來傳去，像一個沒有人敢拿穩的盤子。',
     choices: [
       {

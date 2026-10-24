@@ -335,7 +335,7 @@ export default [
     weight: 0.3,
     tags: ['health', 'mental', 'pregnancy'],
     cond: (s, h) => h.female() && h.youngestChildAge() >= 0 && h.youngestChildAge() <= 1,
-    text: (s, h) => `${h.lastChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
+    text: (s, h) => `${h.youngestChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
     choices: [
       {
         label: '把心裡的話告訴身邊的人',
@@ -823,7 +823,7 @@ export default [
       {
         label: '以舒緩與生活品質為重',
         effects: { happiness: +3, social: +3, health: -2 },
-        result: '你和家人好好談了談，決定把剩下的力氣用在重要的事上：陪孫子畫畫、回老家吃一碗麵、把想說的話都說完。',
+        result: (s, h) => `你和家人好好談了談，決定把剩下的力氣用在重要的事上：${h.hasGrandchildren() ? '陪孫子畫畫、' : '陪身邊的人多坐一會兒、'}回家鄉吃一碗麵、把想說的話都說完。`,
         ai: (s, h) => (h.age() >= 70 ? 1.5 : 0.5),
       },
     ],

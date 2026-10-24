@@ -14,7 +14,7 @@
 
 import { BY_CODE } from '../data/countries.js';
 import { createRngState } from './rng.js';
-import { drawBirth } from './birth.js';
+import { drawBirth, normalizeBirth } from './birth.js';
 import { dies, drawCause } from './mortality.js';
 import { initSystems, runSystems, ctxOf, pushLog, STAT_KEYS, JOBS } from './systems.js';
 import { runEvents, resolveChoice, autoPickIndex, getPendingChoice, sanitizeNovelty } from './events.js';
@@ -22,6 +22,7 @@ import { makeHelpers, recordDeath, hash01 } from './helpers.js';
 import { drawReligion, RELIGION_LABELS } from '../data/religion.js';
 import { FOCI, FOCUS_BY_ID, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus, ensureFocus, lapseFocus } from './focus.js';
 
+export { normalizeBirth };
 export { getPendingChoice, FOCI, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus };
 
 /** Family religion of a life, drawn from a hash of the seed (no random numbers are used, so nothing else in the life moves). */
@@ -62,6 +63,10 @@ function snapshotRow(s) {
  * @param {object} settings  see DEFAULT_SETTINGS (optional extra: `birthYear` forces the present year)
  * @param {number|string} seed  any value; same seed + settings => identical life
  * @param {object} [opts]  force parts of the draw: { countryCode, gender, urban, wealthQ, birthYear }.
+ *   `birth` (Phase 5E, "same start, live again"): the start of an earlier life as `birthOf(state)` returns it. Country, city or
+ *   countryside, gender, wealth quintile, name and culture group, birth year and era, parents (names, ages, alive or not), the
+ *   number of siblings, the family religion and whether the family runs a business come from it; everything else (every random
+ *   draw after the birth, so the whole life) comes from `seed`. Without `birth` nothing changes: the life is byte for byte the same.
  *   `novelty` ({ eventId: number of earlier lives of this player that met it }, Phase 5C) makes events and "ordinary year"
  *   lines the player has seen before less likely and rotates the phrasing of events that have `variants`. It is copied into
  *   `state.novelty`, so it survives serialize/deserialize; without it (or when empty) the life is exactly the one it always was.
@@ -85,7 +90,7 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
     gender: b.gender,
     name: { given: b.name.given, family: b.name.family, full: b.name.full },
     family: { wealthQ: b.wealthQ, siblings: b.siblings, mother: b.parents.mother, father: b.parents.father },
-    religion: religionOf(seed, b.country.code, b.poolKey, b.eraKey, b.birthYear, b.name.full),
+    religion: b.religion || religionOf(seed, b.country.code, b.poolKey, b.eraKey, b.birthYear, b.name.full),
     focus: 'balance',
     focusHistory: [{ age: 0, focus: 'balance' }],
     stats: { health: 90, happiness: 60, knowledge: 2, wealth: 50, social: 55 },
@@ -105,12 +110,44 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
     alive: true,
     death: null,
   };
+  if (typeof b.business === 'boolean') s.flags._fix = { family_business: b.business }; // read by stableFlip (systems.js)
   const novelty = sanitizeNovelty(opts.novelty);
   if (novelty) s.novelty = novelty;
   initSystems(s);
   pushLog(s, 'milestone', '誕生', `${s.year} 年，${s.name.full}出生在${b.country.name}${s.urban ? s.city : s.city + '附近的鄉下'}。`);
   s.statHistory.push(snapshotRow(s));
   return s;
+}
+
+/**
+ * The start of a life as plain data (pass it as `createLife(settings, seed, { birth })` to live the same start again; the album keeps
+ * it as `meta.birth`). Exact at any age: nothing it holds changes during a life except the parents, whose starting age is
+ * their age minus the years lived and who were alive at birth if they are alive now or a death was logged.
+ */
+export function birthOf(s) {
+  const lived = s.death ? s.death.age : s.age;
+  const parent = (who, title) => {
+    const p = s.family[who];
+    return { alive: p.alive || s.log.some((e) => e.title === title), age: Math.max(12, p.age - lived), name: p.name };
+  };
+  const nameOf = s.name;
+  return {
+    v: 1,
+    eraKey: s.settings.era,
+    birthYear: s.birthYear,
+    countryCode: s.homeCountryCode,
+    city: s.flags._birthCity ?? s.city,
+    urban: s.flags._birthUrban ?? s.urban,
+    gender: s.gender,
+    wealthQ: s.family.wealthQ,
+    poolKey: s.flags._pool,
+    name: { given: nameOf.given, family: nameOf.family, full: nameOf.full, givenToken: s.flags._gt ?? '', familyToken: s.flags._ft ?? '' },
+    siblings: s.family.siblings,
+    mother: parent('mother', '母親過世'),
+    father: parent('father', '父親過世'),
+    religion: s.religion,
+    business: makeHelpers(s).familyBusiness(),
+  };
 }
 
 function finishYear(s) {

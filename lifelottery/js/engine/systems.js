@@ -54,6 +54,8 @@ export function ctxOf(s) {
  * the random generator (h.stable is this function).
  */
 export function stableFlip(s, key, p = 0.5) {
+  const fixed = s.flags && s.flags._fix; // set only by a "same start" life (createLife { birth }): answers carried over from the first life
+  if (fixed && Object.prototype.hasOwnProperty.call(fixed, key)) return !!fixed[key];
   if (!(p > 0)) return false;
   if (p >= 1) return true;
   return hash01(`${s.seed}|${s.birthYear}|${s.name.full}|${key}`) < p;
@@ -338,6 +340,65 @@ export function annualIncome(s) {
 // People around you: parents, partner, children
 // ---------------------------------------------------------------------------------------------
 
+/** Who is still alive among the parents: 'both' | 'mother' | 'father' | 'none'. */
+export function parentsPresent(s) {
+  const { mother, father } = s.family;
+  return mother.alive && father.alive ? 'both' : mother.alive ? 'mother' : father.alive ? 'father' : 'none';
+}
+
+/**
+ * Who stands in for absent parents at a wedding or a first day: an uncle, an aunt, an elder of the family while the person is
+ * young enough for one to be alive (up to 40), the eldest brother or sister later on (if there are any), else nobody (''). Decided once
+ * per life with `hash01`, no random numbers consumed.
+ */
+export function standInKin(s) {
+  if (s.age <= 40) return ['叔叔', '姑姑', '舅舅', '阿姨', '伯父'][Math.floor(hash01(`${s.seed}|${s.birthYear}|${s.name.full}|standin`) * 5)];
+  return s.family.siblings > 0 ? '年紀最長的手足' : '';
+}
+
+/** Have the partner's parents died too? (not simulated: decided per life by the partner's age, so a wedding at 60 is often a wedding without any parents). */
+export function partnerParentsGone(s) {
+  const a = s.partner ? s.partner.age : s.age;
+  return stableFlip(s, 'pt_parents_gone', clamp((a - 38) / 40, 0, 0.9));
+}
+
+/**
+ * One tender sentence about the parents who cannot be at the wedding (the empty seats at the table, a prayer, an offering, an
+ * uncle who gives the bride or groom away); the tradition follows the family religion. '' when both parents are alive.
+ */
+export function weddingAbsence(s, again = (s.flags._married || 0) >= 2) {
+  const pp = parentsPresent(s);
+  if (pp === 'both') return '';
+  // a second wedding: the empty seats were already told once
+  if (again) return pp === 'none' ? '這一次，你只在心裡對過世的爸媽說：「我慢慢走到這裡了。」' : `這一次，你只在心裡對過世的${pp === 'mother' ? '父親' : '母親'}說了一聲。`;
+  const rel = s.religion || 'none';
+  if (pp === 'none') {
+    const kin = standInKin(s);
+    const both = partnerParentsGone(s);
+    const by = kin ? `${kin}坐在旁邊，替你們主婚` : '沒有人替你們主婚，你和對方自己牽著手，向賓客一桌一桌敬了過去';
+    const seats = both ? '雙方過世的父母都沒能到場，主桌上留了四個空位' : '你過世的爸媽沒能到場';
+    switch (rel) {
+      case 'muslim': return `婚禮前一天，你到墓地為過世的爸媽唸了一段祈禱，把明天的事告訴他們。${by}。`;
+      case 'christian': return `牧師在禱詞裡提到你過世的爸媽，你低頭停了一下。${kin ? `${kin}陪你走到台前` : '你一個人走到台前'}。`;
+      case 'hindu': case 'sikh': return `儀式開始前，你在家中的神龕前點了一盞燈，請不在了的爸媽也來祝福。${by}。`;
+      case 'buddhist': case 'folk': return `婚禮前你先到牌位前為過世的爸媽上了香，告訴他們今天的事。主桌替他們留了兩個位子，${by}。`;
+      case 'jewish': return `華蓋旁點了一盞小燈，紀念過世的爸媽。${by}。`;
+      default: return `${seats}，桌上擺著他們的相片。${by}。`;
+    }
+  }
+  const dead = pp === 'mother' ? '父親' : '母親', alive = pp === 'mother' ? '母親' : '父親';
+  switch (rel) {
+    case 'muslim': return `婚禮前你到墓地為過世的${dead}唸了一段祈禱，婚禮上${alive}握著你的手，眼眶紅紅的。`;
+    case 'hindu': case 'sikh': case 'buddhist': case 'folk': return `儀式前你在${dead}的牌位或神龕前點了香，婚禮上${alive}坐在主桌，旁邊替過世的${dead}留了一個位子。`;
+    default: return `婚禮上，${alive}坐在主桌，旁邊替過世的${dead}留了一個位子，擺著${dead}的相片。`;
+  }
+}
+
+/** Who sits with the person at the wedding table: '兩家人' as long as one of the person's own parents lives, else the partner's side, '親友'. */
+export function weddingFolk(s) {
+  return parentsPresent(s) === 'none' ? '親友們' : '兩家人';
+}
+
 function parentDeathText(s, who, ctx) {
   const label = who === 'mother' ? '母親' : '父親';
   const young = s.age < 18;
@@ -558,7 +619,7 @@ function schooling(s, ctx) {
   }
   if (y === 16) {
     const { mother, father } = s.family;
-    const crowd = mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手' : father.alive ? '你看見父親在觀眾席裡拚命揮手' : '你特別想起不在現場的雙親';
+    const crowd = mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手，也想起沒能看到這一天的父親' : father.alive ? '你看見父親在觀眾席裡拚命揮手，也想起沒能看到這一天的母親' : '你特別想起不在現場的雙親，心裡對他們說了一聲「我畢業了」';
     pushLog(s, 'milestone', '大學畢業', `你拿到學位。畢業典禮上，${crowd}。`, applyDelta(s, { happiness: 4, knowledge: 2 }));
     addHighlight(s, '大學畢業。');
     if (s.flags._tertYears === 4 && incomeRank[inc] >= 2 && chance(s.rng, (incomeRank[inc] === 3 ? 0.32 : 0.2) * (fxOf(s).tertiary ?? 1))) { s.flags._tertYears = 6; return; }
@@ -949,7 +1010,9 @@ function makePartner(s, ctx, status, opts = {}) {
     age = Math.max(s.age < 18 && gender !== s.gender ? 17 : 16, age);
   }
   const group = partnerGroup(s);
-  const nm = randomName(s.rng, group, gender);
+  let nm = randomName(s.rng, group, gender);
+  // nobody in the family shares a full name with the partner (a child born before the partner arrived may already have drawn it): draws again only on a clash
+  for (let tries = 0; tries < 6 && !opts.name && [s.name.full, s.family.mother.name, s.family.father.name, ...s.children.map((c) => c.name)].includes(nm.full); tries++) nm = randomName(s.rng, group, gender);
   s.flags._partnerFt = nm.familyToken;
   s.flags._partnerGt = nm.givenToken;
   s.flags._partnerPool = group;
@@ -1042,7 +1105,14 @@ function childBirthText(s, c, first) {
     UM: '在醫院的產房外，家人焦急地等待。',
     H: '在明亮的產房裡，護理師把包得緊緊的小小身體遞給你。',
   });
-  return `${parent}。${c.name}出生了。${where}`;
+  // the first child is the news for the grandparents; for parents who have died it is a quiet word to them
+  let news = '';
+  if (first) {
+    const pp = parentsPresent(s);
+    if (pp === 'none') news = '你想起過世的爸媽，在心裡對他們說：「你們的家，又多了一個人。」';
+    else if (pp !== 'both') news = `你第一個打電話告訴${pp === 'mother' ? '母親' : '父親'}，電話那頭停了一下，接著傳來${pp === 'mother' ? '她' : '他'}壓不住的笑聲。`;
+  }
+  return `${parent}。${c.name}出生了。${where}${news}`;
 }
 
 /** Add a child to the family. Returns the child record. */
@@ -1182,7 +1252,7 @@ function loveText(s, ctx) {
   return byIncome(ctx.income, {
     L: `你認識了${pt.name}。你們常常在田埂邊、水井旁或市集的角落說上幾句話。`,
     LM: `你和${pt.name}開始走得很近。朋友們都看出來了，只有你們還裝作若無其事。`,
-    UM: `你和${pt.name}開始約會。你們常在${s.work.status === 'employed' ? '下班' : s.edu.inSchool ? '放學' : '收工'}後去街邊吃宵夜，聊到店家要打烊。`,
+    UM: `你和${pt.name}開始約會。你們常在${s.work.status === 'employed' ? '下班' : s.edu.inSchool ? (s.age < 20 ? '放學' : '下課') : '收工'}後去街邊吃宵夜，聊到店家要打烊。`,
     H: `你和${pt.name}開始交往。第一次約會你緊張得換了三次衣服。`,
   });
 }
@@ -1192,15 +1262,20 @@ function doMarriage(s, ctx) {
   marry(s);
   const pt = s.partner;
   if (child) {
-    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，家人就替你決定了婚事。${s.gender === 'F' ? `你嫁給了比你大不少的${pt.name}` : `你和${pt.name}成了家`}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
+    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，${parentsPresent(s) === 'none' ? '親戚' : '家人'}就替你決定了婚事。${s.gender === 'F' ? `你嫁給了比你大不少的${pt.name}` : `你和${pt.name}成了家`}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
     addHighlight(s, '很年輕就結婚。');
   } else {
+    const gone = parentsPresent(s) === 'none';
+    const wine = drinksAlcohol(s) ? '酒' : '茶';
+    const absent = weddingAbsence(s);
     pushLog(s, 'milestone', '結婚', byIncome(ctx.income, {
       L: `你和${pt.name}結了婚。沒有華麗的場面，鄰居都來幫忙，晚上大家一起吃了一頓飯。`,
       LM: `你和${pt.name}結婚了。親戚們從各地趕來，場地很簡單，但每個人都笑得很大聲。`,
-      UM: `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯${drinksAlcohol(s) ? '酒' : '茶'}。`,
+      UM: gone
+        ? `你和${pt.name}的婚禮上，${pt.name}那邊的親友擠了一整桌，大家彼此敬了很多杯${wine}。`
+        : `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯${wine}。`,
       H: `你和${pt.name}結婚了。婚禮之後，你們收拾好滿屋子的禮物，開始學習怎麼一起過日子。`,
-    }), applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
+    }) + absent, applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
     addHighlight(s, `與${pt.name}結婚。`);
   }
 }

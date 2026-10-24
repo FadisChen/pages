@@ -21,6 +21,9 @@
 6. **回顧**：壽命與本國／世界平均的對照、「這樣一生的機率」、人生足跡地圖、五項狀態的曲線、各階段的人生重心、重要時刻、
    學歷／工作／伴侶／子女／住過的國家與家庭信仰，可以留一句話給這個角色、下載分享圖卡（含小地圖），或收進「前世記錄」。
    回顧頁最上方是依這一生的事實寫成的「生平」（3–5 句，早夭、長壽、坎坷、離鄉語氣各不相同，同一段人生永遠是同一段話；分享圖卡上有 1–2 句的短版）。
+   回顧頁底下（以及前世記錄的詳細頁）有「**同一起點，再活一次**」：沿用這一世的出生地、城鄉、性別、家境、名字、出生年、父母與手足，之後發生什麼事交給新的運氣。
+   這一世會標上「重活」，附上前一世的連結，並和前一世並排比較壽命、學歷、子女、主要重心、機率與生平開頭；同一個起點活過三次會解鎖成就。
+   舊記錄沒有保存名字與家人，會沿用出生地、性別、家境與出生年，其餘重新抽。
 7. **前世記錄**：歷次人生都存在你的瀏覽器裡（`localStorage`），可以匯出／匯入 JSON；上方是「人生收藏」與「成就」。
    **降低重複感**：遊戲會在你的瀏覽器裡記住歷次人生遇過哪些事件（`lifelottery.seenEvents`，只存事件代號與次數），遇過的一般事件和「平凡的一年」在下一世比較少出現，常見事件的第二次、第三次會換一種寫法；里程碑與時代事件不受影響。
 
@@ -61,7 +64,7 @@
 
 ### 人生收藏與成就
 
-前世記錄頁上方是「人生收藏」（出生過的國家／大洲／年代地圖、累計統計）與 24 個「成就」（例如小國寡民、走過三個國家、金婚、
+前世記錄頁上方是「人生收藏」（出生過的國家／大洲／年代地圖、累計統計）與 25 個「成就」（例如小國寡民、走過三個國家、金婚、
 百萬分之一）；成就全由前世記錄推導，所以匯入別台裝置的記錄也會一起算進去。
 
 ### 宗教、文化與在地化
@@ -99,7 +102,7 @@
 - **事件**：約 590 則事件（成長、青年、工作、家庭、移居、健康、老年、世界大事、地區事件）加上 260 多句「平凡的一年」，
   依年齡、年代、國家、所得、城鄉、家庭、職業與先前的選擇觸發。事件之間的前後關係用旗標與「後續事件」串起來。
 - **敘事一致性**：文字不能和狀態矛盾（孩子不會在辦公室過夜、沒有伴侶就不會提到另一半、2000 年以前沒有智慧型手機）。
-  有一支自動稽核器（`tests/lib/coherence.mjs`）模擬數千段人生、檢查每一句文字；詳見下方測試說明與 `PLAN.md` 的 Phase 3B notes。
+  有一支自動稽核器（`tests/lib/coherence.mjs`）模擬數千段人生、檢查每一句文字，也檢查家人是否還在（父母雙亡後不會再出現在婚禮、伴侶不在了孩子不會再喊「爸媽，你們」）；詳見下方測試說明與 `PLAN.md` 的 Phase 3B 與 Phase 5D notes。
 
 ## 執行與測試
 
@@ -108,17 +111,28 @@
 ```sh
 cd lifelottery
 npm test                  # 全部單元與模擬測試（node --test tests/*.test.mjs），約 2.5 分鐘
-node --test tests/coherence.test.mjs   # 只跑敘事一致性稽核（約 20 秒）
+node --test tests/coherence.test.mjs   # 只跑敘事一致性稽核（約 45 秒，含家人連續性的壓力測試）
+node tests/a11y.mjs       # axe-core 無障礙檢查（需先 npm install --no-save axe-core；沒裝會略過）
 node tests/e2e.mjs        # 端對端測試（Playwright + Chromium，需要已安裝 Chromium；會自己啟動靜態伺服器；LL_SHOTS=資料夾 指定截圖輸出）
 ```
 
 本機玩：在 `lifelottery/` 底下開任一靜態伺服器，例如 `npx http-server .` 或 `python3 -m http.server`，
 用瀏覽器開啟網址即可（直接雙擊 `index.html` 不行，ES modules 需要 http）。
 
+### 載入速度、分享預覽與無障礙（Phase 5E）
+
+- **載入**：首頁只需要約 8 個小模組，引擎與全部事件文字（約 1.2 MB）等頁面閒下來、或玩家把指標移到「開始投胎」、進到設定頁時才下載。`index.html` 裡兩段 `modulepreload`（首頁用的直接列出，其餘放在一個不會執行的 `<template>`，閒下來時才放進 `<head>`）由 `node tools/build-preload.mjs` 產生，`tests/pwa.test.mjs` 會在清單過期時失敗；`node tools/measure-load.mjs` 量首頁的載入時間。
+- **分享預覽**：`index.html` 有 Open Graph 與 Twitter meta，預覽圖是 `og-image.png`（1200×630，`node tools/build-og-image.mjs` 由 `tools/og-image.html` 產生）。**`og:image`、`twitter:image` 與 `og:url` 必須是絕對網址**（爬蟲不會解析相對路徑），目前寫的是 `https://fadischen.github.io/pages/lifelottery/`；把資料夾放到別的網域時，請把 `index.html` 裡這三個網址換掉。分享圖卡時附的文字（Web Share 與「複製分享文字」）會帶上遊戲網址，網址取自目前頁面的位置，不受這個設定影響。
+- **無障礙**：`node tests/a11y.mjs` 用 axe-core 檢查每個畫面（淺色與深色）；axe-core 只裝在本資料夾（`npm install --no-save axe-core`，`node_modules/` 已被 `.gitignore` 排除），沒裝時腳本會說明並直接略過。
+
 ### 工具
 
 ```sh
 node tools/coherence-scan.mjs 2500 myprefix        # 模擬 N 段人生並列出文字與狀態的矛盾（--rule=a,b、--samples=n、--json=檔案）
+node tools/coherence-scan.mjs 3000 myprefix --stress --novelty   # 7/8 的人生讓父母、伴侶或孩子提早離開，並讀遍每個事件的所有寫法
+node tools/build-preload.mjs [--check]             # 重新產生（或檢查）index.html 的 modulepreload 清單
+node tools/build-og-image.mjs                      # 重新產生 og-image.png
+node tools/measure-load.mjs [次數]                 # 用 Playwright 量首頁載入時間（LL_PRELOAD=none|all|fp-none|fp-body 比較不同的 preload 設定）
 node tools/read-life.mjs --seed x --era past --country TWN --gender F   # 把一段人生印成可讀的日誌（--urban --wealth --birthYear --draw --focus --religion --city）
 ```
 
@@ -136,9 +150,10 @@ node tools/calibrate-risk.mjs 30000 4   # 重新校準個人風險乘數，產�
 
 ```
 index.html · manifest.webmanifest · sw.js · icon.svg · icons/   靜態頁、PWA（sw.js 預先快取整個遊戲；檔案清單變動時要升 CACHE_VERSION）
+og-image.png                                                   分享預覽圖（1200×630，由 tools/build-og-image.mjs 產生；不進預先快取）
 css/style.css                                                  樣式（色彩全用 CSS 變數，淺色／深色）
 js/main.js · storage.js · strings.js · theme-init.js           進入點、localStorage、所有介面字串
-js/ui/                                                         畫面（screens/）、圖表、人生重心（focusview）、世界地圖與縮放（worldmap、mapzoom）、機率、收藏與成就、分享圖卡、節奏控制
+js/ui/                                                         畫面（screens/）、圖表、人生重心（focusview）、世界地圖與縮放（worldmap、mapzoom）、機率、收藏與成就、分享圖卡、節奏控制、「同一起點再活一次」（replayview）
 js/engine/                                                     純邏輯，不碰 DOM，可在 Node 執行（見 js/engine/README.md）
 js/data/                                                       countries（產生）、eras、names、causes、conditions、yearly、riskref（產生）、religion、geo、money、worldmap（產生）
 js/data/events/                                                事件：seed、childhood、youth、adult_work、adult_family、migration、health、aging、world、regional

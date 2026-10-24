@@ -44,6 +44,7 @@ export function lifeFacts(rec) {
 
   return {
     id: rec && rec.id,
+    startId: (rec && rec.meta && rec.meta.replay && rec.meta.replay.start) || (rec && rec.id) || '', // lives that share a start (same_start_3)
     name: sum.name || '',
     code,
     continent: code ? CONTINENT[code] || null : null,
@@ -124,6 +125,7 @@ export const ACHIEVEMENTS = [
   { id: 'ten_countries', icon: 'mapPin', rule: (f, st) => count(st.countries, 10) },
   { id: 'twentyfive_countries', icon: 'flag', rule: (f, st) => count(st.countries, 25) },
   { id: 'long_career', icon: 'briefcase', rule: (f) => any(f, (x) => x.yearsWorked >= 40) },
+  { id: 'same_start_3', icon: 'replay', rule: (f) => { const n = {}; for (const x of f) if (x.startId) n[x.startId] = (n[x.startId] || 0) + 1; return count(Math.max(0, ...Object.values(n)), 3); } },
 ];
 
 /** Evaluate every achievement for a list of album records: [{ id, icon, done, value, goal }]. */

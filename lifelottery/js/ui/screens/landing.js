@@ -92,6 +92,17 @@ export default function mount(ctx, root) {
     if (ok) { ctx.session.discard(); ctx.go('/setup'); }
   });
 
+  // The engine and the event texts are the heavy part of the game and the landing screen does not need them: fetch them once
+  // the page is idle (not at all on a data-saver connection), or at once when the player reaches for the start button.
+  const warm = () => ctx.session.warm();
+  ['pointerenter', 'focus', 'touchstart'].forEach((type) => startBtn.addEventListener(type, warm, { once: true, passive: true }));
+  let idleTimer = null;
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  if (!saveData) {
+    const whenIdle = () => { idleTimer = setTimeout(() => { if ('requestIdleCallback' in window) window.requestIdleCallback(warm, { timeout: 4000 }); else warm(); }, 800); };
+    if (document.readyState === 'complete') whenIdle(); else window.addEventListener('load', whenIdle, { once: true });
+  }
+
   const notice = el('aside', { class: 'notice', 'aria-labelledby': 'notice-title' },
     el('span', { class: 'notice-badge', 'aria-hidden': 'true' }, S.landing.noticeBadge),
     el('div', null, el('h2', { id: 'notice-title', class: 'notice-title' }, S.landing.noticeTitle), el('p', null, S.landing.notice)),
@@ -119,5 +130,5 @@ export default function mount(ctx, root) {
     pitch,
   ));
 
-  return () => clearInterval(timer);
+  return () => { clearInterval(timer); clearTimeout(idleTimer); };
 }

@@ -107,22 +107,44 @@ export function saveTheme(theme) {
 // In-progress save: { v, savedAt, recordId, state }
 // ---------------------------------------------------------------------------------------------
 
-/** Returns { state, recordId, savedAt } or null. `deserialize` is injected to keep this module engine-free. */
+/** The "same start" link of a life: { prev: record id of the life it repeats, start: id of the first life of that start, n: 2.., partial? } or null. */
+export function cleanReplay(r) {
+  if (!r || typeof r !== 'object') return null;
+  const prev = str(r.prev, 64), start = str(r.start, 64);
+  if (!prev || !start) return null;
+  const out = { prev, start, n: Math.max(2, Math.min(99, Math.floor(num(r.n, 2)))) };
+  if (r.partial === true) out.partial = true; // the start was rebuilt from an old record: name and family were drawn again
+  return out;
+}
+
+/** Returns { state, recordId, replay, savedAt } or null. `deserialize` is injected to keep this module engine-free. */
 export function loadSave(deserialize) {
   const raw = readJSON(KEYS.save);
   if (!raw) return null;
   try {
     const body = raw.state || raw;
     const state = deserialize(body);
-    return { state, recordId: typeof raw.recordId === 'string' ? raw.recordId : null, savedAt: raw.savedAt || 0 };
+    return { state, recordId: typeof raw.recordId === 'string' ? raw.recordId : null, replay: cleanReplay(raw.replay), savedAt: raw.savedAt || 0 };
   } catch (e) {
     removeRaw(KEYS.save);
     return null;
   }
 }
 
-export function writeSave(state, recordId) {
-  return writeRaw(KEYS.save, JSON.stringify({ v: 1, savedAt: Date.now(), recordId: recordId || null, state }));
+/**
+ * What the landing screen needs to offer "resume", without loading the engine: { state: { alive, age, name, countryCode }, recordId } or
+ * null. Only a plausibility check; the full validation (and the removal of a broken save) happens in loadSave when the life is opened.
+ */
+export function peekSave() {
+  const raw = readJSON(KEYS.save);
+  const st = raw && (raw.state || raw);
+  if (!st || typeof st !== 'object' || st.v !== 1 || !Array.isArray(st.rng) || typeof st.alive !== 'boolean') return null;
+  if (!st.name || typeof st.name.full !== 'string' || !Number.isFinite(st.age) || typeof st.countryCode !== 'string') return null;
+  return { state: { alive: st.alive, age: st.age, name: { full: st.name.full }, countryCode: st.countryCode }, recordId: typeof raw.recordId === 'string' ? raw.recordId : null };
+}
+
+export function writeSave(state, recordId, replay = null) {
+  return writeRaw(KEYS.save, JSON.stringify({ v: 1, savedAt: Date.now(), recordId: recordId || null, replay: cleanReplay(replay), state }));
 }
 
 export function clearSave() {
@@ -221,13 +243,45 @@ export function normalizeSummary(x) {
 }
 
 /**
- * Optional facts the game stores next to the summary when a life ends ({ drawMode, partnerYears, events }). Old records have none;
- * everything that reads them has a fallback (ui/achievements.js, engine/odds.js, loadSeenEvents below). `events` lists the ids
+ * The start of a life (engine/life.js birthOf), kept so the album can offer "same start, live again". Only the shape and sizes are
+ * checked here (this module stays engine-free); createLife validates it for real (engine/birth.js normalizeBirth) and a record whose
+ * start fails that is treated like an old one. Returns undefined when it is not recognisable.
+ */
+export function cleanStart(b) {
+  if (!b || typeof b !== 'object' || b.v !== 1) return undefined;
+  if (typeof b.countryCode !== 'string' || (b.gender !== 'M' && b.gender !== 'F') || typeof b.urban !== 'boolean') return undefined;
+  if (!Number.isFinite(b.wealthQ) || !Number.isFinite(b.birthYear) || !['past', 'present', 'future'].includes(b.eraKey)) return undefined;
+  const parent = (p) => (p && typeof p === 'object' ? { alive: !!p.alive, age: num(p.age), name: str(p.name, 80) } : undefined);
+  const n = b.name && typeof b.name === 'object' ? b.name : null;
+  const out = {
+    v: 1, eraKey: b.eraKey, birthYear: Math.round(b.birthYear), countryCode: str(b.countryCode, 4), city: str(b.city, 40), urban: b.urban,
+    gender: b.gender, wealthQ: Math.round(b.wealthQ),
+  };
+  if (n && typeof b.poolKey === 'string') {
+    out.poolKey = str(b.poolKey, 16);
+    out.name = { given: str(n.given, 80), family: str(n.family, 80), full: str(n.full, 80), givenToken: str(n.givenToken, 80), familyToken: str(n.familyToken, 80) };
+    out.siblings = Math.round(num(b.siblings));
+    out.mother = parent(b.mother);
+    out.father = parent(b.father);
+    out.religion = str(b.religion, 12);
+    if (typeof b.business === 'boolean') out.business = b.business;
+  }
+  return out;
+}
+
+/**
+ * Optional facts the game stores next to the summary when a life ends ({ drawMode, partnerYears, events, birth, replay }). Old records have none;
+ * everything that reads them has a fallback (ui/achievements.js, engine/odds.js, loadSeenEvents below). `birth` is the start of the life
+ * and `replay` ({ prev, start, n }) says it was lived again from an earlier life's start (Phase 5E). `events` lists the ids
  * of the events the life met (Phase 5C), so the cross-life counts can be rebuilt from an album that has no seenEvents.
  */
 export function normalizeMeta(m) {
   if (!m || typeof m !== 'object') return undefined;
   const out = {};
+  const birth = cleanStart(m.birth);
+  if (birth) out.birth = birth;
+  const replay = cleanReplay(m.replay);
+  if (replay) out.replay = replay;
   if (m.drawMode === 'births' || m.drawMode === 'population') out.drawMode = m.drawMode;
   if (typeof m.partnerYears === 'number' && Number.isFinite(m.partnerYears)) out.partnerYears = Math.max(0, Math.min(120, Math.round(m.partnerYears)));
   const events = eventIdList(m.events);

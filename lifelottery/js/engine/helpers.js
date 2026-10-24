@@ -21,6 +21,7 @@ import {
   STAT_KEYS, EDU_LEVELS, JOBS, ctxOf, annualIncome, applyDelta, pushLog, addHighlight, incomeAtLeast, byIncome, aliveKids,
   startJob, loseJob, retire, setPartner, newPartner, endRelationship, marry, divorce, addChild, addCondition, removeCondition,
   migrate, leaveSchool, enroll, inTertiary, setUrban, setCity, stableFlip, drinksAlcohol,
+  parentsPresent, standInKin, weddingAbsence, weddingFolk, partnerParentsGone,
 } from './systems.js';
 
 /**
@@ -330,6 +331,45 @@ export class Helpers {
     const f = this.s.family;
     return f.mother.alive && f.father.alive ? '爸媽' : f.mother.alive ? '媽媽' : f.father.alive ? '爸爸' : '身邊的大人';
   }
+  // ---- family continuity (Phase 5D): who is still here, and how to write the people who are not ----
+  /** Which parents are alive: 'both' | 'mother' | 'father' | 'none'. */
+  parentsPresent() { return parentsPresent(this.s); }
+  /** Both parents have died. */
+  parentsGone() { return parentsPresent(this.s) === 'none'; }
+  /** Exactly one parent is alive. */
+  oneParent() { const p = parentsPresent(this.s); return p === 'mother' || p === 'father'; }
+  /**
+   * The parents as a word for a sentence about the present: '爸媽' (both alive), '媽媽', '爸爸', or `fallback` when both have died
+   * (default '長輩'). Unlike parentsLabel() it never says "身邊的大人", so it also fits an adult.
+   */
+  parentsOr(fallback = '長輩') {
+    const p = parentsPresent(this.s);
+    return p === 'both' ? '爸媽' : p === 'mother' ? '媽媽' : p === 'father' ? '爸爸' : fallback;
+  }
+  /** The mother or the father who is still alive: '母親' | '父親' | '' (both alive → '' is NOT returned, both dead → ''); only meaningful with oneParent(). */
+  parentLeft() { const p = parentsPresent(this.s); return p === 'mother' ? '母親' : p === 'father' ? '父親' : ''; }
+  /** Pick a sentence by which parents are alive: h.byParents({ both: '…', mother: '…', father: '…', none: '…', one: '…' (used for mother/father when those are missing), _: '…' }). */
+  byParents(map) {
+    const p = parentsPresent(this.s);
+    const v = map[p] ?? ((p === 'mother' || p === 'father') ? map.one : undefined) ?? map._ ?? map.default;
+    return typeof v === 'function' ? v(this.s, this) : v ?? '';
+  }
+  /** '零用錢' for a child, a teenager or a student living on their family's money; '私房錢' for a young person who already works or is married. */
+  pocketMoney() {
+    const s = this.s;
+    return s.age < 18 || (s.age < 22 && s.edu.inSchool && !this.employed() && !this.married()) ? '零用錢' : '私房錢';
+  }
+  /** The uncle, aunt or elder who stands in for absent parents ('叔叔', '姑姑', '舅舅', '阿姨', '伯父'; after 40 the eldest sibling '年紀最長的手足'; '' when there is nobody). Stable per life. */
+  standIn() { return standInKin(this.s); }
+  /** Whether the partner's own parents are (made) gone too: decided once per life from the partner's age. */
+  partnerParentsGone() { return partnerParentsGone(this.s); }
+  /** '兩家人' while at least one of your parents is alive, else '親友們': who fills the table at your wedding. */
+  weddingFolk() { return weddingFolk(this.s); }
+  /**
+   * One sentence for the parents who cannot be at the wedding (empty seats and a photo at the table, a prayer at the grave, an
+   * offering at the altar, an uncle who stands in; by religion). '' when both parents are alive. Add it after the wedding scene.
+   */
+  weddingAbsence() { return weddingAbsence(this.s, (this.s.flags._married || 0) >= (this.married() ? 2 : 1)); }
   /**
    * Has a technology that appeared in the rich countries in `baseYear` (e.g. smartphones 2008, mobile phones 1995,
    * the web 1995) reached this person? Later for poorer countries and for the countryside (see techLag).
@@ -463,7 +503,13 @@ export class Helpers {
   childHe(i = 0) { const c = kidOf(this.s, i); return c ? (c.gender === 'F' ? '她' : '他') : '孩子'; }
   /** Name of the i-th living child (default: the first; the i-th child at all if none is alive); '孩子' if there is none. */
   childName(i = 0) { const c = kidOf(this.s, i); return c ? c.name : '孩子'; }
-  /** Name of the most recently born child. */
+  /** Name of the youngest child who is still alive ('孩子' if there is none): the right name for "the baby" in a scene of the present. */
+  youngestChildName() {
+    const kids = this.s.children.filter((c) => c.alive);
+    if (!kids.length) return '孩子';
+    return kids.reduce((a, b) => (b.birthYear > a.birthYear ? b : a)).name;
+  }
+  /** Name of the most recently born child (alive or not: use youngestChildName() for a scene of the present). */
   lastChildName() { const c = this.s.children[this.s.children.length - 1]; return c ? c.name : '孩子'; }
   motherName() { return this.s.family.mother.name; }
   fatherName() { return this.s.family.father.name; }

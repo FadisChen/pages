@@ -585,13 +585,43 @@ export function canShareImage() {
   }
 }
 
+/** Address of the game (this page without the query and the #/route), what a shared card should point people to. */
+export function pageUrl() {
+  try { return `${location.origin}${location.pathname.replace(/index\.html$/, '')}`; } catch (e) { return ''; }
+}
+
+/** The text that goes with a shared card: one sentence about the life and the address of the game. */
+export function shareText(record) {
+  const s = record.summary;
+  const url = pageUrl();
+  return `${S.summary.cardShareText(s.name, s.age, s.homeCountry.name)}${url ? `\n${url}` : ''}`;
+}
+
+/** Copy the share text to the clipboard. Resolves true when it worked. */
+export async function copyShareText(record) {
+  const text = shareText(record);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch (e) { /* fall through to the old way */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) { return false; }
+}
+
 /** Share the card. Resolves 'shared' | 'cancelled'; rejects on real errors. */
 export async function shareCard(canvas, record) {
   const blob = await cardToBlob(canvas);
   const file = new File([blob], cardFileName(record), { type: 'image/png' });
-  const s = record.summary;
   try {
-    await navigator.share({ files: [file], title: S.appName, text: S.summary.cardShareText(s.name, s.age, s.homeCountry.name) });
+    await navigator.share({ files: [file], title: S.appName, text: shareText(record) });
     return 'shared';
   } catch (e) {
     if (e && e.name === 'AbortError') return 'cancelled';

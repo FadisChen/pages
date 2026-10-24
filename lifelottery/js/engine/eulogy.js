@@ -14,6 +14,7 @@
 // long and quiet follow the facts of the life. Suicide is told with restraint: no method, not even the word.
 
 import { hash01 } from './rng.js';
+import { placePhrases } from './place.js';
 
 export const EULOGY_VERSION = 1;
 
@@ -37,7 +38,7 @@ export function factsOf(sum) {
   const hl = Array.isArray(sum.highlights) ? sum.highlights.filter((h) => h && typeof h.text === 'string') : [];
   const country = (sum.homeCountry && sum.homeCountry.name) || sum.countryName || '';
   const city = sum.birthCity && sum.birthCity !== country ? sum.birthCity : '';
-  const place = !country ? '' : !city ? country : sum.urbanBirth ? `${country}${city[0] === '的' ? '' : '的'}${city}` : `${country}${city[0] === '的' ? '' : '的'}${city}附近的鄉村`;
+  const place = !country ? '' : !city ? country : placePhrases(country, city, !!sum.urbanBirth).full;
   const q = Math.max(1, Math.min(5, Math.round(Number(sum.wealthQ) || 3)));
   const edu = sum.education || {};
   // each job once, in the order of the LAST time it was held (so the last one is the last job)

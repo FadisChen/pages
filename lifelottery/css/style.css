@@ -17,16 +17,16 @@
   --surface-3: #ebe1c6;
   --ink: #2a2620;
   --ink-2: #4f4739;
-  --muted: #6c6354;
+  --muted: #625a4b;
   --line: #d8cdb0;
   --line-strong: #bdae8a;
   --accent: #a63d27;
   --accent-hover: #8f3320;
   --accent-ink: #fffaf0;
   --accent-soft: rgba(166, 61, 39, 0.09);
-  --gold: #b07d1e;
-  --good: #34724a;
-  --bad: #b03a26;
+  --gold: #82590c;
+  --good: #286640;
+  --bad: #9c3220;
   --focus: #1f5fbf;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 8px 20px -10px rgba(80, 60, 20, 0.35), 0 1px 3px rgba(80, 60, 20, 0.12);
   --overlay: rgba(40, 30, 10, 0.45);
@@ -139,6 +139,9 @@
   --moon: #e8b765;
 }
 
+/* The farewell screen is always the night sky, whatever the theme (the page behind the sky is dark too, so no light edge shows
+   when the page overscrolls and a contrast check sees the real background). */
+html:has(> body[data-route="death"]) { background: #0a1024; }
 /* The farewell screen is always the night sky, whatever the theme. */
 body[data-route="death"] {
   color-scheme: dark;
@@ -948,7 +951,7 @@ dialog { color: var(--ink); }
    --------------------------------------------------------------------------------------------- */
 :root {
   /* one colour per life focus: the same hues as the stat each one feeds (so both themes are covered by the stat tokens) */
-  --fc-balance: color-mix(in srgb, var(--muted) 70%, var(--surface-3));
+  --fc-balance: var(--muted);
   --fc-study: var(--c-knowledge);
   --fc-work: var(--c-wealth);
   --fc-family: var(--c-social);
@@ -1157,3 +1160,41 @@ html:has(dialog.mapzoom[open]) { overflow: hidden; }
   color: var(--ink); text-align: start; overflow-wrap: anywhere;
 }
 @media (min-width: 720px) { .eulogy-card .eulogy-text { font-size: 1.125rem; } }
+
+/* ---------------------------------------------------------------------------------------------
+   Phase 5E: 同一起點，再活一次 (replay badge, comparison with the previous life, the button card)
+   --------------------------------------------------------------------------------------------- */
+.pace-hint { display: flex; gap: 6px; align-items: flex-start; }
+.pace-hint[hidden] { display: none; }
+.pace-hint .icon { flex: none; margin-top: 0.3em; }
+
+.replay-line { margin: 10px 0 0; font-size: 0.875rem; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; justify-content: center; }
+.screen-head .replay-line { justify-content: flex-start; }
+.replay-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-size: 0.8125rem; font-weight: 700; line-height: 1.5;
+}
+.replay-badge .icon { width: 14px; height: 14px; }
+.replay-n { font-weight: 600; }
+.replay-prev { font-weight: 600; }
+.tag-replay { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); }
+
+.replay-card { border-left: 4px solid var(--accent); }
+.replay-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9375rem; }
+.replay-table th, .replay-table td { padding: 10px 8px; text-align: start; vertical-align: top; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.replay-table thead th { border-top: 0; padding-top: 0; font-size: 0.8125rem; color: var(--muted); font-weight: 700; }
+.replay-table tbody th { width: 6.5em; color: var(--ink-2); font-weight: 700; font-size: 0.875rem; }
+.replay-table td { color: var(--ink); line-height: 1.7; }
+.replay-table tr[data-row="opening"] td { font-family: var(--font-serif); font-size: 0.875rem; line-height: 1.8; }
+.replay-note { display: block; color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin-top: 2px; }
+@media (max-width: 559px) {
+  .replay-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .replay-table, .replay-table tbody { display: block; }
+  .replay-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .replay-table tbody th, .replay-table td { display: block; padding: 0; border: 0; width: auto; }
+  .replay-table tbody th { grid-column: 1 / -1; }
+  .replay-table td::before { content: attr(data-label); display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+}
+.replay-cta .replay-actions { margin-top: 12px; display: flex; }
+.replay-cta .replay-actions .btn { flex: 1 1 auto; }
+@media (min-width: 600px) { .replay-cta .replay-actions .btn { flex: 0 0 auto; } }

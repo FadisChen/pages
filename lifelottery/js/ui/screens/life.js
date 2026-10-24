@@ -59,7 +59,7 @@ export default function mount(ctx, root) {
   const metaEl = el('p', { class: 'life-meta' });
   const pausedChip = el('span', { class: 'paused-chip', hidden: true }, T.paused);
   const boostChip = el('span', { class: 'boost-chip', hidden: true, 'data-role': 'boost-chip', 'aria-hidden': 'true' }, icon('next'), ' ', P5.boostChip);
-  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'family' }, icon('family'), el('span', { class: 'family-label' }, T.family));
+  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-label': T.family, 'data-action': 'family' }, icon('family'), el('span', { class: 'family-label' }, T.family));
   const focusChipText = el('span', { class: 'focus-chip-text' });
   const focusChip = el('button', { class: 'focus-chip', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'focus-chip' }, icon('target'), focusChipText);
   const statEls = {};
@@ -83,7 +83,9 @@ export default function mount(ctx, root) {
   );
 
   // ---- timeline ----
-  const timeline = el('ol', { class: 'timeline', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', 'aria-label': T.timelineLabel });
+  // the live region is a wrapper: an <ol> may not take role="log" (it would stop being a list)
+  const timeline = el('ol', { class: 'timeline' });
+  const timelineLog = el('div', { class: 'timeline-log', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', 'aria-label': T.timelineLabel }, timeline);
   const choiceHost = el('div', { class: 'choice-host' });
 
   // ---- controls ----
@@ -100,7 +102,7 @@ export default function mount(ctx, root) {
   );
 
   const holdHint = el('p', { class: 'fine hold-hint' }, P5.holdHint);
-  const screen = el('div', { class: 'screen screen-life' }, header, el('div', { class: 'life-body' }, timeline, choiceHost, holdHint, help), controls);
+  const screen = el('div', { class: 'screen screen-life' }, header, el('div', { class: 'life-body' }, timelineLog, choiceHost, holdHint, help), controls);
   root.append(screen);
   screen.dataset.expectedYears = String(expectedYears);   // read by tests/e2e-pacing.mjs
   screen.dataset.pace = s.settings.pace;
@@ -149,8 +151,9 @@ export default function mount(ctx, root) {
     const chips = Object.entries(delta).filter(([k, v]) => STATS.includes(k) && v).map(([k, v]) => {
       const rounded = Math.round(v);
       if (!rounded) return null;
-      return el('span', { class: `chip ${rounded > 0 ? 'up' : 'down'}`, 'aria-label': `${T.statLabels[k]}${rounded > 0 ? T.deltaUp : T.deltaDown} ${Math.abs(rounded)}` },
-        el('span', { 'aria-hidden': 'true' }, `${T.statLabels[k]} ${signed(rounded)}`));
+      return el('span', { class: `chip ${rounded > 0 ? 'up' : 'down'}` },
+        el('span', { 'aria-hidden': 'true' }, `${T.statLabels[k]} ${signed(rounded)}`),
+        el('span', { class: 'sr-only' }, `${T.statLabels[k]}${rounded > 0 ? T.deltaUp : T.deltaDown} ${Math.abs(rounded)}`));
     }).filter(Boolean);
     return chips.length ? el('div', { class: 'deltas' }, chips) : null;
   }
@@ -168,7 +171,7 @@ export default function mount(ctx, root) {
     } else if (kind === 'focus') {
       body.append(el('p', { class: 'entry-text' }, icon('target', 'icon icon-inline'), ' ', el('b', null, e.title), '：', e.text));
     } else {
-      if (e.title) body.append(el('h3', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
+      if (e.title) body.append(el('h2', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
       body.append(el('p', { class: 'entry-text' }, e.text));
     }
     const chips = chipsFor(e.delta);

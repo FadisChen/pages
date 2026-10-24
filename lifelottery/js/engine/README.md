@@ -39,7 +39,8 @@ if (!s.alive) getSummary(s);                    // review screen / share card / 
 
 | Function | Description |
 | --- | --- |
-| `createLife(settings, seed, opts?)` | New life. `settings`: `era` (`'past'`/`'present'`/`'future'`/`'random'`), `drawMode` (`'births'`/`'population'`), `pace` (`'short'`/`'standard'`/`'long'`), `autoChoice` (bool; a UI hint only). Optional `settings.birthYear` forces the "present" year. `seed` is any string/number: same seed + settings ⇒ identical life. `opts` can force `{ countryCode, gender, urban, wealthQ, birthYear }` (tests, "replay this life"). |
+| `createLife(settings, seed, opts?)` | New life. `settings`: `era` (`'past'`/`'present'`/`'future'`/`'random'`), `drawMode` (`'births'`/`'population'`), `pace` (`'short'`/`'standard'`/`'long'`), `autoChoice` (bool; a UI hint only). Optional `settings.birthYear` forces the "present" year. `seed` is any string/number: same seed + settings ⇒ identical life. `opts` can force `{ countryCode, gender, urban, wealthQ, birthYear, eraKey, city }` (tests, tools), carry the cross-life `novelty` counts, or carry a whole `birth` (next row). |
+| `createLife(settings, seed, { birth })` / `birthOf(state)` / `normalizeBirth(b)` | **Same start, live again** (Phase 5E). `birthOf(state)` returns the start of a life as plain JSON (`{ v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ, poolKey, name:{ given, family, full, givenToken, familyToken }, siblings, mother/father:{ alive, age, name }, religion, business }`), exact at any age (the parents' ages and `alive` are the values at birth). `createLife(settings, newSeed, { birth })` reuses all of it and takes everything else from the new seed: no random number is spent on the birth, so the life is a normal life from the first year on. The family-business answer (decided by `stableFlip`, which hashes the seed) is carried in `state.flags._fix = { family_business }`, which `stableFlip` honours. `normalizeBirth(b)` validates (`null` = unusable, e.g. unknown country; `.full === false` = only country, city, urban, gender, wealth, birth year and era are usable, the rest is drawn: this is how an old album record without a stored start is replayed). Without `birth` (or with `birth: undefined`) nothing changes: the same seed gives the same bytes as before (`tests/replay.test.mjs`). |
 | `advanceYear(state, { auto?, autoFocus? })` | Lives one year. Returns `{ entries, pendingChoice, died, focusPrompt }`. `entries` are the new log entries of this year. If a choice is pending, calling it again returns the same `pendingChoice` and does **not** advance. `auto: true` resolves choices by their `ai` weights and picks the life focus itself at each stage prompt (simulations); `autoFocus: false` keeps the focus alone (tests that force one). `focusPrompt` is true in the year a new life stage starts (see "Life focus"). |
 | `FOCI`, `availableFoci(state)`, `setFocus(state, id)`, `autoFocus(state)` | The life focus API, see "Life focus (Phase 4A)" below. |
 | `choose(state, optionIndex)` | Resolve the pending choice. `optionIndex` indexes `pendingChoice.options` (not the original `choices` array). Returns `{ entries, pendingChoice: null, died }`. Throws if nothing is pending or the index is invalid. |
@@ -67,6 +68,8 @@ kept in `state.settings.eraSetting`.
 * `state.statHistory`: one `{ age, health, happiness, knowledge, wealth, social }` row per year (+ birth row, + a row at death), ready for the SVG curve.
 
 ### birth.js (lottery reveal)
+
+`describeBirth(state)` also returns `placeText` (「孟買近郊的鄉村」 / 「孟買」) and `placeFull` (「印度孟買近郊的鄉村」 / 「印度的孟買」), both from `place.js` `placePhrases(country, city, urban)`; the life story (`eulogy.js`) uses the same function.
 
 * `describeBirth(state)` → `{ name, year, eraName, eraLabel, countryCode, countryName, region, income, city, urban, placeText, genderLabel, wealthQ, wealthLabel, wealthShort, babiesPer100, babiesText, lifeExpectancy, comparisons: [{ key: 'le'|'imr'|'school'|'gdp', label, unit, value, world, higherIsBetter }] }`.
   `eraName` is `過去 / 現在 / 未來`; `eraLabel` is `現在` or the birth year (`1962 年`) and reads as "{eraLabel}出生的 100 個嬰兒…". `babiesText` is ready to drop into "…出生的 100 個嬰兒裡，有{babiesText}和你同國。"
@@ -198,7 +201,7 @@ if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `t
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 138)
+### Helpers (`h`, all 150)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
@@ -249,6 +252,19 @@ Call helpers as methods: `h.chance(0.3)`, never destructure.
 Useful flags set by systems (read with `h.has`): `orphan`, `migrated`, `war` (set it yourself to raise conflict mortality). Flags beginning with `_` are
 engine-private — do not read or write them from events.
 
+### Family continuity (Phase 5D)
+
+A text about the family must fit who is alive *now*. The coherence auditor checks parents (both / one / none), the partner (dating, married, divorced, widowed, never), the children (count, alive, sons and daughters), the siblings (count) and the age of the scene (see `tests/lib/coherence.mjs`: rules `parents_dead`, `couple_gone`, `partner_gone`, `kids_dead`, `kids_count`, `kid_gender`, `siblings_count`, `adult_childish`, `young_elder`, `parent_pronoun`). Write the branch with these helpers instead of the assumption:
+
+* `parentsPresent()` → `'both' | 'mother' | 'father' | 'none'`; `parentsGone()` (both dead); `oneParent()` (exactly one alive); `parentLeft()` → `'母親' | '父親'` for the one who is alive (`''` otherwise).
+* `parentsOr(fallback = '長輩')` → `'爸媽' | '媽媽' | '爸爸'` or the fallback when both have died (unlike `parentsLabel()` it never says 身邊的大人, so it also suits an adult).
+* `byParents({ both, mother, father, none, one, _ })` picks a text by `parentsPresent()` (`one` serves `mother` and `father` when they are missing; `_` is the fallback; a function value is called with `(s, h)`).
+* `standIn()` → the uncle, aunt or elder who stands in for absent parents (`'叔叔' | '姑姑' | '舅舅' | '阿姨' | '伯父'` up to age 40, `'年紀最長的手足'` later if there are siblings, `''` if nobody). Stable per life, consumes no random numbers.
+* `weddingFolk()` → `'兩家人'` while one of your parents lives, else `'親友們'`; `weddingAbsence()` → one tender sentence for the parents who cannot come (empty seats and a photo, a prayer at the grave, an offering at the altar, the stand-in who gives you away; it follows the family religion and gets shorter at a second wedding); `''` if both are alive. `systems.js` appends the same sentence to the 結婚 line, so an event that narrates a wedding only needs `weddingFolk()` (not "兩家人") and may add `weddingAbsence()` when it is the event that marries the person. `partnerParentsGone()` says whether the partner's own parents are (made) gone as well, decided per life from the partner's age.
+* `youngestChildName()` → the youngest child who is **alive** (`lastChildName()` may name a child who has died); `pocketMoney()` → `'零用錢'` for a child or a student living on the family's money, `'私房錢'` for a young adult who works or is married.
+* Rules of thumb: "兩家人／雙方長輩／雙方家長／家長／回老家" assume living parents; `母親說…` in the present tense is a living mother (a memory needs 想起／當年／小時候／教的…); the child who calls "爸媽，你們…" needs a partner who is alive (`hasPartner()`); a count word ("兩個孩子") must match `childCount()`; "手足們" needs `siblings() > 1`.
+* Titles are static strings and are audited too (`至親病倒了`, `返鄉過節`), so do not put a family assumption in a title.
+
 ## 6. Data modules
 
 * **countries.js** (generated by `tools/build-data.mjs`): 173 countries/territories ≥ 500k people covering 99.9 % of humanity. Fields per the PLAN plus `pop1970` and
@@ -285,6 +301,7 @@ Every country must map to existing groups (`tests/names.test.mjs`).
 ```
 cd lifelottery && npm test                 # or: node --test lifelottery/tests/*.test.mjs   (from the repo root)
 node --test tests/focus.test.mjs        # life focus: API, legality by age, prompts, old saves, effect directions on 2000 lives (LL_FOCUS_N=800 for a quick run)
+node tools/coherence-scan.mjs 3000 x --stress --novelty   # Phase 5D deep scan: 7 lives in 8 lose parents / partner / a child early (applyStress), every phrasing of every event is read (novelty counts 1-3)
 node --test tests/culture.test.mjs      # religion, festivals, city geography, local money, pandemic timing, narrow-state ordinary years, the new coherence rules
 # coherence rules added in Phase 4A (tests/lib/coherence.mjs): `festival` (a festival or religious word must fit the family's tradition; 農曆新年 only where `lunarNewYear()`), `climate` (snow needs a snowy climate, typhoons / sea level / going to sea need a coast), `drink` (no beer or toasts for a family that does not drink); the toddler rule now catches "你學會的第一個長句子" from age 4
 LL_SIM_N=1000 node --test tests/simulation.test.mjs    # quicker run (statistical tolerances get noisy below ~1000 lives)

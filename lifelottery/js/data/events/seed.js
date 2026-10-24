@@ -551,7 +551,7 @@ export default [
     tags: ['family', 'marriage'],
     major: true,
     cond: (s, h) => h.married() && h.yearsMarried() <= 1 && !h.has('wedding_done') && s.age >= 18,
-    text: (s, h) => `你和${h.partnerName()}已經登記，但兩家人對婚禮的期待截然不同。親戚的電話一通接著一通，帳本上的數字讓你們都沉默了。`,
+    text: (s, h) => `你和${h.partnerName()}已經登記，但${h.parentsGone() ? `${h.partnerName()}的家人和你的親戚` : '兩家人'}對婚禮的期待截然不同。親戚的電話一通接著一通，帳本上的數字讓你們都沉默了。`,
     choices: [
       {
         label: '盛大的婚宴',
@@ -582,7 +582,7 @@ export default [
     ages: [20, 50],
     tags: ['family'],
     cond: (s, h) => h.hasChildren() && h.youngestChildAge() === 1 && !h.has('saw_first_steps'),
-    text: (s, h) => `${h.lastChildName()}扶著沙發邊緣，搖搖晃晃地朝你走來，然後撲進你的懷裡。那一刻，你所有的疲憊都消失了。`,
+    text: (s, h) => `${h.youngestChildName()}扶著沙發邊緣，搖搖晃晃地朝你走來，然後撲進你的懷裡。那一刻，你所有的疲憊都消失了。`,
     effects: { happiness: +5, social: +1 },
     set: ['saw_first_steps'],
   },
@@ -654,14 +654,14 @@ export default [
   },
   {
     id: 'seed_parent_illness',
-    title: '父母病了',
+    title: '至親病倒了',
     ages: [30, 65],
     tags: ['family', 'caregiving'],
     major: true,
     cond: (s, h) => (s.family.mother.alive && s.family.mother.age >= 62) || (s.family.father.alive && s.family.father.age >= 62),
     text: (s, h) => {
       const who = s.family.mother.alive && s.family.mother.age >= 62 ? s.family.mother.name : s.family.father.name;
-      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 0 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
+      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 1 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : h.siblings() === 1 ? '電話那頭，你的手足也有自己的難處。兩個人都在等對方先開口。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
     },
     choices: [
       {
@@ -919,7 +919,7 @@ export default [
     tags: ['family', 'milestone'],
     milestone: true,
     cond: (s, h) => h.hasChildren() && !h.has('grandparent') && h.expectedGrandchildren() > 0,
-    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「${h.hasPartner() ? '爸媽' : h.male() ? '爸' : '媽'}，我要當${h.hasPartner() ? '爸媽' : h.male() ? '爸爸' : '媽媽'}了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
+    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「${h.hasPartner() ? '爸媽' : h.male() ? '爸' : '媽'}，我要當${h.childHe(0) === '她' ? '媽媽' : '爸爸'}了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
     effects: { happiness: +8, social: +4 },
     set: ['grandparent'],
     highlight: '抱起了第一個孫輩。',

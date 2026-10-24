@@ -1,17 +1,17 @@
 // 設定: era, draw mode, life length, auto-choice. Submitting draws the lottery.
 
 import { S } from '../../strings.js';
-import { el, icon } from '../dom.js';
+import { el, icon, toast } from '../dom.js';
 import { loadSettings, saveSettings } from '../../storage.js';
 
 /** A fieldset of radio "cards": real radio inputs (keyboard + screen reader native), styled as tiles. */
-function radioGroup(name, legend, options, value, cls = '') {
+function radioGroup(name, legend, options, value, cls = '', describedBy = {}) {
   return el('fieldset', { class: `field ${cls}` },
     el('legend', null, legend),
     el('div', { class: 'tiles' }, options.map(([val, title, desc]) => {
       const id = `${name}-${val}`;
       return el('div', { class: 'tile' },
-        el('input', { type: 'radio', name, id, value: val, checked: val === value }),
+        el('input', { type: 'radio', name, id, value: val, checked: val === value, 'aria-describedby': describedBy[val] }),
         el('label', { for: id }, el('span', { class: 'tile-title' }, title), el('span', { class: 'tile-desc' }, desc)),
       );
     })),
@@ -25,7 +25,11 @@ export default function mount(ctx, root) {
 
   const era = radioGroup('era', T.era.legend, ['past', 'present', 'future', 'random'].map((k) => [k, T.era[k][0], T.era[k][1]]), cfg.era);
   const mode = radioGroup('drawMode', T.drawMode.legend, ['births', 'population'].map((k) => [k, T.drawMode[k][0], T.drawMode[k][1]]), cfg.drawMode, 'tiles-wide');
-  const pace = radioGroup('pace', T.pace.legend, ['short', 'standard', 'long'].map((k) => [k, T.pace[k][0], T.pace[k][1]]), cfg.pace, 'tiles-3');
+  const pace = radioGroup('pace', T.pace.legend, ['short', 'standard', 'long'].map((k) => [k, T.pace[k][0], T.pace[k][1]]), cfg.pace, 'tiles-3', { long: 'pace-long-hint' });
+  // the 60-minute pace is slow on purpose (it waits for slow readers): say so when it is picked, and where the speed-ups are
+  const longHint = el('p', { class: 'fine pace-hint', id: 'pace-long-hint', 'data-role': 'pace-long-hint', hidden: cfg.pace !== 'long' }, icon('info', 'icon icon-inline'), ' ', T.pace.longHint);
+  const syncHint = () => { longHint.hidden = !pace.querySelector('#pace-long').checked; };
+  pace.addEventListener('change', syncHint);
 
   const auto = el('fieldset', { class: 'field' },
     el('legend', null, T.auto.legend),
@@ -37,7 +41,7 @@ export default function mount(ctx, root) {
   );
 
   const form = el('form', { class: 'setup-form', novalidate: true },
-    era, mode, pace, auto,
+    era, mode, pace, longHint, auto,
     el('p', { class: 'fine' }, T.pace.note),
     el('p', { class: 'fine focus-note', 'data-role': 'focus-note' }, icon('target', 'icon icon-inline'), ' ', T.focusNote),
     el('p', { class: 'fine notice-inline' }, el('span', { class: 'notice-badge small', 'aria-hidden': 'true' }, S.landing.noticeBadge), ' ', T.notice),
@@ -47,8 +51,13 @@ export default function mount(ctx, root) {
     ),
   );
 
-  form.addEventListener('submit', (ev) => {
+  ctx.session.warm(); // the engine and every event text are fetched while the player picks
+
+  let starting = false;
+  form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if (starting) return;
+    starting = true;
     const fd = new FormData(form);
     const settings = saveSettings({
       era: fd.get('era'),
@@ -56,9 +65,18 @@ export default function mount(ctx, root) {
       pace: fd.get('pace'),
       autoChoice: fd.get('autoChoice') === 'on',
     });
-    ctx.session.discard();
-    ctx.session.start(settings);
-    ctx.go('/lottery');
+    const go = form.querySelector('button[type="submit"]');
+    go.setAttribute('aria-busy', 'true');
+    try {
+      ctx.session.discard();
+      await ctx.session.start(settings);
+      ctx.go('/lottery');
+    } catch (e) {
+      console.error(e);
+      starting = false;
+      go.removeAttribute('aria-busy');
+      toast(S.errors.generic, 'error');
+    }
   });
 
   root.append(el('div', { class: 'screen screen-narrow' },
