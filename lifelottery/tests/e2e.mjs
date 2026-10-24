@@ -379,7 +379,7 @@ try {
       assert(f && f.segs.length >= 1, `focus timeline missing: ${JSON.stringify(f)}`);
       assert(f.legend.length >= 1 && f.legend.every((l) => /\d+ 年$/.test(l)), `legend: ${f.legend}`);
       assert(/^人生重心時間軸：/.test(f.aria) && f.aria.includes('歲'), `aria: ${f.aria}`);
-      assert(Math.abs(f.widths.reduce((a, b) => a + b, 0) - f.bar) < 2, 'the segments fill the bar');
+      assert(Math.abs(f.widths.reduce((a, b) => a + b, 0) - f.bar) < 3, 'the segments fill the bar (the bar has a 1px border on each side)');
       const rec = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.album')).records[0].summary);
       assert(rec.focusTimeline.length === f.segs.length && rec.focusTimeline.every((g, i) => g.focus === f.segs[i]), `timeline matches the record: ${JSON.stringify(rec.focusTimeline)} vs ${f.segs}`);
       const religion = await page.textContent('[data-role="religion"]');
@@ -596,6 +596,7 @@ try {
       assert((await page.textContent('.kind-focus')).includes('學業'), 'timeline note');
       const st = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelottery.save')).state);
       assert(st.focus === 'study' && st.focusHistory.some((r) => r.age === 6 && r.focus === 'study') && !st.flags._focusPrompt, JSON.stringify(st.focusHistory));
+      if (await page.$(`${CHOICE_CARD} .choice-btn`)) await page.evaluate(() => document.querySelector('.choice-card .choice-btn').click()); // a choice that came with the stage prompt follows it (which seed meets one depends on the childhood events: Phase 6A)
       assert(!(await page.isDisabled('[data-action="next-year"]')), 'time can go on');
     });
 

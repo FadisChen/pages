@@ -28,6 +28,8 @@ import { createLife, advanceYear } from '../../js/engine/life.js';
 import { BY_CODE } from '../../js/data/countries.js';
 import { incomeGroupAt } from '../../js/data/eras.js';
 import * as HELP from '../../js/engine/helpers.js';
+import { RULE as AGENCY_RULE } from './rules-agency.mjs'; // Phase 6A
+import { RULE as HOUSEHOLD_RULE, householdSnap, migrantStressFor, applyMigrantStress } from './rules-household.mjs'; // Phase 6B
 
 // ---------------------------------------------------------------------------------------------
 // Snapshots
@@ -71,6 +73,7 @@ export function snapshot(s) {
     flags: Object.keys(f).filter((k) => !k.startsWith('_') && f[k]).join(','),
     religion: s.religion, festivalKey: HELP.makeHelpers(s).festivalKey(), homeRegion: BY_CODE[s.homeCountryCode].region,
     coast: HELP.makeHelpers(s).coastal(), climate: HELP.makeHelpers(s).climate(), drinks: HELP.makeHelpers(s).drinks(),
+    hh: householdSnap(s), // Phase 6B (rules-household.mjs)
   };
 }
 
@@ -134,6 +137,7 @@ function tag(s, entry) {
  * every event in those states:  { mother?: age, father?: age, partner?: [age, 'widowed' | 'divorced'], kid?: age (the first child dies that year or later) }.
  */
 export function applyStress(s, st) {
+  if (st.migrant) applyMigrantStress(s, st.migrant); // Phase 6B: `--migrant`
   if (st.mother !== undefined && s.age >= st.mother) s.family.mother.alive = false;
   if (st.father !== undefined && s.age >= st.father) s.family.father.alive = false;
   if (st.partner && s.age >= st.partner[0] && s.partner && (s.partner.status === 'married' || s.partner.status === 'dating')) s.partner.status = st.partner[1];
@@ -944,6 +948,9 @@ export const RULES = [
   },
 ];
 
+RULES.push(AGENCY_RULE); // Phase 6A: no adult-only decisions for people under 15 (tests/lib/rules-agency.mjs)
+RULES.push(HOUSEHOLD_RULE); // Phase 6B: no same-place scenes with family who do not live with the person (tests/lib/rules-household.mjs)
+
 // ---------------------------------------------------------------------------------------------
 // Allowlist: strict, per rule + event (+ optional word / state condition), always with a reason.
 // An entry that never matches in a full run is reported as stale (see runAudit().staleAllow).
@@ -956,6 +963,7 @@ export const ALLOW = [
   { rule: 'toddler', event: 'childhood_new_baby', word: '搖籃', reason: 'the cradle is the new baby sibling\'s, not the player\'s' },
   { rule: 'school', event: 'migration_after_graduation', word: '同學', reason: 'follow-up that narrates the graduation of the studies abroad' },
   { rule: 'climate', event: 'world_hurricane_mitch_1998', word: '颶風', reason: 'the title names the storm; its rains flooded all of Central America, inland as well, and the text describes mudslides and rivers' },
+  { rule: 'household', event: /^(world_pandemic_work|world_energy_prices_2022|health_alcohol_problem|health_miscarriage|health_disability_adaptation|health_flu_season|health_clinic_far|seed_child_school_choice|regional_culture_pilgrimage|regional_festival|regional_remittance_day|regional_bed_nets|regional_wildfire_season)$/, rare: true, reason: 'Phase 6B: events of files owned by 6A (health, seed, world, regional) that still put the family in the room of a person who lives alone abroad or whose children / partner live elsewhere; listed for the 6C pass (PLAN.md "Phase 6B notes"), remove this entry when they are fixed' },
   { rule: 'school', event: 'world_china_after_cr', reason: 'news-level description of schools reopening nationwide, not the player\'s own class' },
 ];
 
@@ -1030,7 +1038,7 @@ export function lifeChecks(s, rows) {
 const ERAS = ['past', 'present', 'future'];
 
 /** Deterministic life configurations: eras x draw modes x (every k-th life forced to a country for coverage). */
-export function lifeConfigs(n, { prefix = 'coh', countries = null, offset = 0, stress = false, novelty = false } = {}) {
+export function lifeConfigs(n, { prefix = 'coh', countries = null, offset = 0, stress = false, novelty = false, migrant = false } = {}) {
   const out = [];
   const ids = novelty ? ALL_EVENTS.filter((e) => e.variants).map((e) => e.id).concat(YEARLY.map((y, i) => (y.variants ? `yearly:${i}` : null)).filter(Boolean)) : null;
   for (let i = 0; i < n; i++) {
@@ -1039,6 +1047,7 @@ export function lifeConfigs(n, { prefix = 'coh', countries = null, offset = 0, s
     const opts = {};
     if (countries && j % 4 === 3) opts.countryCode = countries[Math.floor(j / 4) % countries.length];
     if (stress) { const st = stressFor(j); if (st) opts.stress = st; }
+    if (migrant) { const m = migrantStressFor(j); if (m) opts.stress = { ...(opts.stress || {}), migrant: m }; } // Phase 6B
     if (ids && j % 4) opts.novelty = Object.fromEntries(ids.map((id) => [id, j % 4])); // counts 1..3 rotate every phrasing
     out.push({ settings, seed: `${prefix}-${j}`, opts });
   }

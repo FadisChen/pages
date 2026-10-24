@@ -562,7 +562,7 @@ function lifeClauses(f, budget) {
     if (!c[k]) continue;
     if (chosen.length >= 3) break;
     const cost = c[k].length + 1;
-    if (chosen.length >= 1 && used + cost > budget) continue;
+    if (chosen.length >= 1 && used + cost > budget && !(k === 'route' && f.route.flight)) continue; // a flight from war is always told, whatever the budget
     chosen.push(k); used += cost;
   }
   if (chosen.includes('hard') && c.hard2) chosen.push('hard2');

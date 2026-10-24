@@ -10,6 +10,9 @@
 //
 // A small controller keeps the running total on schedule: if the life so far used less (more) time than the
 // straight-line plan (target x age / expected lifespan) the next event years are stretched (squeezed) a little.
+// Event years can only be squeezed down to their readability floor, so a text-heavy life (many long events, few quiet
+// years) cannot be caught up through them alone; when behind, quiet years are squeezed as well (never below QUIET_MIN).
+// Quiet years are never stretched.
 // The controller reads the *planned* time, not the time the player actually spent, so skipping a year or running
 // at 4x never makes later years slower. Pausing and time spent on cards do not count towards the target.
 //
@@ -20,7 +23,7 @@ import { lifespanComparison } from '../engine/summary.js';
 
 export const TARGET_MINUTES = { short: 10, standard: 30, long: 60 };
 
-/** Tunable constants (seconds unless noted). Calibrated on 300 simulated lives, see PLAN "Phase 5A notes". */
+/** Tunable constants (seconds unless noted). Calibrated on 600 simulated lives of the current content (Phase 5D addendum), see PLAN "Phase 5A notes". */
 export const PACING = {
   /** Reading speed used to estimate event text: Traditional Chinese characters per second. */
   CPS: 7,
@@ -38,16 +41,16 @@ export const PACING = {
   QUIET_MAX: 14,
   /** Floors and cap for any year that has new text. The floor is also bounded by a fast reader: ORIENT_FAST + chars / CPS_FAST. */
   EVENT_MIN: 4,
-  CPS_FAST: 11,
+  CPS_FAST: 12,
   ORIENT_FAST: 0.8,
   EVENT_MAX: 100,
   /** Shape of an average life (from the simulation): share of quiet years, and mean reading estimate of the others. */
   QUIET_SHARE: 0.19,
-  MEAN_QUIET_WEIGHT: 0.43,
-  MEAN_READ: 12.4,
-  /** Controller: lag of this many "base years" gives the full correction; the correction is clamped to [G_MIN, G_MAX]. */
+  MEAN_QUIET_WEIGHT: 0.46,
+  MEAN_READ: 13.2,
+  /** Controller: lag of this many "base years" gives the full correction; the correction is clamped to [G_MIN, G_MAX]. G_MIN is low because most of a text-heavy life sits on the floors, so the squeeze must reach whatever is above them. */
   CTRL_YEARS: 8,
-  G_MIN: 0.7,
+  G_MIN: 0.5,
   G_MAX: 1.5,
   /** The first screen of a life (the birth line) never waits longer than this: the player just came from the reveal. */
   INTRO_MAX: 8,
@@ -155,8 +158,9 @@ export function dwellSeconds(load, { pace, expectedYears, gain = 1 }) {
   const base = baseSecondsPerYear(pace, expectedYears);
   if (load.empty) return PACING.QUIET_MIN;
   if (load.quiet) {
+    // Behind schedule (gain < 1): quiet years are squeezed too, down to QUIET_MIN. Ahead of schedule they are left alone.
     const w = PACING.QUIET_LO + (PACING.QUIET_HI - PACING.QUIET_LO) * clamp(load.chars / PACING.QUIET_FULL, 0, 1);
-    return clamp(base * w, PACING.QUIET_MIN, PACING.QUIET_MAX);
+    return clamp(base * w * clamp(gain, 0.85, 1), PACING.QUIET_MIN, PACING.QUIET_MAX);
   }
   const floor = Math.max(PACING.EVENT_MIN, PACING.ORIENT_FAST + load.chars / PACING.CPS_FAST + PACING.PER_ENTRY * Math.max(0, load.entries - 1));
   const want = readSeconds(load) * stretchFor(pace, expectedYears) * gain;

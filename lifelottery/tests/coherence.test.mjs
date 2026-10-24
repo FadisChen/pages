@@ -211,7 +211,7 @@ function renderAll(ev, s) {
   const one = (t) => { try { const v = typeof t === 'function' ? t(s, h) : t; if (typeof v === 'string') out.push(v); } catch (e) { out.push(`<<${e.message}>>`); } };
   one(ev.text);
   for (const v of ev.variants || []) one(v);
-  for (const c of ev.choices || []) { out.push(c.label); one(c.result); }
+  for (const c of ev.choices || []) { if (c.cond) { let ok = true; try { ok = !!c.cond(s, h); } catch (e) { ok = false; } if (!ok) continue; } out.push(c.label); one(c.result); one(c.familyResult); } // Phase 6A: only the choices this person can be offered (a teenager's wording is not read by a 40-year-old)
   return out;
 }
 

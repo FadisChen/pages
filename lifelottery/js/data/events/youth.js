@@ -597,7 +597,7 @@ export default [
     text: (s, h) => '朋友邀你參加一場晚上的聚會，大人卻說十點前一定要回家，一分鐘都不能晚。你在心裡練了三個晚上的說服詞，站在客廳，手心全是汗。',
     choices: [
       {
-        label: '據理力爭，談判延後',
+        label: '把理由一條條說給大人聽，爭取延後',
         effects: (s, h) => {
           if (h.chance(0.6)) { h.change('social', +2); h.change('happiness', +2); h.set('y_curfew_ok'); }
           else { h.change('happiness', -2); h.unset('y_curfew_ok'); }
@@ -713,7 +713,7 @@ export default [
       },
       {
         label: '找工作，自己養活自己',
-        cond: (s, h) => h.age() >= 14,
+        cond: (s, h) => h.age() >= 15, // Phase 6A: not a 13-year-old's decision to make alone
         effects: (s, h) => {
           if (h.inSchool()) h.dropOut();
           if (!h.employed()) h.startJob(h.pick(['laborer', 'cook', 'street_vendor']));
@@ -721,6 +721,15 @@ export default [
         },
         result: '你在工地（或餐館）找到了位置。老闆看你年紀小，多給了你一碗湯。你學得很快，因為你沒有別的選擇。',
         ai: (s, h) => (h.isPoor() ? 1.2 : 0.4),
+      },
+      {
+        // 13-14: not old enough to be sent out to work; they can ask the grown-ups around them
+        label: '去請老師和鄰居幫忙，找一個能繼續上學的落腳處',
+        who: 'child',
+        cond: (s, h) => h.age() < 15 && h.inSchool(),
+        effects: { knowledge: +1, social: +2, wealth: -1, happiness: -1 },
+        result: '你鼓起勇氣去找老師，又請鄰居陪你去拜託遠房的親戚。幾天後有人點了頭，學校的位子也替你保留著。你睡在陌生的床上，心裡卻有一小塊地方安定了下來。',
+        ai: 1.5,
       },
     ],
   },
@@ -817,7 +826,7 @@ export default [
         ai: 1.5,
       },
       {
-        label: '接下這份工作',
+        label: '點頭答應，跟著他們去做事',
         effects: (s, h) => { h.change('wealth', +5); h.change('social', -3); h.change('health', -2); h.addRisk(1.3, 5); },
         set: ['y_gang_member'],
         result: '第一個月你領到的錢，比大人一整年存的還多。你開始買新鞋、請朋友吃飯，卻也學會了在街上永遠背對著牆壁走。',
@@ -1328,7 +1337,7 @@ export default [
       {
         label: '跟大人談條件，一起改規則',
         effects: { happiness: +1, social: +1, knowledge: +1 },
-        result: (s, h) => `你們坐下來談了半個小時。最後的規則是：吃飯時不看、${h.inSchool() ? '考試週交出' : '忙的時候交出'}、週末彈性。你第一次覺得自己被當成能談判的大人。`,
+        result: (s, h) => `你們坐下來談了半個小時。最後的規則是：吃飯時不看、${h.inSchool() ? '考試週交出' : '忙的時候交出'}、週末彈性。你第一次覺得自己被當成能一起訂規則的大人。`,
         ai: 1.5,
       },
     ],

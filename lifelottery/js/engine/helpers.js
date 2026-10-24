@@ -22,6 +22,7 @@ import {
   startJob, loseJob, retire, setPartner, newPartner, endRelationship, marry, divorce, addChild, addCondition, removeCondition,
   migrate, leaveSchool, enroll, inTertiary, setUrban, setCity, stableFlip, drinksAlcohol,
   parentsPresent, standInKin, weddingAbsence, weddingFolk, partnerParentsGone,
+  ensureHousehold, livesWithWho, kidsWith, reunite, moveWithin, setCohabiting, setParentsHome, setKidsWhere, moveInWithChild, kidLeaves, caregiverWord, sendFamilyAway, APART_WHERE,
 } from './systems.js';
 
 /**
@@ -410,6 +411,97 @@ export class Helpers {
     return stableFlip(this.s, key, p);
   }
 
+  // ---- household (Phase 6B): who lives with whom ----
+  /** Raw household record (see systems.js): { parents, partner, kids: [where], far, alone, sep ... }. Created on first use. */
+  household() { return ensureHousehold(this.s); }
+  /**
+   * Does the person live under one roof with these people? `who`: 'parents' (a living parent), 'partner' (the partner they are
+   * together with: a married couple can live apart), 'children' (at least one living child lives with them, grown-up ones included).
+   */
+  livesWith(who) { return livesWithWho(this.s, who); }
+  /**
+   * The opposite for narration: the person HAS such family (a living parent, a partner, a living child) but does not live with them.
+   * A married partner who works in another country, children left with the grandparents or grown-up children with homes of their own count as apart.
+   */
+  apartFrom(who) {
+    const s = this.s;
+    if (who === 'parents') return this.parentsAlive() > 0 && !livesWithWho(s, 'parents');
+    if (who === 'partner') return this.hasPartner() && !livesWithWho(s, 'partner');
+    if (who === 'children' || who === 'kids') return aliveKids(s) > 0 && !livesWithWho(s, 'children');
+    return false;
+  }
+  /** Abroad, and nobody of the family (parents, partner, children) lives with the person. */
+  aloneAbroad() { return ensureHousehold(this.s).aloneAbroad; }
+  /** Nobody of the family (parents, partner, children) lives with the person, abroad or not. */
+  livesAlone() { return !livesWithWho(this.s, 'parents') && !livesWithWho(this.s, 'partner') && !livesWithWho(this.s, 'children'); }
+  /** Living children who live with the person (grown-up ones included), as child records { name, gender, birthYear }. */
+  childrenWithYou() { return kidsWith(this.s, 'with_you'); }
+  /** Living children under 18 who live with the person. */
+  minorsWithYou() { return kidsWith(this.s, 'with_you').filter((c) => this.s.year - c.birthYear < 18); }
+  /** Living children under 18 who live elsewhere: with the partner, the grandparents or relatives (the ones a labour migrant leaves at home). */
+  childrenApart() {
+    const hh = ensureHousehold(this.s);
+    return this.s.children.filter((c, i) => c.alive && this.s.year - c.birthYear < 18 && APART_WHERE.includes(hh.kids[i]));
+  }
+  /** Where the i-th child lives: 'with_you' | 'with_partner' | 'with_grandparents' | 'home_country' | 'independent'. */
+  childLives(i = 0) { return ensureHousehold(this.s).kids[i]; }
+  /**
+   * Living children who are within reach of a visit: the ones who live with the person, and the grown-up ones who live in the same country
+   * (a child who stayed behind when the person moved abroad is far away until the person returns).
+   */
+  childrenNearby() {
+    const hh = ensureHousehold(this.s);
+    return this.s.children.filter((c, i) => c.alive && (hh.kids[i] === 'with_you' || (hh.kids[i] === 'independent' && !hh.far[i])));
+  }
+  /** Who looks after the children who are not with the person: '伴侶', '孩子的另一位家長' (after a divorce), '孩子的祖父母', '家鄉的親戚'; '你' when they all live with the person; '' without minors. */
+  caregiverOfChildren() { return caregiverWord(this.s); }
+  /** A living parent is within reach of a visit: the person does not live abroad, or the parents live with them. */
+  parentsNear() { return this.parentsAlive() > 0 && (!this.isMigrant() || livesWithWho(this.s, 'parents')); }
+  /** A living parent is far away: the person lives abroad and the parents do not live with them. */
+  parentsFar() { return this.parentsAlive() > 0 && this.isMigrant() && !livesWithWho(this.s, 'parents'); }
+  /** The married partner is somewhere else (working abroad, or left behind by the person): the couple live apart. */
+  coupleApart() { return this.married() && !livesWithWho(this.s, 'partner'); }
+  /** Name of the child who last left the parents' home (the system tells it in family_child_leaves / aging_empty_nest), or the first child. */
+  lastLeftChildName() {
+    const hh = ensureHousehold(this.s);
+    const c = hh.lastLeft !== undefined ? this.s.children[hh.lastLeft] : null;
+    return c ? c.name : this.childName(0);
+  }
+  /** The last reunion or return as plain data { year, apartYears, partner, kids: [names], how: 'join' | 'return' }, or null. */
+  lastReunion() { return ensureHousehold(this.s).lastReunion || null; }
+  /** What the person left behind when they last moved: { year, partner: bool, kids: [names], mode } or null while the whole family is together. */
+  leftBehind() { const hh = ensureHousehold(this.s); return hh.sep ? { ...hh.sep, kids: [...hh.sep.kids] } : null; }
+  /**
+   * One sentence about the family the person left behind when they moved ('' if nobody): "你把兩個孩子留給了伴侶照顧。" Use after migrate()
+   * in an event's `result`.
+   */
+  leftBehindLine() {
+    const hh = ensureHousehold(this.s);
+    const d = hh.lastDepart;
+    if (!d || d.year !== this.s.year || (!d.kids.length && !d.partner)) return '';
+    const who = caregiverWord(this.s);
+    const kids = d.kids.length > 1 ? `${'零一兩三四五六七八九'[d.kids.length] ?? d.kids.length}個孩子` : d.kids.length === 1 ? '孩子' : '';
+    if (kids && d.partner) return `你把${kids}和${this.partnerName()}留在了家鄉。`;
+    if (kids) return `你把${kids}留給了${who === '伴侶' ? this.partnerName() : who}照顧。`;
+    return `${this.partnerName()}沒有一起來，留在家鄉等你。`;
+  }
+  /** Move the family along / away. In effects: h.reunite() brings the partner and the children who were left behind; { partner: false } or { kids: false } limit it. Returns { partner, kids: [names] }. */
+  reunite(opts) { return reunite(this.s, opts); }
+  /** Move to another town or city of the same country: { with: 'alone' | 'partner' | 'family' } or by the circumstances. The person stops living with the parents. */
+  moveAway(opts) { moveWithin(this.s, opts); }
+  /** A couple move in together (true) or apart (false) by choice. Marriage moves the couple in together by itself. */
+  cohabit(together = true) { setCohabiting(this.s, together); }
+  /** The person stays while the partner and the minors are sent away to safety (flight). Returns { partner, kids: [names] }. */
+  sendFamilyAway() { return sendFamilyAway(this.s); }
+  /** A parent moves in with the person (true), or stops living with them (false). */
+  moveParentsIn(together = true) { setParentsHome(this.s, together); }
+  /** The person (an elder) moves in with a grown-up child who lives in the same country. Returns the child record or null. */
+  moveInWithChild() { return moveInWithChild(this.s); }
+  /** Set where the living minors who are not independent live (after a custody decision): h.setChildrenLive('with_you', ['with_you', 'with_partner']). Returns how many moved. */
+  setChildrenLive(where, only) { return setKidsWhere(this.s, where, only); }
+  /** The i-th child leaves the parents' home. */
+  childLeaves(i = 0) { return kidLeaves(this.s, i); }
+
   // ---- state changes ----
   set(flag, v = true) { this.s.flags[flag] = v; }
   unset(flag) { delete this.s.flags[flag]; }
@@ -470,11 +562,16 @@ export class Helpers {
   divorce() { return divorce(this.s); }
   /** Add a child: { gender? }. Returns the child record (name is generated). */
   addChild(opts) { return addChild(this.s, opts); }
-  /** Move to another country (ISO3 code). Adjusts mortality risk by the life-expectancy gap. */
-  migrate(code) {
+  /**
+   * Move to another country (ISO3 code). Adjusts mortality risk by the life-expectancy gap. `opts.with` says who comes along
+   * (Phase 6B): 'alone' | 'partner' | 'family' | 'refugee' | 'keep'; without it the engine decides from the circumstances
+   * (refugees take whoever lives with them, students and most labour migrants go alone). Moving to the home country is a return:
+   * the partner and the children who were left behind live with the person again.
+   */
+  migrate(code, opts) {
     const s = this.s;
     const from = ctxOf(s).country;
-    if (!migrate(s, code)) return false;
+    if (!migrate(s, code, opts)) return false;
     const view = (c) => eraView(c, s.year);
     const f = view(from), t = view(BY_CODE[code]);
     const ratio = (f.le[s.gender]) / (t.le[s.gender]);

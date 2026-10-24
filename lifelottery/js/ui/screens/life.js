@@ -550,7 +550,13 @@ export default function mount(ctx, root) {
     const p = yearMs > 0 ? Math.min(1, elapsed / yearMs) : 1;
     yearBar.firstElementChild.style.setProperty('--p', String(p));
     timeline.style.setProperty('--yp', p.toFixed(3));
-    if (elapsed >= yearMs) step();
+    if (elapsed >= yearMs) {
+      // Keep the sliver the tick overshot by, so the clock does not add about half a tick to every year: a 90-year life
+      // would run long, and a quiet year of 2 s at ?debug=scale=25 by 10-15%. A skip or a card resets it as before.
+      const over = Math.min(elapsed - yearMs, 50);
+      step();
+      if (!choiceActive && !focusActive && !dying && over > 0) elapsed = Math.min(over, yearMs * 0.25);
+    }
   }
   const clock = setInterval(frame, quick ? 8 : DEBUG.scale > 1 ? 16 : 50);
 

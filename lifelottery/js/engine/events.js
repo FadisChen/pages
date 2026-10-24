@@ -10,9 +10,12 @@
 
 import ALL_EVENTS from '../data/events/index.js';
 import YEARLY from '../data/yearly.js';
-import { STAT_KEYS, applyDelta, pushLog, addHighlight } from './systems.js';
-import { rand, randInt, weightedIndex, chance, hash01 } from './rng.js';
+import { STAT_KEYS, applyDelta, pushLog, addHighlight, standInKin, parentsPresent } from './systems.js';
+import { rand, randInt, weightedIndex, chance, hash01, clamp } from './rng.js';
 import { focusEventMult } from './focus.js';
+import { Helpers } from './helpers.js';
+import { BY_CODE } from '../data/countries.js';
+import { incomeGroupAt } from '../data/eras.js';
 
 export const EFFECT_KEYS = STAT_KEYS;
 
@@ -25,6 +28,95 @@ export const TUNING = {
   yearlyRepeatGap: Infinity, // a "平凡的一年" line is never reused in a life while an unused one exists
   nullWeight: 2.5,          // weight of "nothing happens" in each regular draw: keeps a thin pool from firing constantly
 };
+
+// ---------------------------------------------------------------------------------------------
+// Decision agency (Phase 6A): who makes the decision?
+//
+//   agencyOf(age)  'infant' 0-5 | 'child' 6-11 | 'teen' 12-17 | 'adult' 18+          (also h.agency())
+//   event.decider = 'family'   an infant or a child never gets a choice card: the family decides (see decideForFamily), and the
+//                              event is logged as one ordinary entry (the text, then what the family did, told by the child).
+//                              Teens and adults choose as before; the choices a teenager sees are written for a teenager
+//                              (`cond: (s, h) => h.agency() === 'teen'`, marked `who: 'child'`).
+//   choice.who = 'child'       a choice written from a young person's point of view (ask, tell, hide, help ...); the `agency`
+//                              audit (tests/lib/rules-agency.mjs) lets it through even when it mentions an adult act.
+//   choice.familyResult        the result line when the family decided (string or (s, h) => string), written from the child's side;
+//                              `false` for a choice that is never offered to a family deciding for a child (its `cond` keeps it for older people).
+//   choice.cost 0..3           how much money / effort the option takes: poor families lean to the cheap ones, comfortable ones afford the dear ones.
+//   choice.reach 0..2          how far the option depends on services (a clinic, transport): harder for remote, low-income families.
+// An event without `decider` behaves exactly as before at every age.
+// ---------------------------------------------------------------------------------------------
+
+export const AGENCY_TIERS = Object.freeze(['infant', 'child', 'teen', 'adult']);
+
+/** Decision tier of an age: infant (0-5), child (6-11), teen (12-17), adult (18 and over). */
+export function agencyOf(age) {
+  return age < 6 ? 'infant' : age < 12 ? 'child' : age < 18 ? 'teen' : 'adult';
+}
+
+/**
+ * How well the family can cope, as a number around 0..6 (3 = an ordinary household): the wealth quintile, moved by the income
+ * group of the country in that year, the countryside, and by how many parents are there to earn and to carry a child to the clinic.
+ */
+export function familyMeans(s) {
+  const country = BY_CODE[s.countryCode];
+  const group = country ? incomeGroupAt(country, s.year) : 'UM';
+  const p = parentsPresent(s);
+  return s.family.wealthQ + ({ L: -1, LM: -0.4, UM: 0.2, H: 0.6 }[group] ?? 0) + (s.urban ? 0 : -0.5) + (p === 'both' ? 0 : p === 'none' ? -1.4 : -0.7);
+}
+
+/** 'thin' | 'ok' | 'good': the family's means in words (h.means()). */
+export function meansTier(s) {
+  const m = familyMeans(s);
+  return m < 2.2 ? 'thin' : m < 3.8 ? 'ok' : 'good';
+}
+
+/** How far services are from this family: 0 (a city, a rich country) .. ~1.3 (a poor, remote village). */
+function remoteness(s) {
+  const country = BY_CODE[s.countryCode];
+  const group = country ? incomeGroupAt(country, s.year) : 'UM';
+  return (s.urban ? 0 : 0.7) + ({ L: 0.6, LM: 0.3 }[group] ?? 0);
+}
+
+/** Weight multiplier of a choice for a family deciding in its own circumstances (1 when the choice declares no cost or reach). */
+export function familyFactor(s, c) {
+  let f = 1;
+  if (typeof c.cost === 'number') {
+    const a = clamp((familyMeans(s) - 3) / 1.6, -1.3, 1.3); // -1.3 (destitute) .. +1.3 (comfortable)
+    f *= Math.exp(0.75 * a * (c.cost - 1.5));
+  }
+  if (typeof c.reach === 'number') f *= Math.exp(-0.8 * remoteness(s) * c.reach);
+  return f;
+}
+
+/** Who in the family decides, as the word a child would use ('爸爸', '媽媽', '爸媽', '奶奶', an uncle or aunt when both parents are gone, else '身邊的大人'). Stable for (life, age, salt); draws no random numbers. */
+export function whoDecides(s, salt = '') {
+  const p = parentsPresent(s);
+  const u = hash01(`${s.seed}|decides|${s.age}|${salt}`);
+  if (p === 'both') return u < 0.34 ? '爸爸' : u < 0.68 ? '媽媽' : u < 0.9 ? '爸媽' : '奶奶';
+  if (p === 'mother') return u < 0.82 ? '媽媽' : '奶奶';
+  if (p === 'father') return u < 0.82 ? '爸爸' : '奶奶';
+  return standInKin(s) || '身邊的大人';
+}
+
+// h.agency() and friends live here (the helper class belongs to systems/helpers, the tiers to the event engine); they are part of
+// every `h` handed to an event, in the engine and in the tests alike.
+const AGENCY_HELPERS = {
+  /** 'infant' | 'child' | 'teen' | 'adult' (see agencyOf). */
+  agency() { return agencyOf(this.s.age); },
+  /** Under 12: an infant or a child, whose family decides the big things. */
+  isKid() { return this.s.age < 12; },
+  /** 12-17. */
+  isTeen() { return this.s.age >= 12 && this.s.age < 18; },
+  /** Who in the family is deciding right now ('爸爸', '媽媽', '爸媽', '奶奶', an uncle / aunt when the parents are gone, or '身邊的大人'). `salt` tells two decisions of the same year apart. */
+  whoDecides(salt = '') { return whoDecides(this.s, salt); },
+  /** The family's means in words: 'thin' | 'ok' | 'good' (wealth quintile, country income, countryside, parents present). */
+  means() { return meansTier(this.s); },
+  /** How a grown-up carries the child, for a child's narration: '抱著你' (up to 3), '背著你' (4-7), '牽著你' (8 and over). */
+  carryYou() { const a = this.s.age; return a <= 3 ? '抱著你' : a <= 7 ? '背著你' : '牽著你'; },
+};
+for (const [name, fn] of Object.entries(AGENCY_HELPERS)) {
+  if (!Object.prototype.hasOwnProperty.call(Helpers.prototype, name)) Object.defineProperty(Helpers.prototype, name, { value: fn, writable: true, configurable: true, enumerable: false });
+}
 
 // ---------------------------------------------------------------------------------------------
 // Cross-life novelty (Phase 5C)
@@ -191,11 +283,18 @@ export function validateEvents(list, byId = null) {
     checkFlags(w, ev.set, 'set');
     checkFlags(w, ev.unset, 'unset');
     if (ev.major && !(ev.choices && ev.choices.length)) errors.push(`${w}: major events need choices`);
+    if (ev.decider !== undefined && (ev.decider !== 'family' || !(ev.choices && ev.choices.length))) errors.push(`${w}: decider must be 'family' and the event must have choices`);
     if (ev.choices !== undefined) {
-      if (!Array.isArray(ev.choices) || ev.choices.length < 2 || ev.choices.length > 3) errors.push(`${w}: choices must have 2-3 items`);
+      // 2-3 choices are shown at once; an event that offers different wordings to different ages (Phase 6A) lists up to 6 and hides the others with `cond`
+      if (!Array.isArray(ev.choices) || ev.choices.length < 2 || ev.choices.length > 6) errors.push(`${w}: choices must have 2-6 items (2-3 visible at a time)`);
       else ev.choices.forEach((c, i) => {
         const cw = `${w} choice ${i}`;
         if (typeof c.label !== 'string' || !c.label) errors.push(`${cw}: missing label`);
+        if (c.who !== undefined && c.who !== 'child') errors.push(`${cw}: who must be 'child'`);
+        if (c.familyResult !== undefined && c.familyResult !== false && typeof c.familyResult !== 'string' && typeof c.familyResult !== 'function') errors.push(`${cw}: familyResult must be string, function, or false (never offered to a family deciding for a child)`);
+        if (c.cost !== undefined && !(typeof c.cost === 'number' && c.cost >= 0 && c.cost <= 3)) errors.push(`${cw}: cost must be a number in 0..3`);
+        if (c.reach !== undefined && !(typeof c.reach === 'number' && c.reach >= 0 && c.reach <= 2)) errors.push(`${cw}: reach must be a number in 0..2`);
+        if (ev.decider === 'family' && c.who === undefined && c.familyResult === undefined) errors.push(`${cw}: a family-decided event needs familyResult on every choice that is not who:'child'`);
         if (c.cond !== undefined && typeof c.cond !== 'function') errors.push(`${cw}: cond must be a function`);
         checkEffects(cw, c.effects);
         checkSchedule(cw, c.schedule);
@@ -414,10 +513,50 @@ function fireRegular(s, h, ev) {
   return entry;
 }
 
+/** The `ai` weight of a choice (number or function of the state); 1 when it has none or the function throws. */
+function aiWeight(s, h, c) {
+  const ai = c.ai;
+  if (ai === undefined) return 1;
+  if (typeof ai === 'function') { try { return Math.max(0, +ai(s, h) || 0); } catch (e) { return 1; } }
+  return ai;
+}
+
+/**
+ * Phase 6A: a family-decided event (`decider: 'family'`) met by an infant or a child. Nobody asks the child. The family picks one
+ * of the options, weighted by each option's `ai` and by the family's circumstances (wealth quintile, income group, countryside, which
+ * parents are alive: see familyFactor), and the event is written down as one ordinary entry: the event's text, then the
+ * option's `familyResult` (what the family did, told from the child's side). It is not a choice and is not counted as one.
+ */
+function decideForFamily(s, h, ev, options, text) {
+  const ws = options.map((o) => aiWeight(s, h, ev.choices[o.index]) * familyFactor(s, ev.choices[o.index]));
+  let k = weightedIndex(s.rng, ws);
+  if (k < 0) k = Math.floor(rand(s.rng) * options.length);
+  const ch = ev.choices[options[k].index];
+  const from = s.log.length;
+  const d1 = applyEffects(s, h, ev.effects);
+  applyFlags(s, ev);
+  const d2 = applyEffects(s, h, ch.effects);
+  applyFlags(s, ch);
+  scheduleFollowUps(s, ch.schedule);
+  scheduleFollowUps(s, ev.schedule);
+  const result = str(ch.familyResult ? ch.familyResult : ch.result, s, h) || '';
+  const told = `${text}${result}`;
+  addHighlightFrom(s, h, ch, told);
+  if (!ch.highlight) addHighlightFrom(s, h, ev, told);
+  const delta = {};
+  for (const k2 of STAT_KEYS) { const v = Math.round(((d1[k2] || 0) + (d2[k2] || 0)) * 10) / 10; if (v) delta[k2] = v; }
+  const entry = pushLog(s, 'event', ev.title, told, delta);
+  entry.by = 'family'; // marks the entry as a decision the family took (the UI shows it like any other event; tests and the debug panel read the mark)
+  entryFirst(s, from, entry);
+  deathLast(s, from);
+  return entry;
+}
+
 /**
  * Present a major event: log its setup text and store the choice for the UI. Event-level `effects`, `set`
  * and `unset` apply now (the situation itself has consequences); event-level `schedule` is queued when
  * the choice is resolved, together with the chosen option's own follow-ups.
+ * A family-decided event met by an infant or a child is decided and logged right here instead (decideForFamily).
  */
 function presentChoice(s, h, ev) {
   const options = [];
@@ -431,6 +570,7 @@ function presentChoice(s, h, ev) {
   const text = again ? freshText(s, h, ev) : recordFirst(s, ev, renderText(s, h, ev, ev.id));
   markSeen(s, ev);
   if (text === null) return null;
+  if (ev.decider === 'family' && s.age < 12) return decideForFamily(s, h, ev, options, text);
   const from = s.log.length;
   const delta = applyEffects(s, h, ev.effects);
   applyFlags(s, ev);
@@ -477,12 +617,7 @@ export function autoPickIndex(s, h) {
   const pc = s.flags._choice;
   if (!pc) return -1;
   const ev = BY_ID.get(pc.eventId);
-  const ws = pc.options.map((o) => {
-    const ai = ev.choices[o.index].ai;
-    if (ai === undefined) return 1;
-    if (typeof ai === 'function') { try { return Math.max(0, +ai(s, h) || 0); } catch (e) { return 1; } }
-    return ai;
-  });
+  const ws = pc.options.map((o) => aiWeight(s, h, ev.choices[o.index]));
   const i = weightedIndex(s.rng, ws);
   return i < 0 ? Math.floor(rand(s.rng) * pc.options.length) : i;
 }

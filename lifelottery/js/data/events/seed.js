@@ -18,6 +18,12 @@
 // All functions must be total: they are called on random states by tests/events.test.mjs, so use
 // helpers like h.partnerName() (safe) rather than s.partner.name (may be null).
 
+// Phase 6A (decision agency): `decider: 'family'` events are decided by the family while the person is under 12 (the choices listed for
+// `notTeen` are the family's options, each with a `familyResult` told from the child's side); 12-17 get their own `teenOnly` choices,
+// written for a young person (`who: 'child'`); adults see the original choices.
+const notTeen = (s, h) => h.agency() !== 'teen';
+const teenOnly = (s, h) => h.agency() === 'teen';
+
 const CONSCRIPT = new Set(['KOR', 'TWN', 'ISR', 'SGP', 'RUS', 'TUR', 'EGY', 'IRN', 'GRC', 'FIN', 'CHE', 'AUT', 'NOR', 'SWE', 'THA', 'PRK', 'UKR', 'BLR', 'VNM']);
 
 export default [
@@ -318,7 +324,7 @@ export default [
   {
     id: 'seed_scholarship_or_work',
     title: '念下去，還是去工作',
-    ages: [17, 19],
+    ages: [18, 19], // Phase 6A: signing a student loan is for a legal adult (was 17-19)
     tags: ['education', 'money'],
     major: true,
     cond: (s, h) => h.inSchool() && h.eduYears() >= 11 && h.wealthQ() <= 3,
@@ -982,22 +988,44 @@ export default [
     chance: 0.012,
     once: false,
     cooldown: 15,
+    decider: 'family', // a child is carried to the high ground; it is the grown-ups who decide to run or to stay
     cond: (s, h) => h.isRegion('SAS', 'SEA', 'EAS', 'LAC', 'OCE') && (h.income() !== 'H' || h.chance(0.3)),
     text: (s, h) => '連續幾天的暴雨讓河水漫過了堤防。夜裡，水聲越來越近，鄰居在窗外大聲喊著要大家快跑。',
     choices: [
       {
         label: '立刻帶著家人撤離',
+        cond: notTeen,
         effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
         result: '你抱起最重要的幾樣東西往高處跑。天亮時回頭看，屋子已泡在水裡。你什麼都沒了，但每個人都還在。',
+        familyResult: (s, h) => `${h.whoDecides('flood')}一把${h.carryYou().slice(0, 1)}起你，另一隻手抓起最重要的幾樣東西，往高處跑。天亮時你回頭看，屋子已泡在水裡。家裡什麼都沒了，但每個人都還在。`,
         ai: 4,
       },
       {
         label: '留下來守住家當',
+        cond: notTeen,
         effects: (s, h) => {
-          if (h.chance(0.08)) { h.die('disaster'); return; }
+          if (!h.isKid() && h.chance(0.08)) { h.die('disaster'); return; }
+          if (h.isKid()) { h.change('health', -2); h.change('happiness', -4); h.change('wealth', -2); return; } // a child is sent up to the neighbours' roof; only the grown-ups face the water
           h.change('health', -6); h.change('happiness', -4); h.change('wealth', -2);
         },
         result: (s, h) => (s.alive ? '你守了一整夜，水位在窗台下停住了。累到沒有力氣說話，但屋子保住了。' : ''),
+        familyResult: (s, h) => `${h.whoDecides('flood')}先把你送到鄰居家的高處，自己回去守著家當。你在別人的屋簷下睜著眼睛等到天亮。水位在窗台下停住了，大人回來時累到說不出話，但屋子保住了。`,
+        ai: 0.6,
+      },
+      {
+        label: '催家人快走，拉著弟妹一起往高處跑',
+        who: 'child',
+        cond: teenOnly,
+        effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
+        result: '你一邊大喊，一邊拉著弟妹跟上大人往高處跑。天亮時回頭看，屋子已泡在水裡。你們什麼都沒了，但每個人都還在。',
+        ai: 4,
+      },
+      {
+        label: '跟著大人留在二樓，幫忙把家當搬到高處',
+        who: 'child',
+        cond: teenOnly,
+        effects: (s, h) => { h.change('health', -4); h.change('happiness', -4); h.change('wealth', -2); },
+        result: '你和大人一趟又一趟，把能搬的家當搬上二樓。水位在窗台下停住了。累到沒有力氣說話，但屋子保住了。',
         ai: 0.6,
       },
     ],

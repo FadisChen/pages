@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever the list of files changes.
 
 const CACHE_PREFIX = 'lifelottery-';
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const CACHE = CACHE_PREFIX + CACHE_VERSION;
 
 const PRECACHE = [
