@@ -16,6 +16,7 @@ import { createLife, advanceYear, serialize, deserialize } from '../js/engine/li
 import { makeHelpers } from '../js/engine/helpers.js';
 import { install, playAudited, runAudit, lifeConfigs, groupFlags } from './lib/coherence.mjs';
 import * as store from '../js/storage.js';
+import { scaled } from './lib/scale.mjs';
 
 const BY_ID = new Map(ALL_EVENTS.map((e) => [e.id, e]));
 const VARIANT_EVENTS = ALL_EVENTS.filter((e) => e.variants);
@@ -227,7 +228,7 @@ let POOL = null;
 function pool() {
   if (POOL) return POOL;
   POOL = [];
-  for (let i = 0; POOL.length < 1500; i++) {
+  for (let i = 0; POOL.length < scaled(1500, 400, 200); i++) {
     const s = createLife({ era: ['past', 'present', 'future'][i % 3], drawMode: 'births' }, `nov-pool-${i}`);
     let g = 0;
     while (s.alive && g++ < 130) { advanceYear(s, { auto: true }); if (s.alive && s.age % 9 === 4) POOL.push(JSON.parse(JSON.stringify(s))); }
@@ -269,13 +270,13 @@ test('variants: well-formed (60-160 characters, no placeholders), no random numb
     if (problems.length > 12) break;
   }
   assert.deepEqual([...new Set(problems)].slice(0, 12), []);
-  assert.ok(rendered > 3000, `only ${rendered} variant renderings were checked`);
+  assert.ok(rendered > scaled(3000, 800, 400), `only ${rendered} variant renderings were checked`);
 });
 
 test('variants pass the coherence audit: every phrasing, rotated through all positions, shows no text/state contradiction', () => {
   const ids = ALL_EVENTS.filter((e) => e.variants).map((e) => e.id);
   const configs = [];
-  const base = lifeConfigs(1200, { prefix: 'novcoh' });
+  const base = lifeConfigs(scaled(1200, 300, 120), { prefix: 'novcoh' });
   base.forEach((c, i) => {
     const shift = i % 4; // count 0..3 rotates the phrasing used by every event with variants
     configs.push({ ...c, opts: { ...c.opts, novelty: shift ? Object.fromEntries(ids.map((id) => [id, shift])) : undefined } });

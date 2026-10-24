@@ -506,6 +506,7 @@ export default [
     choices: [
       {
         label: '當面攤開來談',
+        set: ['f_talked'],
         effects: (s, h) => { if (h.chance(0.5)) { h.set('f_repair'); h.change('happiness', +2); } else { h.unset('f_repair'); h.change('happiness', -5); } h.change('social', -1); },
         result: (s, h) => (h.has('f_repair')
           ? '談話進行到半夜。對方沒有躲，承認了很多事。你們都哭了，但也都說了一直不敢說的實話。這不是結束，也許是另一種開始。'
@@ -516,6 +517,7 @@ export default [
       },
       {
         label: '先暫時分開住，冷靜一陣子',
+        set: ['f_apart_trial'],
         effects: (s, h) => { h.cohabit(false); h.change('happiness', -3); h.change('social', -2); h.change('wealth', -2); },
         result: '你收了簡單的行李，去朋友家住了一段時間。第一個週末安靜得可怕，第二個週末你終於能好好睡覺。',
         schedule: [{ id: 'family_crossroads', inYears: [1, 2] }],
@@ -524,6 +526,7 @@ export default [
       {
         label: '找信任的長輩或諮商師幫忙',
         cond: (s, h) => h.incomeAtLeast('LM'),
+        set: ['f_counseled'],
         effects: { happiness: +1, wealth: -2, knowledge: +2 },
         result: '你們各自去了幾次諮商，也一起去了幾次。那間小小的諮商室裡，沙發永遠放著一盒面紙，這不是巧合。',
         schedule: [{ id: 'family_crossroads', inYears: [1, 2] }],
@@ -538,7 +541,12 @@ export default [
     ages: [27, 62],
     weight: 0,
     tags: ['family', 'marriage', 'followup'],
-    text: (s, h) => `一年過去了，你和${h.partnerName()}之間的距離，沒有變得更近，也沒有真正拉遠。你們都知道，現在是該給彼此一個答案的時候了。窗外的雨，下了一整天。`,
+    // how the year was spent (family_trust_broken): apart, with a counsellor, or after one long talk
+    text: (s, h) => `一年過去了，${h.has('f_apart_trial') && !h.livesWith('partner')
+      ? `你和${h.partnerName()}各住各的，彼此的鑰匙都還留在對方那裡，距離沒有變得更近，也沒有真正拉遠。`
+      : h.has('f_counseled')
+        ? `你和${h.partnerName()}還保留著去諮商的習慣，沙發上那盒面紙換過好幾次，距離沒有變得更近，也沒有真正拉遠。`
+        : `你和${h.partnerName()}之間的距離，沒有變得更近，也沒有真正拉遠。`}你們都知道，現在是該給彼此一個答案的時候了。窗外的雨，下了一整天。`,
     choices: [
       {
         label: '重新開始，一起努力',
@@ -1034,9 +1042,9 @@ export default [
         ai: 1.8,
       },
       {
-        label: '溫和地拒絕，陪孩子一起想辦法',
+        label: '溫和地拒絕，幫孩子一起想辦法',
         effects: { wealth: +1, happiness: -2, social: -1 },
-        result: '你說自己也要為老後打算，但可以陪孩子重新規劃預算。孩子有點失望，卻也一起做了表格，兩人邊吵邊笑。',
+        result: '你說自己也要為老後打算，但可以幫孩子重新規劃預算。孩子有點失望，卻也在電話那頭一起做了表格，兩人邊吵邊笑。',
         ai: 1,
       },
     ],

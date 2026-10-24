@@ -37,7 +37,7 @@ test('newPartner: dating/married partner with a culture-appropriate name and an 
   let n = 0;
   for (let i = 0; i < 40; i++) {
     const s = lifeAt(`np-jpn-${i}`, 24, { countryCode: 'JPN' });
-    if (!s.alive) continue;
+    if (!s.alive || s.countryCode !== 'JPN') continue; // (somebody who has moved abroad may pair across cultures)
     if (s.partner && (s.partner.status === 'dating' || s.partner.status === 'married')) s.partner = null;
     const h = H(s);
     const p = h.newPartner({ status: 'dating' });

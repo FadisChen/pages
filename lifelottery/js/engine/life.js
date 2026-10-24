@@ -16,10 +16,11 @@ import { BY_CODE } from '../data/countries.js';
 import { createRngState } from './rng.js';
 import { drawBirth, normalizeBirth } from './birth.js';
 import { dies, drawCause } from './mortality.js';
-import { initSystems, runSystems, ctxOf, pushLog, STAT_KEYS, JOBS } from './systems.js';
+import { initSystems, runSystems, ctxOf, pushLog, STAT_KEYS, JOBS, ensureHousehold } from './systems.js';
 import { runEvents, resolveChoice, autoPickIndex, getPendingChoice, sanitizeNovelty } from './events.js';
 import { makeHelpers, recordDeath, hash01 } from './helpers.js';
 import { drawReligion, RELIGION_LABELS } from '../data/religion.js';
+import { sanitizeMemories, listMemories } from './memory.js';
 import { FOCI, FOCUS_BY_ID, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus, ensureFocus, lapseFocus } from './focus.js';
 
 export { normalizeBirth };
@@ -239,6 +240,7 @@ export function deserialize(text) {
   for (const k of ['children', 'conditions', 'pending', 'log', 'statHistory', 'highlights']) if (!Array.isArray(s[k])) throw new Error(`Invalid save: ${k}`);
   // Saves from before Phase 4A: no life focus (balance) and no family religion (drawn now from the seed, like a new life)
   ensureFocus(s);
+  if ('memories' in s) { const m = sanitizeMemories(s.memories); if (m.length) s.memories = m; else delete s.memories; } // Phase 6C; saves from before have none
   if ('novelty' in s) { const nv = sanitizeNovelty(s.novelty); if (nv) s.novelty = nv; else delete s.novelty; } // Phase 5C; saves from before have none
   if (!RELIGION_LABELS[s.religion]) s.religion = religionOf(s.seed, s.homeCountryCode, s.flags._pool, s.settings && s.settings.era, s.birthYear, s.name && s.name.full);
   return s;
@@ -248,10 +250,36 @@ export function deserialize(text) {
 // Read-only views for the UI
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Where each member of the family lives, for the people drawer (Phase 6C), as keys the UI words (strings.js `people.where`):
+ *   parents:  'with_you' | 'apart' (the same country, another roof) | 'home_country' (the person lives abroad) | '' (nobody alive)
+ *   partner:  'with_you' | 'apart' | 'home_country' | '' (no partner, a former one, or a dating partner who does not share the home)
+ *   children: 'with_you' | 'with_partner' | 'with_other_parent' (after a divorce) | 'with_grandparents' | 'home_country' | 'independent' | 'abroad' | '' (died)
+ * Reads the household (systems.js ensureHousehold) and changes nothing else.
+ */
+export function householdView(s) {
+  const hh = ensureHousehold(s);
+  const abroad = s.countryCode !== s.homeCountryCode;
+  const parentWhere = (p) => (!p.alive ? '' : hh.parents ? 'with_you' : abroad ? 'home_country' : 'apart');
+  const pt = s.partner;
+  const partner = !pt || (pt.status !== 'married' && !(pt.status === 'dating' && hh.partner)) ? ''
+    : hh.partner ? 'with_you' : abroad ? 'home_country' : 'apart';
+  const children = s.children.map((c, i) => {
+    if (!c.alive) return '';
+    const w = hh.kids[i];
+    if (w === 'with_partner') return pt && pt.status === 'married' ? 'with_partner' : 'with_other_parent';
+    if (w === 'independent') return hh.far[i] ? 'abroad' : 'independent';
+    return w || 'with_you';
+  });
+  return { mother: parentWhere(s.family.mother), father: parentWhere(s.family.father), partner, children };
+}
+
 /** Compact snapshot for the life screen header and the people drawer. */
 export function getStatus(s) {
   const country = BY_CODE[s.countryCode];
   return {
+    household: householdView(s),
+    memories: listMemories(s).slice(-60).sort((a, b) => b.age - a.age).slice(0, 5),
     name: s.name.full,
     age: s.age,
     year: s.year,

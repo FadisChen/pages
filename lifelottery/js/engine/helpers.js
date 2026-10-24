@@ -15,6 +15,7 @@ import { moneyText } from '../data/money.js';
 import { FOCUS_BY_ID } from './focus.js';
 import { describeCause } from './mortality.js';
 import { rand, between, randInt, chance, pick, clamp, hash01 } from './rng.js';
+import { remember, memoryOf, speech, listMemories, resting } from './memory.js';
 
 export { hash01 };
 import {
@@ -34,6 +35,22 @@ export function techLag(incomeAt, urban) {
   const lag = { H: 0, UM: 2, LM: 4, L: 7 }[incomeAt] ?? 0;
   return lag + (!urban && incomeAt !== 'H' ? 2 : 0);
 }
+
+// the family's festival, kept alone in another country (h.festivalScene when nobody of the family lives with the person)
+const ALONE_FESTIVAL = {
+  adult: [
+    (name) => `${name}這天沒有人在身邊。你照著小時候記得的樣子把屋子整理乾淨，煮了幾樣家鄉的味道，一個人慢慢吃完。`,
+    (name) => `${name}到了。你一個人把桌子擦乾淨，做了一道記憶裡的菜，吃到一半才發現，自己想家想得比預期的厲害。`,
+    (name, pic) => `${name}的夜裡，你一個人待在家，屋子安安靜靜。你煮了一鍋熱的，邊吃邊翻著${pic}裡的舊照片，把每一張都看了一遍。`,
+    (name) => `${name}這天你請了假，一個人去平常常去的地方走走，回到家煮一點熱的，把想說的祝福留給遠方的人。`,
+  ],
+  elder: [
+    (name) => `${name}這天，屋子很安靜。你把家裡整理了一遍，煮了一點記憶裡的味道，一個人慢慢吃，一邊等著遠方的消息。`,
+    (name, pic) => `${name}的傍晚，你坐在窗邊，把${pic}裡的舊照片一張張翻過。沒有人來敲門，你替每個想念的人在心裡說了一句祝福。`,
+    (name) => `${name}到了，你一個人做了一道只在這天才做的菜。吃著吃著，你想起從前這個日子有多熱鬧，笑了一下。`,
+    (name) => `${name}這天沒有誰在身邊。你穿上乾淨的衣服，把桌子擺好，像從前一樣，替每個不在場的人留了一個位子。`,
+  ],
+};
 
 /** Record a death on the state (also used for the natural-mortality death in life.js). */
 export function recordDeath(s, causeId) {
@@ -171,6 +188,11 @@ export class Helpers {
     const k = kind || (s.age < 13 ? 'child' : s.age >= 65 ? 'elder' : 'adult');
     const info = this.festivalInfo();
     let text = festivalScene(info, s.homeCountryCode, this.homeCountry().region, k);
+    // Phase 6C: nobody of the family is there (abroad, alone): the festival is kept in an empty room, not at the family's long table
+    if (k !== 'child' && this.aloneAbroad()) {
+      const pool = ALONE_FESTIVAL[k] || ALONE_FESTIVAL.adult;
+      text = pool[Math.floor(hash01(`${s.seed}|alonefest|${info.key}|${s.age}`) * pool.length)](info.name, this.techReady(2008) ? '手機' : '相簿');
+    }
     if (k !== 'child' && s.countryCode !== s.homeCountryCode) {
       const call = this.techReady(2005) ? '視訊' : '長途電話';
       text += k === 'adult'
@@ -410,6 +432,22 @@ export class Helpers {
   stable(key, p = 0.5) {
     return stableFlip(this.s, key, p);
   }
+
+  // ---- memories (Phase 6C): moments the life keeps and calls back (see memory.js) ----
+  /**
+   * Keep a moment: `key` ('kind:what', unique: a second call with the same key replaces the first), `phrase` a clause in the second person
+   * and the past tense that completes "你想起…，" ("是叔叔借了車，送你去診所"). `opts`: `age` (default now), `tag` (one of memory.js DOMAINS:
+   * school work money family love health move bond life), `w` 1..3 (3 = a moment the whole life turns on). Returns true when stored.
+   */
+  remember(key, phrase, opts) { return remember(this.s, key, phrase, opts); }
+  /** What was kept under `key`, ready for a sentence ("" too when it was spoken within the last ten years, or is only the plain record of a choice): "十歲那年，是叔叔借了車，送你去診所" ("" when there is nothing): write `你想起${h.recall('f:regional_malaria_season')}。`. Pure: it changes nothing. */
+  recall(key) { const m = memoryOf(this.s, key); return m && !m.u && !resting(this.s, m) ? speech(this.s, m) : ''; }
+  /** Only the clause that was kept ("是叔叔借了車，送你去診所"), "" when there is none. */
+  recallPhrase(key) { const m = memoryOf(this.s, key); return m && !m.u && !resting(this.s, m) ? m.p : ''; }
+  /** Is there a memory under this key? */
+  hasMemory(key) { return !!memoryOf(this.s, key); }
+  /** The memories of a domain or a key prefix ('family', 'loss', 'f' ...; none = all), oldest first: [{ key, phrase, age, tag, spoken, text }]. */
+  memories(tag) { return listMemories(this.s, tag); }
 
   // ---- household (Phase 6B): who lives with whom ----
   /** Raw household record (see systems.js): { parents, partner, kids: [where], far, alone, sep ... }. Created on first use. */

@@ -15,6 +15,7 @@
 
 import { hash01 } from './rng.js';
 import { placePhrases } from './place.js';
+import { thirdPerson, whenAt } from './memory.js';
 
 export const EULOGY_VERSION = 1;
 
@@ -123,6 +124,14 @@ export function factsOf(sum) {
     if (!focus || yrs > focus.years) focus = { id, years: yrs, noun: FOCUS_NOUN[id] };
   }
 
+  // Phase 6C: the one remembered moment (a decision the family took, a loss), turned into the third person; null when there is none
+  let keepsake = null;
+  if (sum.keepsake && typeof sum.keepsake.text === 'string' && Number.isFinite(Number(sum.keepsake.age))) {
+    const tp = thirdPerson(sum.keepsake.text, male);
+    // never in the story of a suicide, and no child, partner or place the story does not know: a phrase about other people's children needs children
+    const strangers = /孩子|兒子|女兒|寶寶|小孩|丈夫|妻子|伴侶/.test(tp) && (kidTotal === 0 || !partner);
+    if (tp && tp.length >= 4 && tp.length <= 60 && !/undefined|NaN/.test(tp) && !strangers && !(sum.suicide || (cause && cause.id === 'suicide'))) keepsake = { age: Math.floor(Number(sum.keepsake.age)), text: tp, kind: sum.keepsake.kind === 'loss' ? 'loss' : 'f' };
+  }
   const grand = !!firstHl(hl, /孫輩/);
   const grown = !!firstHl(hl, /長大離家/);
   const retired = !!firstHl(hl, /^退休。?$/);
@@ -139,7 +148,7 @@ export function factsOf(sum) {
     partner, pstatus: partner ? partner.status : null, partnerGone: pp ? pp.age : null,
     marriages: sum.marriages || 0, divorces: sum.divorces || 0,
     kids: { total: kidTotal, alive: kidAlive, names: kidNames.slice(0, kidTotal || kidNames.length) },
-    grand, grown, retired, route, hard, hardScore, hardCore, keeps, focus,
+    grand, grown, retired, route, hard, hardScore, hardCore, keeps, focus, keepsake,
     cause, suicide: !!sum.suicide || (!!cause && cause.id === 'suicide'),
     vs: Number.isFinite(ls.vsCountry) ? ls.vsCountry : 0, le: Math.round(ls.countryLe || 0),
     highlights: hl,
@@ -305,6 +314,22 @@ const CHILD_STAGE = {
   teen: [(f) => `${f.age}歲的${f.he}，正要從孩子長成少年`, (f) => `${f.he}站在童年和少年的交界，眼前的路才剛開始`, (f) => `${f.he}正走到一個開始有自己想法的年紀，世界對${f.he}也才剛展開`, (f) => `${f.age}歲，是一個一半像孩子、一半想長大的年紀`],
 };
 
+// ---- a remembered moment (Phase 6C): `when` is "十歲那年", `t` the third-person clause the memory kept ("是叔叔借了車，送她去診所") ----
+const KEEPSAKE = {
+  f: [
+    (f, when, t) => `${f.he}始終記得${when}，${t}`,
+    (f, when, t) => `${when}，${t}，這件事${f.he}一直放在心上`,
+    (f, when, t) => `${f.he}記得${when}的事：${t}`,
+    (f, when, t) => `${f.he}一直記得${when}，${t}`,
+  ],
+  loss: [
+    (f, when, t) => `${when}，${t}，那是${f.he}一直放在心上的事`,
+    (f, when, t) => `${f.he}忘不了${when}，${t}`,
+    (f, when, t) => `${when}，${t}，這件事一直留在${f.he}心裡`,
+    (f, when, t) => `${when}，${t}，${f.he}把那一天記了很久`,
+  ],
+};
+
 // ---- death ----
 const DEATH = {
   neonatal: ['因出生時的健康問題，沒能撐過最初的日子', '因早產與新生兒的併發症，離開了人世', '在出生後不久，被新生兒疾病帶走了', '還沒來得及熟悉這個世界，就因新生兒的病症離開'],
@@ -428,7 +453,7 @@ const SHORT_CLOSE = {
 export const TEMPLATES = {
   fam: Object.values(FAM), origin: Object.values(ORIGIN),
   edu: Object.values(EDU), work: Object.values(WORK), route: Object.values(ROUTE), hard: Object.values(HARD), keep: Object.values(KEEP), focus: [FOCUS],
-  partner: Object.values(PARTNER), kids: Object.values(KIDS), childStage: Object.values(CHILD_STAGE),
+  partner: Object.values(PARTNER), kids: Object.values(KIDS), childStage: Object.values(CHILD_STAGE), keepsake: Object.values(KEEPSAKE),
   death: Object.values(DEATH).concat([DEATH_SUICIDE]),
   deathLine: [D_ADULT, D_LONG, D_YOUTH, D_CHILD, D_INFANT, D_SUICIDE, D_NOCAUSE], cmp: Object.values(CMP),
   close: Object.values(CLOSE).concat([CLOSE_SUICIDE, CLOSE_KID]),
@@ -706,14 +731,18 @@ export function composeEulogy(sum) {
     if (f.shape === 'child') stage = pick(f, `stage-${f.age <= 2 ? 't' : f.age <= 5 ? 's' : f.age >= 12 ? 'n' : f.edu.years >= 1 ? 'sc' : 'ns'}`, CHILD_STAGE_FOR(f))(f);
 
     let B = [];
+    // the remembered moment rides on the family sentence (or stands alone when there is none), so the sentence count stays within 3-5
+    const K = f.keepsake && f.shape !== 'infant' && f.age >= 5 ? pick(f, `keepsake-${f.keepsake.kind}`, KEEPSAKE[f.keepsake.kind])(f, whenAt(f.keepsake.age), f.keepsake.text) : '';
+    let noK = false;
     const assemble = (budget, drop, noB) => {
       const parts = [`${A}。`];
-      if (f.shape === 'child') parts.push(`${stage}。`);
+      const k = K && !noK ? K : '';
+      if (f.shape === 'child') parts.push(`${stage}${k ? `；${k}` : ''}。`);
       else if (f.shape !== 'infant') {
         B = noB ? [] : lifeClauses(f, budget);
         if (B.length) parts.push(`${f.he}${B.map((x) => x.text).join(B.length > 2 || B.some((x) => x.text.includes('，')) ? '；' : '，')}。`);
         const fam = familyText(fparts, drop);
-        if (fam) parts.push(`${fam}。`);
+        if (fam || k) parts.push(`${[fam, k].filter(Boolean).join('；')}。`);
       }
       parts.push(D, E);
       return parts;
@@ -725,7 +754,8 @@ export function composeEulogy(sum) {
     let noB = false;
     let parts = assemble(budget, drop, noB);
     for (let guard = 0; guard < 40 && parts.join('').length > MAX_LEN; guard++) {
-      if (budget > 0) budget = Math.max(0, budget - 10);
+      if (K && !noK) noK = true; // the remembered moment goes first: it is the least needed part of the story
+      else if (budget > 0) budget = Math.max(0, budget - 10);
       else if (drop.size < dropOrder.length - 1) drop = new Set([...drop, dropOrder.find((k) => !drop.has(k))]);
       else if (!noB) noB = true;
       else break;
@@ -733,6 +763,7 @@ export function composeEulogy(sum) {
     }
     const slots = ['origin', 'death', 'close', ...B.map((x) => x.kind)];
     if (fparts.some((x) => !drop.has(x.k))) slots.push('family');
+    if (K && !noK) slots.push('keepsake');
     return { v: EULOGY_VERSION, text: parts.join(''), short: shortText(f), shape: f.shape, slots, opening: f.opening };
   } catch (e) {
     return brief(sum);

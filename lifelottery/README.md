@@ -17,6 +17,8 @@
 4. **人生**：時間逐年流動，頂端是年齡與五項狀態（健康、幸福、知識、財富、人際）。遇到重大事件會暫停並出現選擇卡；
    可以暫停、1×／2×／4× 倍速、跳到下一年，或打開「自動抉擇」讓人生自己走。頂端的「重心」按鈕可以隨時更換人生重心（見下）。
    每一年停留的時間依閱讀量分配（平淡的一年很快，有事件的一年讓你讀完），整體仍接近你選的長度；按住畫面（電腦：按住 Shift）可以暫時加速，放開就恢復。
+   **前後關聯**：人生會記得做過的事。重大的選擇、家人替年幼的你做的決定（誰做主，每個人生階段固定是同一位大人）、第一份工作、婚禮、孩子出生、離世的至親、搬到另一個國家，都會成為「回憶」；之後某些平淡的年份會變成一句回想（「你想起十歲那年，是叔叔借了車，送你去診所」），
+   同類的事件下面偶爾多一行安靜的斜體字呼應舊事；同一件事十年內不重複說。點「家人」可以看每位家人現在住哪裡（同住、分開住、在家鄉、在國外、跟著祖父母…）與最近的幾則回憶。後續事件也會讀取你之前選了什麼：留在原地的烏克蘭家庭，後來不會變成「臨時的住所」。
 5. **離世**：死亡時間與原因依統計發生，不是玩家選的結果。
 6. **回顧**：壽命與本國／世界平均的對照、「這樣一生的機率」、人生足跡地圖、五項狀態的曲線、各階段的人生重心、重要時刻、
    學歷／工作／伴侶／子女／住過的國家與家庭信仰，可以留一句話給這個角色、下載分享圖卡（含小地圖），或收進「前世記錄」。
@@ -110,7 +112,9 @@
 
 ```sh
 cd lifelottery
-npm test                  # 全部單元與模擬測試（node --test tests/*.test.mjs），約 2.5 分鐘
+npm test                  # 全部單元與模擬測試（node --test tests/*.test.mjs），完整規模，四核心約 5 分鐘（模擬測試用 worker 平行跑）
+npm run test:quick        # 同一批測試，但取樣類稽核用較小的人生數（LL_QUICK=1），平常開發迴圈用，約 3 分鐘內；發佈前請跑完整的 npm test
+node --test tests/consequence.test.mjs # 前後關聯：約一半的重大選擇之後有可見的回響（原本 17%）、回憶系統（只說寫過的句子，一生約 3–4 次回想、6–8 句呼應）、誰做主
 node --test tests/coherence.test.mjs   # 只跑敘事一致性稽核（約 45 秒，含家人連續性的壓力測試）
 node tests/a11y.mjs       # axe-core 無障礙檢查（需先 npm install --no-save axe-core；沒裝會略過）
 node tests/e2e.mjs        # 端對端測試（Playwright + Chromium，需要已安裝 Chromium；會自己啟動靜態伺服器；LL_SHOTS=資料夾 指定截圖輸出）
@@ -133,14 +137,16 @@ node tools/coherence-scan.mjs 3000 myprefix --stress --novelty   # 7/8 的人生
 node tools/build-preload.mjs [--check]             # 重新產生（或檢查）index.html 的 modulepreload 清單
 node tools/build-og-image.mjs                      # 重新產生 og-image.png
 node tools/measure-load.mjs [次數]                 # 用 Playwright 量首頁載入時間（LL_PRELOAD=none|all|fp-none|fp-body 比較不同的 preload 設定）
-node tools/read-life.mjs --seed x --era past --country TWN --gender F   # 把一段人生印成可讀的日誌（--urban --wealth --birthYear --draw --focus --religion --city）
+node tools/read-life.mjs --seed x --era past --country TWN --gender F   # 把一段人生印成可讀的日誌（--urban --wealth --birthYear --draw --focus --religion --city）；回憶的呼應印在 ↳ 之後
+node tools/consequence-scan.mjs --lives=2000      # 後果追蹤：每個重大選擇設下的旗標與後續事件、誰讀它，以及模擬 N 段人生後有多少選擇在之後有可見的回響（--static / --dynamic / --blind / --top=40）
+node tools/run-tests.mjs --quick                  # 與 npm run test:quick 相同（--scale=0.25 為煙霧測試）
 ```
 
 ### 重新產生資料與校準
 
 ```sh
 npm run build:data                  # 下載原始 CSV 並重建 js/data/countries.js（tools/fetch-raw.mjs + tools/build-data.mjs）
-node tools/calibrate-risk.mjs 30000 4   # 重新校準個人風險乘數，產生 js/data/riskref.js（約 10 分鐘）
+node tools/calibrate-risk.mjs 30000 4   # 重新校準個人風險乘數，產生 js/data/riskref.js（worker 平行，四核心約 15 分鐘）
 ```
 
 只要改動了會影響風險的內容（事件的 `addRisk`／健康相關效果、疾病、系統規則、壽命相關的條件），就要重跑校準，

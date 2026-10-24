@@ -17,7 +17,13 @@
 // Helpers: two(h, low, high) = h.byIncome({ L: low, UM: high }) (LM falls back to low, H to high).
 
 const two = (h, low, high) => h.byIncome({ L: low, UM: high });
-const kid = (s, a, b) => { const k = s.children.find((c) => c.alive && s.year - c.birthYear >= a && s.year - c.birthYear <= b); return k ? k.name : '孩子'; };
+// the child of that age a scene under one roof is about: the one who lives with the person (Phase 6C; s.household is created with the first child)
+const kid = (s, a, b) => {
+  const hh = s.household;
+  const fits = (c) => c.alive && s.year - c.birthYear >= a && s.year - c.birthYear <= b;
+  const k = s.children.find((c, i) => fits(c) && (!hh || !Array.isArray(hh.kids) || hh.kids[i] === 'with_you')) || s.children.find(fits);
+  return k ? k.name : '孩子';
+};
 const mom = (h) => (h.parentAlive('mother') ? '媽媽' : h.parentAlive('father') ? '爸爸' : '身邊的大人');
 const away = (s, h) => (s.countryCode !== s.homeCountryCode ? `你人在${h.countryName()}，離家很遠，日子過得簡單些，該吃的、該想念的人卻一樣沒少。` : '');
 
@@ -39,13 +45,17 @@ export default {
 
   health_flu_season: [
     (s, h) => two(h,
-      '家裡人一個傳一個地咳嗽，輪到你時，你躺在最靠牆的那張床上發燒。有人煮了薑湯，也沒人提看醫生的事，你睡了兩天，竟然就好了。',
+      h.livesAlone()
+        ? '附近的人一個傳一個地咳嗽，輪到你時，你躺在最靠牆的那張床上發燒。沒人提看醫生的事，你自己煮了薑湯，睡了兩天，竟然就好了。'
+        : '家裡人一個傳一個地咳嗽，輪到你時，你躺在最靠牆的那張床上發燒。有人煮了薑湯，也沒人提看醫生的事，你睡了兩天，竟然就好了。',
       '流感季，街上戴口罩的人變多了，你終究還是倒下了。燒退之後你捧著一碗稀飯，覺得人生最大的幸福，不過是喉嚨不痛、鼻子通暢，能好好吃完一頓飯。'),
     (s, h) => two(h,
       '附近幾戶人家同時咳了起來，你也跟著燒了兩天。誰都沒有餘裕照顧誰，大家各自躺著，隔著牆聽彼此的咳嗽聲，像在互相報平安。到了第三天，終於有人端來一碗熱湯。',
       '換季的那週，你的喉嚨先癢、接著鼻塞，最後整個人像被抽掉了電池。你乾脆躺平，把窗開一條縫，聽著外面的聲音，覺得世界也跟著慢了下來。'),
     (s, h) => two(h,
-      '你發燒又咳嗽，家人熬了一鍋熱粥放在床邊。你喝一口、睡一陣，醒來時總有人坐在旁邊，也不說話，只是用手背試試你的額頭。那份安靜，讓你覺得病也沒那麼難受了。',
+      h.livesAlone()
+        ? '你發燒又咳嗽，自己熬了一鍋熱粥放在床邊。你喝一口、睡一陣，醒來時屋裡安安靜靜，只有時鐘的滴答聲。那份安靜，讓你覺得病也沒那麼難受了。'
+        : '你發燒又咳嗽，家人熬了一鍋熱粥放在床邊。你喝一口、睡一陣，醒來時總有人坐在旁邊，也不說話，只是用手背試試你的額頭。那份安靜，讓你覺得病也沒那麼難受了。',
       '流感把你放倒在床上三天。你吃著別人送來的水果和熱湯，一邊咳一邊想，生病是唯一一個名正言順什麼都不用做的時候，這種奢侈，平常你可想都不敢想。'),
   ],
 

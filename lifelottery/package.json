@@ -10,6 +10,9 @@
     "build:og": "node tools/build-og-image.mjs",
     "test:a11y": "node tests/a11y.mjs",
     "build:data": "node tools/fetch-raw.mjs && node tools/build-data.mjs",
-    "calibrate": "node tools/calibrate-risk.mjs"
+    "calibrate": "node tools/calibrate-risk.mjs",
+    "test:quick": "node tools/run-tests.mjs --quick",
+    "test:consequence": "node --test tests/consequence.test.mjs",
+    "scan:consequence": "node tools/consequence-scan.mjs"
   }
 }

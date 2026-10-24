@@ -460,7 +460,7 @@ export default [
   },
   {
     id: 'world_hurricane_mitch_1998',
-    title: '米契颶風',
+    title: '米契帶來的大雨',
     ages: [3, 85],
     chance: 0.6,
     tags: ['world', 'disaster', 'regional'],
@@ -502,6 +502,7 @@ export default [
     choices: [
       {
         label: '加入救災或捐出物資',
+        memory: (s, h) => `地震後，${h.whoDecides()}和鄰居把毛毯和飲水送去災區，你抱著一箱泡麵跟在後面`,
         cond: notTeen,
         effects: { social: +5, happiness: +1, health: -2, wealth: -1 },
         result: '你和鄰居開著車把毛毯、飲水和泡麵送到災區。看見人們在帳篷間互相遞水，你覺得這座島比想像中更有溫度。',
@@ -512,6 +513,7 @@ export default [
       },
       {
         label: '陪家人、確認親友平安',
+        memory: (s, h) => `地震後的那幾天，${h.whoDecides()}一遍遍撥電話確認親友平安，全家睡在客廳`,
         effects: { happiness: -1, social: +3 },
         result: '你一遍遍撥著電話，直到所有親友的聲音都回來。那幾天你們全家睡在客廳，餘震一來，就有人伸手握住另一個人的手。',
         familyResult: (s, h) => `${h.whoDecides('921')}一遍遍撥著電話，直到所有親友的聲音都回來。那幾天你們全家睡在客廳，餘震一來，就有人伸手握住你的手。`,
@@ -520,6 +522,7 @@ export default [
       },
       {
         label: '照常上班上課，把眼淚留給夜晚',
+        memory: (s, h) => `地震後，${h.whoDecides()}關掉新聞，照常送你去上學`,
         cond: notTeen,
         effects: { happiness: -3, wealth: +1 },
         result: '你什麼也沒說，只是把新聞關掉，騎車去上班。路上看到半倒的招牌，才意識到這座城市也在慢慢搖著頭。',
@@ -716,6 +719,7 @@ export default [
     choices: [
       {
         label: '立刻往高處跑，帶上身邊的人',
+        memory: (s, h) => `海水退去的那天，是${h.whoDecides()}牽著你往山坡拼命地跑`,
         cond: notTeen,
         effects: (s, h) => { if (h.chance(0.006)) { h.die('disaster'); return; } h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
         result: (s, h) => (s.alive ? '你朝山坡拼命跑，回頭看見海水捲過剛剛站的地方。你的家沒有了，但身邊的人都還在。' : '海水來得比所有人想得都快，你再也沒有機會回頭看一眼熟悉的家。'),
@@ -725,6 +729,7 @@ export default [
       },
       {
         label: '先回頭拿重要的東西',
+        memory: (s, h) => `海水退去的那天，${h.whoDecides()}想先回頭拿重要的東西，水淹到胸口，是一塊木板救了你們`,
         effects: (s, h) => { if (h.chance(0.06)) { h.die('disaster'); return; } h.change('wealth', -3); h.change('happiness', -4); h.change('health', -5); },
         result: (s, h) => (s.alive ? '你抓著重要的東西往外衝，水已經淹到胸口。你被一根被沖來的木板勾住，才僥倖留下一條命。' : '最後一刻你再也沒能走出屋子，那條通往山坡的路，是你最後沒有走完的一段。'),
         familyResult: (s, h) => (s.alive ? `${h.whoDecides('tsunami')}想先回頭拿重要的東西，一手緊緊抓著你。水已經淹到胸口，你們被一根被沖來的木板勾住，才僥倖留下一條命。` : '最後一刻，大人沒能帶著你走出屋子，那條通往山坡的路，是你們最後沒有走完的一段。'),
@@ -937,6 +942,7 @@ export default [
     choices: [
       {
         label: '帶著家人前往鄰國',
+        memory: (s, h) => `${h.whoDecides()}帶著全家前往鄰國，走了好幾天才到邊境的營地`,
         cond: notTeen,
         effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -5); h.change('social', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你們趕了好幾天的路，才到邊境的營地。排隊登記時，工作人員遞給你一杯熱茶，你這才發現自己已經很久沒有好好坐下。',
@@ -945,6 +951,7 @@ export default [
       },
       {
         label: '搬到比較安全的城市或親戚家',
+        memory: (s, h) => `${h.whoDecides()}帶你投靠表親，十幾個人擠在一起，每天晚上在屋頂吃飯`,
         cond: notTeen,
         effects: (s, h) => { h.change('happiness', -3); h.change('wealth', -4); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你和家人擠在表親的家裡，十幾個人共用一個爐子。大家把能做的事都做了，並約定每天晚上在屋頂一起吃飯。',
@@ -953,6 +960,7 @@ export default [
       },
       {
         label: '留在原地，守著家',
+        memory: (s, h) => `${h.whoDecides()}決定留在家裡，每次警報響起，就把你抱到最安全的角落`,
         cond: notTeen,
         effects: (s, h) => { h.change('happiness', -4); h.change('health', -4); h.addRisk(1.3, 2); },
         result: '你把窗戶貼上膠帶，在地下室儲存水和乾糧。每次警報響起，你都把孩子或老人抱到最安全的角落，等一切歸於平靜。',
@@ -1007,6 +1015,7 @@ export default [
       },
       {
         label: '捐款並照顧身邊的人',
+        memory: (s, h) => `地震之後，${h.whoDecides()}把能捐的捐了出去，還讓你抱著麵包去送給鄰居的老人家`,
         effects: { social: +3, wealth: -1, happiness: -1 },
         result: '你把能捐的捐出去，也替鄰居的老人家買了幾天的食物。那些日子，每個人都盡量對彼此更溫柔一些。',
         familyResult: (s, h) => `${h.whoDecides('tohoku')}把能捐的捐了出去，也替鄰居的老人家買了幾天的食物，還讓你抱著一袋麵包跟去送。那些日子，每個人都盡量對彼此更溫柔一些。`,
@@ -1015,6 +1024,7 @@ export default [
       },
       {
         label: '關心核電事故的消息，考慮暫時避難',
+        memory: (s, h) => `${h.whoDecides()}帶全家暫時搬到遠方的親戚家，你在陌生的房間住了好幾個月`,
         cond: (s, h) => (h.hasChildren() || h.urban()) && notTeen(s, h),
         effects: { happiness: -3, social: -1, wealth: -2 },
         result: '你每天追蹤輻射數值與氣象報告，最後和家人暫時搬到了遠方的親戚家。住了幾個月後，你們才決定是否回去。',
@@ -1192,7 +1202,9 @@ export default [
     tags: ['world', 'pandemic', 'job', 'followup'],
     followCond: (s, h) => h.age() >= 18 && h.age() <= 65 && h.employed(),
     text: (s, h) => (h.isJob('nurse', 'doctor', 'caregiver', 'driver', 'cook', 'shopkeeper', 'street_vendor', 'farmer', 'laborer', 'factory', 'guard', 'domestic', 'construction')
-      ? '當許多人在家工作時，你仍得每天出門。口罩勒得耳朵發痛，一天的工作結束，家人在門口噴酒精、等你換衣服，才敢靠近你，那種被愛又被防著的感覺，你到現在都說不清。'
+      ? (h.livesAlone()
+        ? '當許多人在家工作時，你仍得每天出門。口罩勒得耳朵發痛，一天的工作結束，你在門口自己噴酒精、換下外衣，進了屋還是習慣先洗三遍手。沒有人等你，那種被需要又被防著的感覺，你到現在都說不清。'
+        : '當許多人在家工作時，你仍得每天出門。口罩勒得耳朵發痛，一天的工作結束，家人在門口噴酒精、等你換衣服，才敢靠近你，那種被愛又被防著的感覺，你到現在都說不清。')
       : (h.officeJob() ? '你把客廳一角變成辦公室，視訊會議裡總有人忘了關麥克風。' : '你把家裡一角變成工作區，聯絡全靠手機和訊息，總有人在該回覆的時候消失。') + '省下了通勤的時間，卻發現自己的工作和生活像一杯被攪混的奶茶，再也分不開。'),
     effects: (s, h) => { h.change('health', -1); h.change('happiness', -2); h.change('wealth', h.incomeAtLeast('UM') ? 0 : -1); },
   },
@@ -1290,28 +1302,34 @@ export default [
     choices: [
       {
         label: '離開，前往西部或鄰近國家',
+        memory: (s, h) => `${h.whoDecides()}帶著你擠上擠滿人的火車離開家，行李只剩下一個背包`,
         cond: (s, h) => (h.age() < 60 || h.hasChildren()) && notTeen(s, h),
         effects: (s, h) => { h.change('happiness', -5); h.change('wealth', -5); h.change('social', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你搭上擠滿人的火車，行李只剩下一個背包。月台上，志工遞給你熱茶與麵包，你拿著杯子，手還在微微發抖。',
         familyResult: (s, h) => `${h.whoDecides('ukraine')}決定帶著你離開。你們擠上擠滿人的火車，行李只剩下一個背包。月台上，志工遞給你熱牛奶與麵包，你捧著杯子，手還在微微發抖。`,
+        set: ['u_left'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.8,
       },
       {
         label: '留在原地，協助鄰里與志願工作',
+        memory: (s, h) => `${h.whoDecides()}決定留下來，和鄰居輪流守夜、替更年長的人送藥與食物`,
         cond: notTeen,
         effects: (s, h) => { h.change('happiness', -4); h.change('social', +3); h.change('health', -3); h.addRisk(1.2, 2); },
         result: '你和鄰居輪流守夜、整理地下室，替更年長的人送藥與食物。那段日子很漫長，卻讓你知道身邊有誰可以倚靠。',
         familyResult: (s, h) => `${h.whoDecides('ukraine')}決定留下來。大人和鄰居輪流守夜、整理地下室，替更年長的人送藥與食物，你有時抱著一袋麵包跟在後面。那段日子很漫長，卻讓你知道身邊有誰可以倚靠。`,
+        set: ['u_stayed'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.2,
       },
       {
         label: '暫時搬到較安全的親戚家',
+        memory: (s, h) => `${h.whoDecides()}帶你去較安全的親戚家，大家輪流煮飯，也輪流聽新聞`,
         cond: notTeen,
         effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你們一起擠在親戚家，大家輪流煮飯，也輪流聽新聞。夜裡有人哼起舊歌，其他人安靜地接上了下一句。',
         familyResult: (s, h) => `${h.whoDecides('ukraine')}決定先去較安全的親戚家。你們一起擠在親戚家，大家輪流煮飯，也輪流聽新聞。夜裡有人哼起舊歌，其他人安靜地接上了下一句。`,
+        set: ['u_relatives'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.5,
       },
@@ -1321,6 +1339,7 @@ export default [
         cond: teenOnly,
         effects: (s, h) => { h.change('happiness', -5); h.change('wealth', -5); h.change('social', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你和家人搭上擠滿人的火車，行李只剩下一個背包。月台上，志工遞給你熱茶與麵包，你拿著杯子，手還在微微發抖。',
+        set: ['u_left'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.8,
       },
@@ -1330,6 +1349,7 @@ export default [
         cond: teenOnly,
         effects: (s, h) => { h.change('happiness', -4); h.change('social', +3); h.change('health', -3); h.addRisk(1.2, 2); },
         result: '你和大人、鄰居輪流守夜、整理地下室，替更年長的人送藥與食物。那段日子很漫長，卻讓你知道身邊有誰可以倚靠。',
+        set: ['u_stayed'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.2,
       },
@@ -1339,6 +1359,7 @@ export default [
         cond: teenOnly,
         effects: (s, h) => { h.change('happiness', -4); h.change('wealth', -3); h.set('displaced'); h.s.flags._displacedAt = h.year(); },
         result: '你們一起擠在親戚家，你跟著大人輪流煮飯，也輪流聽新聞。夜裡有人哼起舊歌，其他人安靜地接上了下一句。',
+        set: ['u_relatives'],
         schedule: [{ id: 'world_ukraine_later', inYears: [1, 3] }],
         ai: 1.5,
       },
@@ -1350,8 +1371,13 @@ export default [
     ages: [3, 95],
     weight: 0,
     tags: ['world', 'followup'],
-    text: (s, h) => '時間久了，臨時的住所漸漸成了日子。你學會了新的語言、新的菜單，也在手機裡留著老家院子的照片。每次視訊，有人問你什麼時候回去，你總說：「等一切都好了。」',
-    effects: { happiness: -1, social: +2, knowledge: +1 },
+    // what the family chose in the cold February decides what "later" looks like (Phase 6C): leaving, staying, or a relative's home
+    text: (s, h) => (h.has('u_stayed')
+      ? '時間久了，守夜、地下室和排隊領水成了日子。你學會分辨哪一種聲音要躲、哪一種可以繼續煮飯；鄰居的名字你都記得了。手機偶爾有訊號，遠方的親戚問你要不要出來，你總說：「這裡還有人要照顧。」'
+      : h.has('u_relatives')
+        ? '時間久了，借住在親戚家的日子漸漸成了日常。你學會了和一屋子的人分配浴室與時間，也在手機裡留著老家院子的照片。每次通話，有人問你什麼時候回去，你總說：「等一切都好了。」'
+        : '時間久了，臨時的住所漸漸成了日子。你學會了新的語言、新的菜單，也在手機裡留著老家院子的照片。每次視訊，有人問你什麼時候回去，你總說：「等一切都好了。」'),
+    effects: (s, h) => { h.change('happiness', -1); h.change('social', +2); if (h.has('u_left')) h.change('knowledge', +1); },
   },
   {
     id: 'world_ukraine_neighbors',
@@ -1370,7 +1396,9 @@ export default [
     chance: 0.7,
     tags: ['world', 'economy', 'regional'],
     cond: (s, h) => h.isRegion('EUR') && h.yearIn(2022, 2023),
-    text: (s, h) => '能源價格飆漲，帳單上的數字讓你連看了三遍。家人把暖氣調低一度，晚上全家擠在客廳一起看電視，穿著毛衣，笑說這是最省錢的團圓。',
+    text: (s, h) => (h.livesAlone()
+      ? '能源價格飆漲，帳單上的數字讓你連看了三遍。你把暖氣調低一度，晚上穿著毛衣縮在沙發上看電視，對著空蕩的客廳笑說，這是最省錢的日子。'
+      : '能源價格飆漲，帳單上的數字讓你連看了三遍。家人把暖氣調低一度，晚上全家擠在客廳一起看電視，穿著毛衣，笑說這是最省錢的團圓。'),
     effects: (s, h) => { h.change('wealth', h.isRich() ? -1 : -3); h.change('happiness', -1); h.change('social', +1); },
   },
   {
@@ -1598,6 +1626,7 @@ export default [
     choices: [
       {
         label: '搬到城市或較涼爽的地方',
+        memory: (s, h) => `${h.whoDecides()}把房子交給親戚照看，帶著你和幾袋種子搬去新的地方`,
         cond: notTeen,
         effects: (s, h) => { h.change('wealth', +2); h.change('social', -3); h.change('happiness', -1); h.set('left_home'); },
         result: '你們一家人把房子交給親戚照看，帶著孩子與幾袋種子搬了出去。新的社區一開始很陌生，直到有人敲門送來一盤水果。',
@@ -1606,6 +1635,7 @@ export default [
       },
       {
         label: '留下，改種耐旱作物並共用水源',
+        memory: (s, h) => `${h.whoDecides()}決定留下來，一起改種耐旱的穀物，你跟著去排隊提水`,
         cond: notTeen,
         effects: { wealth: -1, knowledge: +2, social: +3 },
         result: '社區請來農業顧問，大家一起改種耐旱的穀物，並輪流使用水井。收成不如以往，但每個人都知道自己並不孤單。',

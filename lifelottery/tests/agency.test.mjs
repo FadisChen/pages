@@ -16,6 +16,7 @@ import { agencyOf, familyFactor, familyMeans, validateEvents, AGENCY_TIERS } fro
 import { makeHelpers } from '../js/engine/helpers.js';
 import { getSummary } from '../js/engine/summary.js';
 import { RULES } from './lib/coherence.mjs';
+import { scaled } from './lib/scale.mjs';
 import { RULE, ACTS, findActs, staticAudit, offeredScan, auditCards, KINDS } from './lib/rules-agency.mjs';
 
 const BY_ID = new Map(ALL_EVENTS.map((e) => [e.id, e]));
@@ -152,7 +153,7 @@ test('familyFactor: money-hungry options suit comfortable families, cheap ones s
 test('malaria in 3000 lives: comfortable households take the child to be tested more often than poor ones', () => {
   const share = (wealthQ, urban) => {
     let tested = 0, waited = 0;
-    for (let i = 0; i < 1500; i++) {
+    for (let i = 0; i < scaled(1500, 600, 300); i++) {
       const s = play({ era: 'present' }, `mal-w${wealthQ}-${i}`, { countryCode: 'NGA', urban, wealthQ }, { until: 12 });
       for (const e of s.log) if (e.by === 'family' && e.title === '雨季熱') { if (/一滴血/.test(e.text)) tested++; else if (/濕毛巾/.test(e.text)) waited++; }
     }
@@ -266,11 +267,12 @@ test('agency audit (static): every choice event x age 0-17 x household (poor vil
 });
 
 test('agency audit (1500 lives): zero adult-decision choices offered under 15; none for 15-17 either', () => {
-  const { cards, family, lives } = offeredScan(1500);
-  assert.equal(lives, 1500);
+  const LIVES = scaled(1500, 500, 250);
+  const { cards, family, lives } = offeredScan(LIVES);
+  assert.equal(lives, LIVES);
   const under15 = cards.filter((c) => c.age < 15);
-  assert.ok(under15.length > 3000, `children are still asked things of their size: ${under15.length} cards`);
-  assert.ok(family > 300, `family decisions under 12: ${family}`);
+  assert.ok(under15.length > 2 * LIVES, `children are still asked things of their size: ${under15.length} cards`);
+  assert.ok(family > 0.2 * LIVES, `family decisions under 12: ${family}`);
   const flags = auditCards(cards);
   assert.deepEqual(flags.slice(0, 8).map((f) => `${f.event} age ${f.age} [${f.act}:${f.word}] ${f.label}`), []);
   // a family-decided event is never a card under 12

@@ -243,6 +243,8 @@ test('divorce: the partner moves out, the minors go with the mother or the fathe
     newPartner(s, { status: 'married', replace: true });
     const a = addChild(s), b = addChild(s);
     a.birthYear = s.year - 5; b.birthYear = s.year - 3;
+    delete s.seen.family_custody; // a life that already went through a divorce before 28 has seen the event; this test is about the one now
+    s.pending = s.pending.filter((p) => p.id !== 'family_custody');
     assert.equal(divorce(s), true);
     const h = makeHelpers(s);
     assert.equal(h.livesWith('partner'), false);

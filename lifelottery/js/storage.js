@@ -117,6 +117,18 @@ export function cleanReplay(r) {
   return out;
 }
 
+/**
+ * The seed of a new life. A pinned `?seed=` (reproducible debugging, the e2e tests) is used as given for an ordinary life; a replay of an
+ * earlier start derives its own from it (`seed~n`, n = which life of the start this is), because "same start, new luck" must not reuse the
+ * luck of the life it repeats: with the pinned seed the e2e replay lost its infant at age 0 twice in a row, and a reload "in the middle"
+ * of that life met the death screen. Without a pinned seed `fresh` (a random one) is used.
+ */
+export function startSeed(pinned, replay, fresh) {
+  if (!pinned) return fresh;
+  const n = replay && Number.isFinite(+replay.n) ? Math.max(2, Math.floor(+replay.n)) : 0;
+  return n ? `${pinned}~${n}` : pinned;
+}
+
 /** Returns { state, recordId, replay, savedAt } or null. `deserialize` is injected to keep this module engine-free. */
 export function loadSave(deserialize) {
   const raw = readJSON(KEYS.save);
@@ -235,6 +247,7 @@ export function normalizeSummary(x) {
     focusTimeline: arr(x.focusTimeline).slice(0, 20).filter((g) => g && typeof g === 'object' && Number.isFinite(g.fromAge) && Number.isFinite(g.toAge)).map((g) => ({ fromAge: num(g.fromAge), toAge: num(g.toAge), focus: focusId(g.focus), label: str(g.label, 12) })),
     riskTrail: riskTrail(x.riskTrail, x.age),
     ...(x.eulogy && x.eulogy.v === 1 && typeof x.eulogy.text === 'string' ? { eulogy: { v: 1, text: str(x.eulogy.text, 400), short: str(x.eulogy.short, 120), shape: str(x.eulogy.shape, 12), slots: [], opening: str(x.eulogy.opening, 16) } } : {}), // Phase 5B: the life story is kept with the record
+    ...(x.keepsake && typeof x.keepsake.text === 'string' && Number.isFinite(x.keepsake.age) ? { keepsake: { age: num(x.keepsake.age), text: str(x.keepsake.text, 80), kind: ['f', 'loss', 'c'].includes(x.keepsake.kind) ? x.keepsake.kind : 'c' } } : {}), // Phase 6C
     highlights: arr(x.highlights).slice(0, 80).filter((h) => h && typeof h.text === 'string').map((h) => ({ age: num(h.age), year: num(h.year), text: str(h.text, 300) })),
     counts: { choices: num(counts.choices), events: num(counts.events), milestones: num(counts.milestones), years: num(counts.years, num(x.age)) },
     stats,

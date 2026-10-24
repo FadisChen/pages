@@ -155,15 +155,22 @@ export function playAudited(settings, seed, opts = {}) {
   s.log.push = function (...es) { for (const e of es) tag(s, e); return push.apply(this, es); };
   tag(s, s.log[0]);
   let guard = 0;
+  const mems = []; // Phase 6C: every memory the moment it was made, with the state before and after that year
+  const known = new Map();
   while (s.alive && guard++ < 130) {
     CTX.current = null;
     if (stress) applyStress(s, stress);
     CTX.yearStart = snapshot(s);
     advanceYear(s, { auto: true });
+    for (const m of s.memories || []) {
+      if (known.get(m.k) === m.p) continue;
+      known.set(m.k, m.p);
+      mems.push({ key: m.k, phrase: m.p, age: s.age, year: s.year, pre: CTX.yearStart, post: snapshot(s) });
+    }
   }
   delete s.log.push; // restore the prototype method (keeps the state serialisable and comparable)
   const rows = s.log.map((entry) => ({ entry, ...(META.get(entry) || { id: `sys:${entry.title}`, pre: null, post: null }) }));
-  return { s, rows };
+  return { s, rows, mems };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -962,8 +969,6 @@ export const ALLOW = [
   { rule: 'school', event: 'childhood_teacher_persuades', rare: true, word: '老師', reason: 'follow-up of the choice "ask the teacher to talk to the family"; the visit happens in the gap between primary and secondary school' },
   { rule: 'toddler', event: 'childhood_new_baby', word: '搖籃', reason: 'the cradle is the new baby sibling\'s, not the player\'s' },
   { rule: 'school', event: 'migration_after_graduation', word: '同學', reason: 'follow-up that narrates the graduation of the studies abroad' },
-  { rule: 'climate', event: 'world_hurricane_mitch_1998', word: '颶風', reason: 'the title names the storm; its rains flooded all of Central America, inland as well, and the text describes mudslides and rivers' },
-  { rule: 'household', event: /^(world_pandemic_work|world_energy_prices_2022|health_alcohol_problem|health_miscarriage|health_disability_adaptation|health_flu_season|health_clinic_far|seed_child_school_choice|regional_culture_pilgrimage|regional_festival|regional_remittance_day|regional_bed_nets|regional_wildfire_season)$/, rare: true, reason: 'Phase 6B: events of files owned by 6A (health, seed, world, regional) that still put the family in the room of a person who lives alone abroad or whose children / partner live elsewhere; listed for the 6C pass (PLAN.md "Phase 6B notes"), remove this entry when they are fixed' },
   { rule: 'school', event: 'world_china_after_cr', reason: 'news-level description of schools reopening nationwide, not the player\'s own class' },
 ];
 
@@ -1079,15 +1084,19 @@ export function runAudit(configs, { allow = ALLOW, rules = RULES, checkLife = tr
   const raw = [];
   const stats = { lives: 0, years: 0, years4: 0, entries: 0, choices: [], adultChoices: [], maxPerYear: 0, eventsSeen: new Set(), perRule: {} };
   for (const cfg of configs) {
-    const { s, rows } = playAudited(cfg.settings, cfg.seed, cfg.opts);
+    const { s, rows, mems } = playAudited(cfg.settings, cfg.seed, cfg.opts);
     stats.lives++;
     stats.entries += rows.length;
     const ch = rows.filter((r) => r.entry.kind === 'choice').length;
     stats.choices.push(ch);
     if (s.age >= 18) stats.adultChoices.push(ch);
     for (const r of rows) if (!r.id.startsWith('sys:') && !r.id.startsWith('yearly:')) stats.eventsSeen.add(r.id);
+    // Phase 6C: a remembered moment is a fact about the past. It is checked once, when it is made (below), against the state of that year;
+    // the lines that speak it again (an entry's `echo`, a reflection in an ordinary year) are not checked against today's state.
+    const phrases = mems.map((m) => m.phrase);
     for (const { entry, id, pre, post } of rows) {
       if (!post) continue;
+      if (entry.kind === 'year' && phrases.some((p) => entry.text.includes(p))) continue; // a reflection
       const text = `${entry.title && entry.kind !== 'year' && !/^\d+ 歲$/.test(entry.title) ? entry.title + '。' : ''}${entry.text}`;
       for (const rule of rules) {
         // A text is only a contradiction when it does not fit the state before NOR after the event's effects
@@ -1098,6 +1107,18 @@ export function runAudit(configs, { allow = ALLOW, rules = RULES, checkLife = tr
         for (const hit of hitsPost) {
           if (!keys.has(hit.word + '|' + hit.sentence)) continue;
           raw.push({ rule: rule.id, id, word: hit.word, sentence: hit.sentence, why: hit.why, snap: post, seed: cfg.seed, settings: cfg.settings, age: entry.age, year: entry.year, kind: entry.kind, title: entry.title });
+        }
+      }
+    }
+    for (const m of mems) {
+      const text = `${m.phrase.replace(/「[^」]*」/g, '')}。`; // the label of a past choice is not a statement about the state
+      for (const rule of rules) {
+        const hitsPost = rule.check(m.post, text);
+        if (!hitsPost.length) continue;
+        const keys = new Set(rule.check(m.pre, text).map((h) => h.word + '|' + h.sentence));
+        for (const hit of hitsPost) {
+          if (!keys.has(hit.word + '|' + hit.sentence)) continue;
+          raw.push({ rule: rule.id, id: `memory:${m.key}`, word: hit.word, sentence: hit.sentence, why: hit.why, snap: m.post, seed: cfg.seed, settings: cfg.settings, age: m.age, year: m.year, kind: 'memory', title: m.key });
         }
       }
     }

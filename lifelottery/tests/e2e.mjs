@@ -321,11 +321,28 @@ try {
       await noHScroll(page, 'lottery');
     });
 
-    await step('life: auto-choice plays the whole life through to the death screen', async () => {
+    await step('life: auto-choice plays the whole life through to the death screen (the story calls memories back in quiet lines)', async () => {
       await page.click('[data-action="begin"]');
       await waitHash(page, /#\/life/);
       await page.waitForSelector('.life-name');
+      // Phase 6C: count the memory echoes the timeline shows (a quiet italic line under an entry, see engine/memory.js)
+      await page.evaluate(() => {
+        window.__echoes = [];
+        window.__reflections = [];
+        new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+          if (n.nodeType !== 1) return;
+          // a reflection is an ordinary year that looks back (a year line that says 想起)
+          const years = n.matches('.kind-year') ? [n] : [...n.querySelectorAll('.kind-year')];
+          years.forEach((y) => { const t = y.querySelector('.entry-text')?.textContent || ''; if (/想起|思緒又回到/.test(t)) window.__reflections.push(t); });
+          const found = n.matches('.entry-echo') ? [n] : [...n.querySelectorAll('.entry-echo')];
+          found.forEach((e) => window.__echoes.push({ text: e.textContent, italic: getComputedStyle(e).fontStyle, mark: !!e.querySelector('.echo-mark[aria-hidden="true"]') }));
+        }))).observe(document.body, { childList: true, subtree: true });
+      });
       await waitHash(page, /#\/death/, 120000);
+      const echoes = await page.evaluate(() => window.__echoes);
+      const reflections = await page.evaluate(() => window.__reflections);
+      assert(echoes.length >= 1 && echoes.length + reflections.length >= 3, `a whole life should call some memories back (3-4 reflections and 6-8 echoes on average), saw ${echoes.length} echoes and ${reflections.length} reflections`);
+      assert(echoes.every((e) => /想起|記起|浮上來/.test(e.text) && e.text.trim().endsWith('。') && e.italic === 'italic' && e.mark), `echo lines: ${JSON.stringify(echoes.slice(0, 3))}`);
       await noHScroll(page, 'death');
     });
 
@@ -758,6 +775,13 @@ try {
       await page.waitForSelector('dialog.drawer[open]');
       const txt = await page.textContent('dialog.drawer');
       assert(txt.includes('母親') && txt.includes('父親'), 'parents listed');
+      // Phase 6C: where each living member of the family lives, and the newest memories
+      const people = await page.$$eval('dialog.drawer .person', (ns) => ns.map((n) => ({ dead: n.classList.contains('is-dead'), where: n.querySelector('.person-where') ? n.querySelector('.person-where').textContent : '' })));
+      assert(people.length >= 2, 'people listed');
+      assert(people.filter((p) => !p.dead).every((p) => ['同住', '分開住', '在家鄉', '在國外', '跟著伴侶', '跟著另一位家長', '跟著祖父母', '自己住', ''].includes(p.where)), `where: ${JSON.stringify(people)}`);
+      if (people.some((p) => !p.dead)) assert(people.filter((p) => !p.dead && p.where).length >= 1, `a living member of the family says where they live: ${JSON.stringify(people)}`);
+      assert(txt.includes('回憶'), 'a memories section');
+      assert((await page.$$('dialog.drawer [data-role="memories"] li')).length <= 5, 'at most five memories');
       await shot(page, 'mobile-light', '06-family-drawer', { full: false });
       await page.keyboard.press('Escape');
       await page.waitForSelector('dialog.drawer', { state: 'detached' });

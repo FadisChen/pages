@@ -95,7 +95,7 @@ export const scaled = (t) => t / DEBUG.scale;
 // Reading load of what a year put on the screen
 // ---------------------------------------------------------------------------------------------
 
-const textLength = (e) => (e && e.title ? String(e.title).length : 0) + (e && e.text ? String(e.text).length : 0);
+const textLength = (e) => (e && e.title ? String(e.title).length : 0) + (e && e.text ? String(e.text).length : 0) + (e && e.echo ? String(e.echo).length : 0);
 
 /**
  * What a set of timeline entries asks of the reader.

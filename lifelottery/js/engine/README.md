@@ -188,9 +188,13 @@ health `health_`, aging `aging_`, world `world_`, regional `regional_`. Start fr
     effects, set, unset, schedule, highlight,
     result: 'text' | (s, h) => text,   // evaluated AFTER effects, so it may describe the outcome
     ai: 1 | (s, h) => number,          // weight for auto-choice
+    memory: 'text' | (s, h) => text | false,   // Phase 6C: the clause this choice keeps as a memory ("你想起十歲那年，…"); default 「面對「title」，你選了「label」」, see section 11
+    memoryYou: 'text' | (s, h) => text,        // same, for an option that also has a `familyResult` when somebody chooses it for themselves
   }],
+  memory: 'text' | (s, h) => text | false,     // Phase 6C: on an event without choices (or the default for its choices): a key moment of its own
 }
 ```
+The authored phrases of the choices live in `data/events/memories.js` (`{ eventId: { 'choice label': phrase } }`), attached by `events/index.js`.
 
 For an event with `choices`, event-level `effects`, `set` and `unset` apply when the situation is presented (its log entry carries the delta) and event-level `schedule`
 when the choice is resolved.
@@ -201,7 +205,7 @@ if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `t
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 176; the household ones are in section 9)
+### Helpers (`h`, all 181 in helpers.js, plus six from events.js; the household ones are in section 9, the memory ones in section 11)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
@@ -307,6 +311,9 @@ node --test tests/culture.test.mjs      # religion, festivals, city geography, l
 LL_SIM_N=1000 node --test tests/simulation.test.mjs    # quicker run (statistical tolerances get noisy below ~1000 lives)
 node --test tests/agency.test.mjs      # Phase 6A: decision tiers, family-decided events, the `agency` audit (section 10)
 node tools/agency-scan.mjs 1500 --static --cards   # who decides: choice cards shown under 18 by event, adult-only acts found in them, and the static audit of every choice event x age x household
+node --test tests/consequence.test.mjs   # Phase 6C: the consequence tracker threshold (about half of the major choices echoed, 51 % measured, 17 % before 6C), the memory API, the decider per stage, the drawer's household view (section 11)
+node tools/consequence-scan.mjs --lives=2000 [--static] [--dynamic] [--top=40] [--blind] [--json=out.json]   # which major choices leave a mark on the rest of the life, and which do not
+npm run test:quick                      # the whole suite with the heavy audits at a smaller size (LL_QUICK=1, about 4 minutes); `npm test` stays the complete run (section 7b)
 node tools/calibrate-risk.mjs [lives] [passes]          # regenerate data/riskref.js
 node tools/read-life.mjs --seed=x --country=NPL --religion=hindu --focus=work --city=比拉特納加   # print one whole life (also --era --gender --urban --wealth --birthYear)
 node tools/fetch-raw.mjs && node tools/build-data.mjs   # regenerate data/countries.js
@@ -314,6 +321,14 @@ node tools/fetch-raw.mjs && node tools/build-data.mjs   # regenerate data/countr
 Note: on Node 22 `node --test <directory>` is not supported (positional arguments are globs); use the glob form above.
 The "choices per life 15–45" target is only enforced once there are ≥ 300 events (`tests/simulation.test.mjs`, `CONTENT_THRESHOLD`);
 until then it is printed with a warning.
+
+### 7b. Quick and full runs
+
+`npm test` is the complete run (every audit at its full size, about 8 minutes on four cores; the statistical simulation test runs on worker threads). `npm run test:quick` sets `LL_QUICK=1`: the sampling audits
+(`tests/coherence.test.mjs` 1300 / 800 lives, `tests/events.test.mjs` 3000 / 600 random states, `tests/eulogy.test.mjs` 3000 lives, `tests/agency.test.mjs`
+1500 lives, `tests/consequence.test.mjs` 600 lives, `tests/simulation.test.mjs` 2000 lives in eight countries and ten extra fertility checks -> 1000 lives in four countries, ...) use `scaled(full, quick)` from `tests/lib/scale.mjs` instead. The rules and the checks are the
+same, only the number of sampled lives is smaller, so a quick run can miss a rare contradiction that the full run finds: run `npm test` before a release.
+`LL_SCALE=0.25 npm test` scales every `scaled()` size by that factor (a smoke run). The time budget the coherence audit asserts is 0.07 s a life (measured 0.042 with the files of a complete run sharing four cores). The health-focus lifespan band (0.5 to 3.2 years) is only asserted by the complete run: a quick run samples too few lives for it.
 
 ## 8. Known limitations
 
@@ -421,3 +436,43 @@ A small child with malaria must not choose between buying medicine and seeing a 
 **Helpers** (added to the helper class by `events.js`; `helpers.js` is not touched): `h.agency()`, `h.isKid()` (under 12), `h.isTeen()` (12-17), `h.whoDecides(salt)` (the word a child uses for the one who decides: `'爸爸'`, `'媽媽'`, `'爸媽'`, `'奶奶'`; with one parent only that parent or `'奶奶'`; with none `h.standIn()`'s uncle, aunt or elder, else `'身邊的大人'`; stable for the life, the age and the salt, draws no random numbers), `h.means()` (`'thin' | 'ok' | 'good'`), `h.carryYou()` (`'抱著你'` up to 3, `'背著你'` up to 7, else `'牽著你'`).
 
 **Writing an event the family decides.** (1) Give the event `decider: 'family'`. (2) The setup `text` must not ask the child anything ("你不知道該不該出發" becomes "大人們壓低聲音商量著要不要出發" for `h.isKid()`), and the same goes for its `variants`. (3) Keep the original choices for adults and give them `cond: notTeen`; add a `familyResult` that names `h.whoDecides(...)` and uses `h.means()` / the place for colour. (4) Add two or three `teenOnly` choices with `who: 'child'` (ask the family, tell them, help, go along, spend your own pocket money). (5) Never let the child be the doer of an adult act in a `familyResult` ("爸爸向鄰居借了機車，帶著你騎去診所", not "你借了車"). The `agency` audit (`tests/lib/rules-agency.mjs`, registered in `coherence.mjs`; `node tools/agency-scan.mjs [lives] [--static] [--cards]`) flags spending, buying, borrowing, taking someone to hospital, evacuating the family, negotiating, farming decisions, quitting, investing, moving house, signing and paying fees in anything offered to somebody under 15 (loans, contracts, investing and quitting for 15-17 as well), unless the sentence is child-framed or somebody else is the doer. `tests/agency.test.mjs` runs it over 1500 lives and over every choice event x age 0-17 x five synthetic households.
+
+## 11. Memories and consequences (Phase 6C)
+
+A life keeps the moments it turns on and speaks of them again, and a choice leaves a mark on what comes after. `engine/memory.js` is a leaf module (it imports only `hash01`).
+
+**State.** `state.memories = [ { k, p, a, g, t?, w?, n?, l?, u?, s? } ]`, at most 48, plain JSON, absent in a life that has none (an old save loads as it was):
+`k` key (`'kind:what'`: `c:` a choice, `f:` a decision the family took, `e:` an event, `loss:` `love:` `kid:` `move:` `work:` system moments), `p` the phrase, a clause in the second
+person and the past tense that completes "你想起…，" (`'是叔叔借了車，送你去診所'`), `a` the age it happened at, `g` the domain (`school work money family love health move bond life`),
+`t` up to three specific tags of the event it came from, `w` weight 1-3, `n` how often it was spoken, `l` the age it was last spoken at, `u` 1 for the plain record 「面對「title」，你選了「label」」 of a choice that has no authored phrase (kept for the consequence tracker, **never spoken**: not by `reflection`, `echoFor`, `h.recall`, the keepsake or the 回憶 list), `s` 1 when the choice has a follow-up of its own (the other memories are called back first).
+Nothing in the memory system draws a random number (every choice is `hash01(seed, age, key)`), so adding memories never changes which events a life meets.
+
+**Who writes memories.**
+
+| Moment | Key | Phrase |
+| --- | --- | --- |
+| a choice of the player | `c:<event id>` | the choice's `memory` (string, `(s, h) => string`, or `false` for none) or the event's; else 「面對「title」，你選了「label」」 |
+| a decision the family took for a child under 12 | `f:<event id>` | the choice's `memory`, which names `h.whoDecides()`; else 「爸媽為「title」拿了主意」 |
+| an event with its own `memory` | `e:<event id>` | the event's `memory` |
+| the first job, a wedding, a divorce, a child's birth, the death of a parent / partner / child, every move to another country | `work:first` `love:wed<n>` `love:div<n>` `kid:<n>` `loss:<who>` `move:<n>` | fixed phrases written in `systems.js` |
+| any event or choice | any | `h.remember(key, phrase, { age, tag, w })` |
+
+An option that has a `familyResult` is written from the child's side; its `memory` is only used when the family decided. When an adult picks the same option the plain 「你選了…」 memory is kept.
+
+**Who speaks them.**
+
+* `reflection(s)` (events.js `yearlyEntry`): an ordinary year may become one or two memories in a line of its own ("夜裡睡不著，你想起前年，…，也想起十六歲那年，…"). The memory spoken least comes first; at most one a year, at least six years apart (`REFLECT_GAP`): three or four in a life, so most quiet years stay ordinary years. Only authored phrases are spoken, and a memory rests for ten years after it was spoken (`FRESH_AFTER`; `h.recall` stays quiet too).
+* `echoFor(s, ev, domain)` (events.js, `addEcho`): an event or a choice result of the same kind as an older memory (a shared specific tag, or the same part of life) carries one short line in the log entry's `echo` field ("這讓你想起…"). Events that look back on a whole life (tags `reflection`, `midlife`, `late`) fit any memory and may speak two. Six to eight in a life (`ECHO_SCALE`). Never on grief, war, disaster, death or an ordinary milestone. The life screen shows `echo` as a quiet italic line (`.entry-echo`) and the pacing counts its characters.
+* `h.recall(key)` ("十歲那年，是叔叔借了車，送你去診所"), `h.recallPhrase(key)`, `h.hasMemory(key)`, `h.memories(tag)` for an event that wants to name one itself: `你想起${h.recall('f:regional_malaria_season')}。`. They change nothing.
+* `summary.keepsake` (`keepsakeOf`: a decision the family took, a loss, or an authored moment, turned into the third person) (there is no `summary.memories`; the family drawer reads the newest five from `getStatus(s).memories`); `eulogy.js` tells the keepsake in the sentence about the family ("她始終記得五歲那年，媽媽整夜守在她身邊…"), the first thing to go when the story is too long.
+
+A memory that was spoken (in any line: `pushLog` calls `noteSpoken`) is not spoken again for ten years (`FRESH_AFTER`) and never in the year it was made. The tuning constants are in `reflection()` / `echoFor()`; `tests/consequence.test.mjs` pins the density (6-16 callbacks per life; measured 3.3 reflections and 6.4 echoes on average, a little more in a life of 80 years or more).
+
+**Audit.** A memory is a fact about the past: `tests/lib/coherence.mjs` checks each phrase once, when it is made, against the state of that year (`memory:<key>` flags; the quoted label of a past choice is removed first), and does not check the lines that speak it again against today's state.
+
+**The consequence tracker** (`tools/consequence-scan.mjs`, `TRACE` hooks in `events.js`): the static part lists, for every major choice, its flags, follow-ups and readers; the dynamic part plays lives and records, for every choice, whether a follow-up fired, a text or condition read one of its flags, or a memory it made was spoken again. The share of choice firings with an echo is the number `tests/consequence.test.mjs` holds at 47 % or more (51 % measured on 2000 lives; 17 % before Phase 6C). The first goal was 80 %, which needed about 20 spoken callbacks in a life and read as a tic; the density was cut on purpose and the number is what it honestly is. `--blind` lists follow-ups scheduled by several options of one event that read none of the flags telling the options apart (a place for "stay" and "leave" to contradict: `world_ukraine_later` used to).
+
+**The person who decides.** `whoDecides` is now fixed per life stage (infant 0-5, child 6-11): two decisions in the same year, or the same stage, name the same adult. The `salt` argument is still accepted and no longer changes the answer.
+
+**Household view.** `getStatus(s).household = { mother, father, partner, children[] }` with `with_you | apart | home_country | abroad | with_partner | with_other_parent | with_grandparents | independent | ''`; the family drawer words them (`strings.js people.where`) and lists `getStatus(s).memories` (the newest five) under 回憶.
+

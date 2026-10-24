@@ -18,8 +18,9 @@ import { composeEulogy, eulogyOf, factsOf, TEMPLATES, EULOGY_VERSION } from '../
 import { normalizeSummary } from '../js/storage.js';
 import { COUNTRIES } from '../js/data/countries.js';
 import { RULES, snapshot, lifeConfigs } from './lib/coherence.mjs';
+import { scaled } from './lib/scale.mjs';
 
-const N_LIVES = 3000;
+const N_LIVES = scaled(3000, 800, 300); // (`npm run test:quick` plays fewer lives)
 const ALL_CODES = COUNTRIES.map((c) => c.code);
 const COUNTRY_NAMES = COUNTRIES.map((c) => c.name).sort((a, b) => b.length - a.length);
 
@@ -250,7 +251,8 @@ test('3000 lives: the eulogy agrees with the facts of the life (children, partne
       }
       // no children: none mentioned (except "no children")
       if (sum.age >= 15 && !sum.children.total) {
-        const y = x.replace(/沒有孩子|一生沒有孩子|身邊沒有孩子|家庭的孩子|這個孩子|還是孩子的年紀|還是孩子的時候|好好當孩子|被家人|手足的孩子|手足那邊的小輩/g, '');
+        let y = x.replace(/沒有孩子|一生沒有孩子|身邊沒有孩子|家庭的孩子|這個孩子|還是孩子的年紀|還是孩子的時候|好好當孩子|被家人|手足的孩子|手足那邊的小輩/g, '');
+        for (const nm of [sum.name, sum.partner && sum.partner.name].filter(Boolean)) y = y.split(nm).join(''); // (孫 is also a family name)
         if (KID_WORDS.test(y)) flag(seed, sum, `${label}: children without children`, x);
       }
       // children named are the person's own, the partner named is the last partner

@@ -9,6 +9,7 @@ import { WEALTH_SHORT } from './birth.js';
 import { FOCUS_BY_ID, focusTimeline } from './focus.js';
 import { RELIGION_LABELS } from '../data/religion.js';
 import { composeEulogy } from './eulogy.js';
+import { keepsakeOf } from './memory.js';
 
 export const EDU_LABELS = {
   none: '未受正式教育', primary: '小學', secondary: '中學', tertiary: '大學', graduate: '研究所',
@@ -169,6 +170,7 @@ export function getSummary(s) {
     riskTrail: riskTrailOf(s),
     highlights,
     featuredHighlight: featuredHighlight(highlights),
+    keepsake: keepsakeOf(s),          // Phase 6C: the one remembered moment the life story may name (eulogy.js)
     counts: { choices, events, milestones, years: s.age },
     stats: statDigest(s.statHistory),
     statHistory: s.statHistory.map((r) => ({ ...r })),

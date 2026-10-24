@@ -8,7 +8,7 @@
 // Bump CACHE_VERSION whenever the list of files changes.
 
 const CACHE_PREFIX = 'lifelottery-';
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v12';
 const CACHE = CACHE_PREFIX + CACHE_VERSION;
 
 const PRECACHE = [
@@ -31,6 +31,7 @@ const PRECACHE = [
   'js/data/events/childhood.js',
   'js/data/events/health.js',
   'js/data/events/index.js',
+  'js/data/events/memories.js',
   'js/data/events/migration.js',
   'js/data/events/regional.js',
   'js/data/events/seed.js',
@@ -50,6 +51,7 @@ const PRECACHE = [
   'js/engine/focus.js',
   'js/engine/helpers.js',
   'js/engine/life.js',
+  'js/engine/memory.js',
   'js/engine/mortality.js',
   'js/engine/odds.js',
   'js/engine/place.js',

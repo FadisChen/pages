@@ -21,6 +21,7 @@ import { getSummary, curateHighlights, MAX_HIGHLIGHTS } from '../js/engine/summa
 import ALL_EVENTS from '../js/data/events/index.js';
 import YEARLY from '../js/data/yearly.js';
 import { RULES, ALLOW, snapshot, runAudit, lifeConfigs, groupFlags, playAudited, applyStress, stressFor } from './lib/coherence.mjs';
+import { scaled, QUICK } from './lib/scale.mjs';
 
 const RULE = Object.fromEntries(RULES.map((r) => [r.id, r]));
 const ALL_CODES = COUNTRIES.map((c) => c.code);
@@ -482,7 +483,7 @@ test('"小老闆" (the family shop) only happens to a family that has a shop', (
 // 3. The audit over a fixed set of lives
 // ---------------------------------------------------------------------------------------------
 
-const AUDIT_LIVES = 1300;
+const AUDIT_LIVES = scaled(1300, 400, 200); // (`npm run test:quick` audits fewer lives)
 let audit = null;
 function runOnce() {
   if (!audit) {
@@ -502,10 +503,13 @@ test(`audit: zero text/state contradictions in ${AUDIT_LIVES} fixed-seed lives`,
     const lines = groupFlags(hard).slice(0, 15).map((g) => `${g.n}x ${g.rule} ${g.id} [${g.word}] ${g.sample.why} :: ${g.sample.sentence} (seed ${g.sample.seed})`);
     assert.fail(`${hard.length} contradictions:\n  ${lines.join('\n  ')}`);
   }
-  assert.ok(res.seconds < 60, `audit took ${res.seconds}s`);
+  // about 0.042 s a life when the files of a complete run share four cores (55 s for 1300 lives, which sat too close to the old 60 s limit): the
+  // budget is 0.07 s a life, a slowdown of more than half still fails it
+  const budget = Math.max(20, AUDIT_LIVES * 0.07);
+  assert.ok(res.seconds < budget, `audit took ${res.seconds}s (budget ${budget.toFixed(0)}s)`);
 });
 
-const STRESS_LIVES = 800;
+const STRESS_LIVES = scaled(800, 250, 120);
 let stressAudit = null;
 test(`audit: zero contradictions in ${STRESS_LIVES} fixed-seed lives with the family taken apart (parents, partner, a child) and every phrasing rotated through`, () => {
   stressAudit = runAudit(lifeConfigs(STRESS_LIVES, { prefix: 'coh5d', countries: ALL_CODES, stress: true, novelty: true }), {});
@@ -554,8 +558,8 @@ test('audit: lives that reach adulthood make 15-45 choices on average', () => {
   assert.ok(mean >= 15 && mean <= 45, `mean adult choices ${mean.toFixed(1)}`);
 });
 
-test('audit: broad event coverage (at least 480 distinct events seen)', () => {
-  assert.ok(runOnce().stats.eventsSeen.size >= 480, `only ${runOnce().stats.eventsSeen.size} events seen`);
+test('audit: broad event coverage (at least 480 distinct events seen; 440 in a quick run)', () => {
+  assert.ok(runOnce().stats.eventsSeen.size >= (QUICK ? 440 : 480), `only ${runOnce().stats.eventsSeen.size} events seen`);
 });
 
 // ---------------------------------------------------------------------------------------------

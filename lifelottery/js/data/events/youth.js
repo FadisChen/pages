@@ -467,6 +467,7 @@ export default [
         label: '繼續保密',
         effects: { happiness: +1, social: -1 },
         set: ['y_secret_romance'],
+        unset: ['y_called_friend'],
         result: '你們約在離家很遠的地方見面，像兩位地下情報員。刺激是刺激，只是每次說謊，你的胃都會縮一下。',
         schedule: [{ id: 'youth_secret_found_out', inYears: [1, 2] }],
         ai: 1.5,
@@ -474,7 +475,7 @@ export default [
       {
         label: '先介紹成「普通朋友」',
         effects: { happiness: +1, social: +1 },
-        set: ['y_secret_romance'],
+        set: ['y_secret_romance', 'y_called_friend'],
         result: '你說對方是「同學」，大人點點頭，沒多問。有一次他們來家裡，大家像一群演員，一起把場面撐了下來。',
         schedule: [{ id: 'youth_secret_found_out', inYears: [1, 3] }],
         ai: 1,
@@ -810,7 +811,12 @@ export default [
     major: true,
     weight: 0,
     tags: ['safety', 'regional', 'followup'],
-    text: (s, h) => '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。',
+    // the corner boys remember how the first offer ended (childhood_corner_boys)
+    text: (s, h) => (h.has('c_corner_errand')
+      ? '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。你小時候替他們跑過腿，他們說「你早就懂規矩了」。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'
+      : h.has('c_refused_corner')
+        ? '街角那幾個大哥哥沒有忘記你。幾年前你搖頭走開，他們笑了一陣；如今他們換了說法，給的是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'
+        : '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'),
     choices: [
       {
         label: '拒絕，並找信任的大人幫忙',
@@ -1578,9 +1584,9 @@ export default [
     ages: [13, 24],
     weight: 0,
     tags: ['followup', 'love', 'family'],
-    text: (s, h) => `大人整理你房間時，看到了${h.year() < 2005 ? '藏起來的信' : '手機螢幕上跳出的訊息'}。晚上，他們把你叫到餐桌邊。出乎意料，沒有人大吼，只是沉默很久，然後有人問：「你為什麼不早點說？」`,
+    text: (s, h) => `大人整理你房間時，看到了${h.year() < 2005 ? '藏起來的信' : '手機螢幕上跳出的訊息'}。晚上，他們把你叫到餐桌邊。出乎意料，沒有人大吼，只是沉默很久，然後有人問：「${h.has('y_called_friend') ? '那個你說的「普通朋友」，其實不普通，對不對？' : '你為什麼不早點說？'}」`,
     effects: { happiness: -2, social: +1, knowledge: +1 },
-    unset: ['y_secret_romance'],
+    unset: ['y_secret_romance', 'y_called_friend'],
   },
   {
     id: 'youth_sneak_caught',

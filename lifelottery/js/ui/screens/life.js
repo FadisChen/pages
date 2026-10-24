@@ -158,6 +158,9 @@ export default function mount(ctx, root) {
     return chips.length ? el('div', { class: 'deltas' }, chips) : null;
   }
 
+  /** A memory the story calls back (engine/memory.js): a quiet line under the entry. */
+  const echoNode = (text) => el('p', { class: 'entry-echo' }, el('span', { class: 'echo-mark', 'aria-hidden': 'true' }, '↺ '), text);
+
   function entryNode(e, { autoPicked = false } = {}) {
     const isNewAge = e.age !== lastAge;
     lastAge = e.age;
@@ -166,6 +169,7 @@ export default function mount(ctx, root) {
     if (kind === 'choice') {
       body.append(el('p', { class: 'entry-chose' }, T.youChose, el('b', null, ` ${e.title}`), autoPicked ? el('span', { class: 'tag' }, T.autoShort) : null));
       body.append(el('p', { class: 'entry-text' }, e.text));
+      if (e.echo) body.append(echoNode(e.echo));
     } else if (kind === 'year') {
       body.append(el('p', { class: 'entry-text' }, e.text));
     } else if (kind === 'focus') {
@@ -173,6 +177,7 @@ export default function mount(ctx, root) {
     } else {
       if (e.title) body.append(el('h2', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
       body.append(el('p', { class: 'entry-text' }, e.text));
+      if (e.echo) body.append(echoNode(e.echo));
     }
     const chips = chipsFor(e.delta);
     if (chips) body.append(chips);
@@ -567,11 +572,14 @@ export default function mount(ctx, root) {
   function openFamily() {
     const st = getStatus(s);
     const P = T.people;
-    const person = (label, name, detail, dead) => el('li', { class: `person${dead ? ' is-dead' : ''}` },
+    const hv = st.household || {};
+    const whereNode = (key) => (key && P.where[key] ? el('span', { class: 'person-where', 'data-where': key }, P.where[key]) : null);
+    const person = (label, name, detail, dead, where) => el('li', { class: `person${dead ? ' is-dead' : ''}` },
       el('span', { class: 'person-role' }, label),
       el('span', { class: 'person-name' }, name),
-      el('span', { class: 'person-detail' }, detail));
-    const parent = (label, p) => person(label, p.name, p.alive ? `${P.alive}・${P.ageOf(p.age)}` : P.deceased, !p.alive);
+      el('span', { class: 'person-detail' }, detail),
+      whereNode(where));
+    const parent = (label, p, where) => person(label, p.name, p.alive ? `${P.alive}・${P.ageOf(p.age)}` : P.deceased, !p.alive, where);
     const section = (title, ...items) => el('section', { class: 'drawer-sec' }, el('h3', null, title), ...items);
 
     const job = st.jobName ? `${T.workStatus[st.workStatus] || ''}・${st.jobName}` : (T.workStatus[st.workStatus] || '');
@@ -585,19 +593,23 @@ export default function mount(ctx, root) {
         el('div', null, el('dt', null, P.work), el('dd', null, job || P.none)),
         el('div', null, el('dt', null, P.health), el('dd', null, conds.length ? conds.join('、') : P.noConditions, st.smoker ? `・${P.smoker}` : '')),
       ));
-    const parents = section(`${P.mother}／${P.father}`, el('ul', { class: 'people' }, parent(P.mother, st.mother), parent(P.father, st.father)),
+    const parents = section(`${P.mother}／${P.father}`, el('ul', { class: 'people' }, parent(P.mother, st.mother, hv.mother), parent(P.father, st.father, hv.father)),
       el('p', { class: 'fine' }, P.siblingCount(st.siblings)));
     const partner = section(P.partner, st.partner
-      ? el('ul', { class: 'people' }, person(T.partnerStatus[st.partner.status] || '', st.partner.name, P.ageOf(st.partner.age), false))
+      ? el('ul', { class: 'people' }, person(T.partnerStatus[st.partner.status] || '', st.partner.name, P.ageOf(st.partner.age), false, hv.partner))
       : el('p', { class: 'fine' }, P.noPartner));
     const kids = section(P.children, st.children.length
-      ? el('ul', { class: 'people' }, st.children.map((c) => person(P.girlOrBoy[c.gender] || '', c.name, c.alive ? `${P.alive}・${P.ageOf(c.age)}` : P.deceased, !c.alive)))
+      ? el('ul', { class: 'people' }, st.children.map((c, i) => person(P.girlOrBoy[c.gender] || '', c.name, c.alive ? `${P.alive}・${P.ageOf(c.age)}` : P.deceased, !c.alive, hv.children && hv.children[i])))
       : el('p', { class: 'fine' }, P.noChildren));
+    // the last few moments the story keeps (engine/memory.js): the newest first
+    const mems = section(P.memoriesTitle, st.memories && st.memories.length
+      ? el('ul', { class: 'memories', 'data-role': 'memories' }, st.memories.map((m) => el('li', null, el('span', { class: 'mem-age' }, P.memoryAge(m.age)), el('span', { class: 'mem-text' }, `${m.phrase}。`))))
+      : el('p', { class: 'fine' }, P.noMemories));
 
     const closeBtn = el('button', { class: 'icon-btn drawer-close', type: 'button', 'aria-label': T.close }, icon('close'));
     const dlg = el('dialog', { class: 'drawer', 'aria-labelledby': 'drawer-title' },
       el('div', { class: 'drawer-head' }, el('h2', { id: 'drawer-title' }, T.familyTitle), closeBtn),
-      el('div', { class: 'drawer-body' }, you, parents, partner, kids));
+      el('div', { class: 'drawer-body' }, you, parents, partner, kids, mems));
     const close = () => dlg.close();
     closeBtn.addEventListener('click', close);
     dlg.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });

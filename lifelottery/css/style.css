@@ -524,6 +524,9 @@ dialog { color: var(--ink); }
 .entry:last-child .entry-body { padding-bottom: 4px; }
 .entry-text { margin: 0; color: var(--ink); }
 .kind-year .entry-text { color: var(--ink-2); font-size: 0.9375rem; }
+/* a memory the story calls back (engine/memory.js): quiet, in the ink-2 colour, set apart by italic and a small mark */
+.entry-echo { margin: 6px 0 0; color: var(--ink-2); font-size: 0.9375rem; font-style: italic; }
+.entry-echo .echo-mark { font-style: normal; color: var(--accent); font-weight: 700; }
 .entry-title { font-size: 1.0625rem; margin: 0 0 2px; }
 .kind-event .entry-body::before { background: var(--ink-2); border-color: var(--ink-2); }
 .kind-milestone .entry-body { border-left-color: var(--accent); }
@@ -608,6 +611,13 @@ dialog { color: var(--ink); }
 .people { display: grid; gap: 8px; }
 .person { display: grid; grid-template-columns: 4.5em 1fr auto; gap: 8px; align-items: baseline; }
 .person-role { font-size: 0.8125rem; color: var(--muted); font-weight: 700; }
+/* where this person lives (同住 / 在家鄉 / 在國外 / 跟著祖父母 ...), a quiet pill under the name */
+.person-where { grid-column: 2 / -1; justify-self: start; font-size: 0.75rem; font-weight: 700; line-height: 1; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2); }
+.person-where[data-where="with_you"] { border-color: var(--accent); color: var(--accent); }
+.memories { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.memories li { display: grid; grid-template-columns: 4.5em 1fr; gap: 8px; align-items: baseline; }
+.mem-age { font-size: 0.8125rem; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.mem-text { color: var(--ink-2); font-size: 0.9375rem; }
 .person-name { font-weight: 700; }
 .person-detail { font-size: 0.8125rem; color: var(--ink-2); }
 .person.is-dead .person-name { color: var(--muted); font-weight: 500; }

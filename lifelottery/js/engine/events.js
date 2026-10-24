@@ -14,6 +14,7 @@ import { STAT_KEYS, applyDelta, pushLog, addHighlight, standInKin, parentsPresen
 import { rand, randInt, weightedIndex, chance, hash01, clamp } from './rng.js';
 import { focusEventMult } from './focus.js';
 import { Helpers } from './helpers.js';
+import { remember, reflection, echoFor, domainOf, specificTags } from './memory.js';
 import { BY_CODE } from '../data/countries.js';
 import { incomeGroupAt } from '../data/eras.js';
 
@@ -28,6 +29,16 @@ export const TUNING = {
   yearlyRepeatGap: Infinity, // a "平凡的一年" line is never reused in a life while an unused one exists
   nullWeight: 2.5,          // weight of "nothing happens" in each regular draw: keeps a thin pool from firing constantly
 };
+
+/**
+ * Observation hooks for tools (tools/consequence-scan.mjs): null in the game, so they cost one comparison. They never change the
+ * state or draw a random number.
+ *   pre(s, ev, choiceIndex, byFamily)          right before a choice is applied
+ *   post(s, ev, choiceIndex, entry, byFamily)  right after its log entry was written
+ *   fire(s, ev, entry)                         an event without a choice was logged, or a choice event was presented
+ *   yearly(s, entry)                           an "ordinary year" line was written
+ */
+export const TRACE = { pre: null, post: null, fire: null, yearly: null };
 
 // ---------------------------------------------------------------------------------------------
 // Decision agency (Phase 6A): who makes the decision?
@@ -88,10 +99,15 @@ export function familyFactor(s, c) {
   return f;
 }
 
-/** Who in the family decides, as the word a child would use ('爸爸', '媽媽', '爸媽', '奶奶', an uncle or aunt when both parents are gone, else '身邊的大人'). Stable for (life, age, salt); draws no random numbers. */
-export function whoDecides(s, salt = '') {
+/**
+ * Who in the family decides, as the word a child would use ('爸爸', '媽媽', '爸媽', '奶奶', an uncle or aunt when both parents are gone,
+ * else '身邊的大人'). Stable for a whole life stage (infant 0-5, child 6-11), whatever the decision: the same adult who carried you to
+ * the clinic at four is the one who decides at five (Phase 6C; before, two events of one year could name two different people).
+ * Draws no random numbers. `salt` is accepted for the old call sites and no longer changes the answer.
+ */
+export function whoDecides(s, salt = '') { // eslint-disable-line no-unused-vars
   const p = parentsPresent(s);
-  const u = hash01(`${s.seed}|decides|${s.age}|${salt}`);
+  const u = hash01(`${s.seed}|decides|${agencyOf(s.age)}`);
   if (p === 'both') return u < 0.34 ? '爸爸' : u < 0.68 ? '媽媽' : u < 0.9 ? '爸媽' : '奶奶';
   if (p === 'mother') return u < 0.82 ? '媽媽' : '奶奶';
   if (p === 'father') return u < 0.82 ? '爸爸' : '奶奶';
@@ -276,6 +292,7 @@ export function validateEvents(list, byId = null) {
     if (ev.variants !== undefined && (!Array.isArray(ev.variants) || !ev.variants.length || ev.variants.some((v) => (typeof v !== 'string' && typeof v !== 'function') || v === ''))) errors.push(`${w}: variants must be a non-empty array of strings or functions`);
     if (ev.again !== undefined && typeof ev.again !== 'string' && typeof ev.again !== 'function') errors.push(`${w}: again must be a string or function`);
     if (ev.max !== undefined && !(Number.isInteger(ev.max) && ev.max >= 1)) errors.push(`${w}: max must be a positive integer`);
+    if (ev.memory !== undefined && ev.memory !== false && typeof ev.memory !== 'string' && typeof ev.memory !== 'function') errors.push(`${w}: memory must be a string, a function or false`);
     if (ev.cooldown !== undefined && !(Number.isInteger(ev.cooldown) && ev.cooldown >= 0)) errors.push(`${w}: cooldown must be a non-negative integer`);
     if (ev.once === false && ev.chance === undefined && ev.cooldown === undefined) { /* allowed: repeatable with no cooldown */ }
     checkEffects(w, ev.effects);
@@ -292,6 +309,7 @@ export function validateEvents(list, byId = null) {
         if (typeof c.label !== 'string' || !c.label) errors.push(`${cw}: missing label`);
         if (c.who !== undefined && c.who !== 'child') errors.push(`${cw}: who must be 'child'`);
         if (c.familyResult !== undefined && c.familyResult !== false && typeof c.familyResult !== 'string' && typeof c.familyResult !== 'function') errors.push(`${cw}: familyResult must be string, function, or false (never offered to a family deciding for a child)`);
+        for (const mk of ['memory', 'memoryYou']) if (c[mk] !== undefined && c[mk] !== false && typeof c[mk] !== 'string' && typeof c[mk] !== 'function') errors.push(`${cw}: ${mk} must be a string, a function or false`);
         if (c.cost !== undefined && !(typeof c.cost === 'number' && c.cost >= 0 && c.cost <= 3)) errors.push(`${cw}: cost must be a number in 0..3`);
         if (c.reach !== undefined && !(typeof c.reach === 'number' && c.reach >= 0 && c.reach <= 2)) errors.push(`${cw}: reach must be a number in 0..2`);
         if (ev.decider === 'family' && c.who === undefined && c.familyResult === undefined) errors.push(`${cw}: a family-decided event needs familyResult on every choice that is not who:'child'`);
@@ -398,6 +416,40 @@ function scheduleFollowUps(s, list) {
     if (it.p !== undefined && !chance(s.rng, it.p)) continue; // optional `p`: probability that the follow-up happens at all
     s.pending.push({ id: it.id, atAge: s.age + randInt(s.rng, a, b) });
   }
+}
+
+/**
+ * Keep the choice that was just made as a memory (Phase 6C). An authored `memory` on the choice (or on the event; `memoryYou` for an option that
+ * also has a `familyResult`, when somebody chooses it for themselves) is a clause in the second
+ * person, written after the effects ran ("是叔叔借了車，送你去診所"; a function may use the state); `memory: false` keeps nothing. Without
+ * one, a choice of the player becomes 「面對「title」，你選了「label」」, and a decision the family took for a child names who decided.
+ */
+function rememberChoice(s, h, ev, ch, byFamily) {
+  // the authored phrase of an option that has a `familyResult` tells what the family did for a child: when somebody chooses it themselves
+  // (an adult, a teenager choosing a grown-up option) the plain "你選了…" memory is kept instead
+  const familyVoice = ch.familyResult !== undefined && ch.familyResult !== false && !byFamily;
+  const spec = familyVoice ? ch.memoryYou : (ch.memory !== undefined ? ch.memory : ev.memory);
+  if (spec === false || !s.alive) return;
+  let phrase = '';
+  try { phrase = typeof spec === 'function' ? spec(s, h) : (spec || ''); } catch (e) { phrase = ''; }
+  const authored = !!phrase;
+  if (!phrase) phrase = byFamily ? `${whoDecides(s)}為「${String(ev.title).replace(/[「」]/g, '')}」拿了主意` : `面對「${String(ev.title).replace(/[「」]/g, '')}」，你選了「${String(ch.label).replace(/[「」]/g, '')}」`;
+  remember(s, `${byFamily ? 'f' : 'c'}:${ev.id}`, phrase, { tag: domainOf(ev), tags: specificTags(ev), w: byFamily || authored ? 2 : 1, plain: !authored, told: !!(ch.schedule && ch.schedule.length) });
+}
+
+/** An event without choices that is a key moment of its own (`memory` on the event). */
+function rememberEvent(s, h, ev) {
+  if (!ev.memory || !s.alive) return;
+  let phrase = '';
+  try { phrase = typeof ev.memory === 'function' ? ev.memory(s, h) : ev.memory; } catch (e) { phrase = ''; }
+  if (phrase) remember(s, `e:${ev.id}`, phrase, { tag: domainOf(ev), tags: specificTags(ev), w: 2 });
+}
+
+/** A short line that calls an older memory of the same kind back (memory.js echoFor), kept next to the entry as `echo`. */
+function addEcho(s, ev, entry) {
+  if (!s.alive || entry.echo) return;
+  const e = echoFor(s, ev, domainOf(ev));
+  if (e) entry.echo = e;
 }
 
 function addHighlightFrom(s, h, spec, fallback) {
@@ -507,9 +559,12 @@ function fireRegular(s, h, ev) {
   applyFlags(s, ev);
   scheduleFollowUps(s, ev.schedule);
   addHighlightFrom(s, h, ev, text);
+  rememberEvent(s, h, ev);
   const entry = pushLog(s, ev.milestone ? 'milestone' : 'event', ev.title, text, delta);
   entryFirst(s, from, entry);
   deathLast(s, from); // a death caused by the effects reads after the event's own narrative
+  addEcho(s, ev, entry);
+  if (TRACE.fire) TRACE.fire(s, ev, entry);
   return entry;
 }
 
@@ -533,6 +588,7 @@ function decideForFamily(s, h, ev, options, text) {
   if (k < 0) k = Math.floor(rand(s.rng) * options.length);
   const ch = ev.choices[options[k].index];
   const from = s.log.length;
+  if (TRACE.pre) TRACE.pre(s, ev, options[k].index, true);
   const d1 = applyEffects(s, h, ev.effects);
   applyFlags(s, ev);
   const d2 = applyEffects(s, h, ch.effects);
@@ -540,6 +596,7 @@ function decideForFamily(s, h, ev, options, text) {
   scheduleFollowUps(s, ch.schedule);
   scheduleFollowUps(s, ev.schedule);
   const result = str(ch.familyResult ? ch.familyResult : ch.result, s, h) || '';
+  rememberChoice(s, h, ev, ch, true);
   const told = `${text}${result}`;
   addHighlightFrom(s, h, ch, told);
   if (!ch.highlight) addHighlightFrom(s, h, ev, told);
@@ -549,6 +606,7 @@ function decideForFamily(s, h, ev, options, text) {
   entry.by = 'family'; // marks the entry as a decision the family took (the UI shows it like any other event; tests and the debug panel read the mark)
   entryFirst(s, from, entry);
   deathLast(s, from);
+  if (TRACE.post) TRACE.post(s, ev, options[k].index, entry, true);
   return entry;
 }
 
@@ -578,6 +636,8 @@ function presentChoice(s, h, ev) {
   entryFirst(s, from, entry);
   deathLast(s, from);
   if (s.alive) s.flags._choice = { eventId: ev.id, title: ev.title, text, options };
+  addEcho(s, ev, entry);
+  if (TRACE.fire) TRACE.fire(s, ev, entry);
   return entry;
 }
 
@@ -599,16 +659,20 @@ export function resolveChoice(s, h, optionIndex) {
   const ch = ev.choices[opt.index];
   delete s.flags._choice;
   const from = s.log.length;
+  if (TRACE.pre) TRACE.pre(s, ev, opt.index, false);
   const delta = applyEffects(s, h, ch.effects);
   applyFlags(s, ch);
   scheduleFollowUps(s, ch.schedule);
   scheduleFollowUps(s, ev.schedule); // event-level follow-ups of a choice event
   const result = ch.result === undefined ? '' : freshResult(s, ev, opt.index, str(ch.result, s, h));
+  rememberChoice(s, h, ev, ch, false);
   addHighlightFrom(s, h, ch, result || ch.label);
   if (!ch.highlight) addHighlightFrom(s, h, ev, result || ev.title);
   const entry = pushLog(s, 'choice', ch.label, result, delta);
   entryFirst(s, from, entry);
   deathLast(s, from); // a death caused by the choice reads after its result text
+  addEcho(s, ev, entry);
+  if (TRACE.post) TRACE.post(s, ev, opt.index, entry, false);
   return entry;
 }
 
@@ -653,9 +717,18 @@ function pickYearly(s, h) {
 }
 
 function yearlyEntry(s, h) {
+  // some quiet years look back instead (memory.js): one or two older memories in a line of their own
+  const look = reflection(s);
+  if (look) {
+    const e = pushLog(s, 'year', `${s.age} 歲`, look);
+    if (TRACE.yearly) TRACE.yearly(s, e);
+    return e;
+  }
   const pick = pickYearly(s, h);
   const text = pick ? renderText(s, h, pick.t, pick.key).list[0] : '平凡的一年悄悄過去。';
-  return pushLog(s, 'year', `${s.age} 歲`, text);
+  const entry = pushLog(s, 'year', `${s.age} 歲`, text);
+  if (TRACE.yearly) TRACE.yearly(s, entry);
+  return entry;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -22,6 +22,7 @@ import { randomName } from './birth.js';
 import { drawGroup, getPool, childFamilyToken } from '../data/names.js';
 import { fxOf } from './focus.js';
 import { placeGeo } from '../data/geo.js';
+import { remember, noteSpoken, speech, resting } from './memory.js';
 
 export const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 export const EDU_LEVELS = ['none', 'primary', 'secondary', 'tertiary', 'graduate'];
@@ -85,6 +86,7 @@ export function pushLog(s, kind, title, text, delta) {
   const e = { age: s.age, year: s.year, kind, title, text };
   if (delta && Object.keys(delta).length) e.delta = delta;
   s.log.push(e);
+  if (kind !== 'death') noteSpoken(s, text); // a memory said again in this line counts as spoken (memory.js)
   return e;
 }
 
@@ -226,6 +228,7 @@ export function pickJob(s, candidates = JOB_IDS) {
 export function startJob(s, id) {
   const j = JOBS[id];
   if (!j) throw new Error(`unknown job ${id}`);
+  if (!(s.flags._jobs && s.flags._jobs.length)) remember(s, 'work:first', `你有了第一份工作，是${j.name}`, { tag: 'work', w: 3 });
   s.work.job = id;
   s.work.status = j.type;
   s.flags._jobs = s.flags._jobs || [];
@@ -416,7 +419,19 @@ export function weddingFolk(s) {
   return parentsPresent(s) === 'none' || parentsFar(s) ? '親友們' : '兩家人';
 }
 
+/** At a parent's death the person remembers what that parent did for them (a decision the family took when they were small), if it was kept: "你想起十歲那年，是爸爸借了車，送你去診所。" */
+function parentRecall(s, who) {
+  if (s.age < 14) return '';
+  const word = who === 'mother' ? '媽媽' : '爸爸';
+  const m = (s.memories || []).filter((x) => x.k.startsWith('f:') && !x.u && !resting(s, x) && x.p.includes(word) && s.age - x.a >= 3).sort((a, b) => (a.n || 0) - (b.n || 0) || a.a - b.a)[0];
+  return m ? `你想起${speech(s, m)}。` : '';
+}
+
 function parentDeathText(s, who, ctx) {
+  return `${parentDeathBase(s, who, ctx)}${parentRecall(s, who)}`;
+}
+
+function parentDeathBase(s, who, ctx) {
   const label = who === 'mother' ? '母親' : '父親';
   const young = s.age < 18;
   const poor = s.family.wealthQ <= 2;
@@ -450,6 +465,7 @@ function agePeople(s, ctx) {
         wealth: s.age < 18 && who === 'father' && s.family.wealthQ <= 3 ? -3 : 0,
       });
       pushLog(s, 'event', who === 'mother' ? '母親過世' : '父親過世', parentDeathText(s, who, ctx), delta);
+      remember(s, `loss:${who}`, `你的${who === 'mother' ? '母親' : '父親'}過世了`, { tag: 'family', w: 3 });
       householdOnParentDeath(s);
       if (s.age >= 12) s.pending.push({ id: 'regional_culture_funeral', atAge: s.age }); // the rites of the family's tradition, told in the same year
       if (!s.family.mother.alive && !s.family.father.alive && s.age < 18) {
@@ -480,6 +496,7 @@ function agePeople(s, ctx) {
               : `${pt.name}走了。家裡每個角落都還留著對方的習慣，你花了很長一段時間才學會一個人吃飯。`)
             : `${pt.name}意外地離開了這個世界，你們原本還有很多計畫。`, delta);
         addHighlight(s, `${pt.name}離世。`);
+        remember(s, 'loss:partner', `${pt.name}離開了人世`, { tag: 'love', w: 3 });
         planRemarriage(s, wasMarried ? 0.3 : 0.7);
       }
     }
@@ -494,6 +511,7 @@ function agePeople(s, ctx) {
       const delta = applyDelta(s, { happiness: -16, health: -4, social: -2 });
       pushLog(s, 'milestone', '失去孩子', `${c.name}在${age}歲時離開了你。沒有任何道理可以安慰這件事，你只是一天一天地撐過去。`, delta);
       addHighlight(s, `失去了孩子${c.name}。`);
+      remember(s, `loss:kid:${c.name}`, `${c.name}在${age}歲時離開了你`, { tag: 'family', w: 3 });
     }
   }
 }
@@ -1606,6 +1624,7 @@ export function marry(s) {
   s.partner.status = 'married';
   s.partner.since = s.year;
   s.flags._married = (s.flags._married || 0) + 1;
+  remember(s, `love:wed${s.flags._married}`, `你和${s.partner.name}結了婚`, { tag: 'love', w: 3 });
   householdOnMarry(s);
   // the wedding rite of the family's tradition is told in the same year (regional_culture_wedding_rite, once per life)
   if (s.seen.regional_culture_wedding_rite === undefined && !s.pending.some((p) => p.id === 'regional_culture_wedding_rite')) s.pending.push({ id: 'regional_culture_wedding_rite', atAge: s.age });
@@ -1616,6 +1635,7 @@ export function divorce(s) {
   if (!s.partner || s.partner.status !== 'married') return false;
   s.partner.status = 'divorced';
   s.flags._divorces = (s.flags._divorces || 0) + 1;
+  remember(s, `love:div${s.flags._divorces}`, `你和${s.partner.name}的婚姻走到了盡頭`, { tag: 'love', w: 3 });
   householdOnPartnerGone(s, 'divorce');
   // who the children live with is told by family_custody (the default of householdOnPartnerGone stands if it never comes up)
   if (s.children.some((c) => c.alive && kidYears(s, c) <= 15) && s.seen.family_custody === undefined && !s.pending.some((p) => p.id === 'family_custody')) s.pending.push({ id: 'family_custody', atAge: s.age });
@@ -1683,6 +1703,7 @@ export function addChild(s, opts = {}) {
   for (let tries = 0; tries < 12 && taken().has(nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
   const child = { name: nm.full, gender, birthYear: s.year, alive: true, religion: s.religion }; // children grow up in the family's tradition
   s.children.push(child);
+  remember(s, `kid:${s.children.length}`, `${child.name}出生了`, { tag: 'family', w: 3 });
   ensureHousehold(s); // the baby lives with the person, or with the partner when the couple live apart
   s.flags._birthThisYear = true;
   return child;
@@ -1860,6 +1881,8 @@ export function migrate(s, code, opts = {}) {
   if (!s.flags._countries.includes(code)) s.flags._countries.push(code);
   s.flags.migrated = true;
   s.flags._movedAt = s.year;
+  s.flags._moves = (s.flags._moves || 0) + 1;
+  remember(s, `move:${s.flags._moves}`, code === s.homeCountryCode ? `你回到了${BY_CODE[code].name}` : `你離開${BY_CODE[from].name}，到${BY_CODE[code].name}生活`, { tag: 'move', w: 3 });
   // Where you live changes how much lives in each part of the wealth model.
   const ctx = ctxOf(s);
   s.stats.wealth = clamp(s.stats.wealth + 0.5 * (wealthTarget(s, ctx) - s.stats.wealth), 0, 100);

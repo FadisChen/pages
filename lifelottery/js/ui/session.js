@@ -105,7 +105,7 @@ export const session = {
    */
   async start(settings, opts = {}) {
     await loadEngine();
-    const seed = params.get('seed') || `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+    const seed = store.startSeed(params.get('seed'), opts.birth ? opts.replay : null, `${Date.now()}-${Math.floor(Math.random() * 1e9)}`);
     const forced = {};
     if (params.get('country') && !opts.birth) forced.countryCode = params.get('country');
     // what earlier lives of this player met: events seen before are drawn less often and read differently (engine/events.js)

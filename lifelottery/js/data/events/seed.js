@@ -632,20 +632,20 @@ export default [
     tags: ['family', 'education'],
     major: true,
     cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 5 && h.youngestChildAge() <= 12 && !h.has('child_school_decided'),
-    text: (s, h) => `${h.childName(0)}快要升上更高的年級了。鄰居們都在討論哪間學校好、哪家補習班有名。你看著孩子在飯桌前寫作業，不知道該為他多爭取一點，還是多放手一些。`,
+    text: (s, h) => `${h.childName(0)}快要升上更高的年級了。鄰居們都在討論哪間學校好、哪家補習班有名。${h.minorsWithYou().length ? '你看著孩子在飯桌前寫作業' : `你聽${h.caregiverOfChildren() || '照顧孩子的人'}說起孩子的功課`}，不知道該為他多爭取一點，還是多放手一些。`,
     choices: [
       {
         label: '花錢送孩子上補習與才藝',
         effects: { wealth: -5, happiness: -1, social: +1 },
         set: ['child_school_decided', 'child_tutoring'],
-        result: '每個週末你都在接送。孩子成績進步了，笑容卻少了一點。你偶爾懷疑：這是他要的，還是你要的？',
+        result: (s, h) => `${h.minorsWithYou().length ? '每個週末你都在接送。' : '你匯去補習和才藝的費用，每個週末只在電話裡聽他說課上了什麼。'}孩子成績進步了，笑容卻少了一點。你偶爾懷疑：這是他要的，還是你要的？`,
         ai: (s, h) => (h.incomeAtLeast('UM') && h.isRich() ? 1.5 : 0.7),
       },
       {
         label: '讓孩子照自己的步調長大',
         effects: { happiness: +4, social: +2 },
         set: ['child_school_decided'],
-        result: '你選擇陪孩子走路回家、聽他說學校的事。成績沒有特別亮眼，但他的話變得很多，眼睛也特別亮。',
+        result: (s, h) => `${h.minorsWithYou().length ? '你選擇陪孩子走路回家、聽他說學校的事。' : '你選擇不加課，只在每次通電話時，耐心聽他說學校的事。'}成績沒有特別亮眼，但他的話變得很多，眼睛也特別亮。`,
         ai: 2,
       },
       {
@@ -994,6 +994,7 @@ export default [
     choices: [
       {
         label: '立刻帶著家人撤離',
+        memory: (s, h) => `是${h.whoDecides()}牽著你，抓了最重要的幾樣東西往高處跑，回頭時屋子已經泡在水裡`,
         cond: notTeen,
         effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
         result: '你抱起最重要的幾樣東西往高處跑。天亮時回頭看，屋子已泡在水裡。你什麼都沒了，但每個人都還在。',
@@ -1002,6 +1003,7 @@ export default [
       },
       {
         label: '留下來守住家當',
+        memory: (s, h) => `${h.whoDecides()}把你送到鄰居家的高處，自己回去守著家當，你睜著眼睛等到天亮`,
         cond: notTeen,
         effects: (s, h) => {
           if (!h.isKid() && h.chance(0.08)) { h.die('disaster'); return; }

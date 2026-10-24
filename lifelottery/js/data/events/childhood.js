@@ -515,7 +515,8 @@ export default [
     ages: [4, 12],
     weight: 0.9,
     tags: ['family', 'migration', 'regional'],
-    cond: (s, h) => !h.incomeAtLeast('H') && h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'CAS', 'MENA', 'EAS') && h.wealthQ() <= 3 && h.parentsAlive() > 0,
+    // a parent who works in another country than the child lives in: the child stays in the home country with the other parent (Phase 6C: the household, not the country of today)
+    cond: (s, h) => !h.incomeAtLeast('H') && h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'CAS', 'MENA', 'EAS') && h.wealthQ() <= 3 && h.parentsAlive() === 2 && !h.isMigrant() && h.livesWith('parents'),
     text: (s, h) => {
       const who = h.parentAlive('mother') && (h.isRegion('SEA', 'SAS') || !h.parentAlive('father')) ? '媽媽' : h.parentAlive('father') ? '爸爸' : '媽媽';
       const he = who === '媽媽' ? '她' : '他'; // the parent who works abroad

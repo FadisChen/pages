@@ -11,6 +11,7 @@ const widowed = (h) => h.partnerStatus() === 'widowed';
 /** Children (or "親戚" without any) who can come by: they live with the person or in the same country (Phase 6B). */
 const kinNear = (h, kids = '孩子們', other = '親戚們') => (h.childrenNearby().length > 0 ? kids : other);
 /** '他' / '她' for the child who left home last ('孩子' when unknown). */
+const lastLeftAlive = (s, h) => { const c = s.children.find((k) => k.name === h.lastLeftChildName()); return !c || c.alive !== false; }; // the child who left and died before the follow-up came up is not packed into a car
 const lastLeftHe = (s, h) => { const c = s.children.find((k) => k.name === h.lastLeftChildName()); return c ? (c.gender === 'F' ? '她' : '他') : '孩子'; };
 
 export default [
@@ -297,7 +298,7 @@ export default [
     // told by the household pass the year the last child at home leaves (systems.js householdYear): pending only
     weight: 0,
     tags: ['aging', 'family', 'followup'],
-    followCond: (s, h) => h.hasChildren() && !h.livesWith('children') && !h.has('f_empty_nest'),
+    followCond: (s, h) => h.hasChildren() && !h.livesWith('children') && !h.has('f_empty_nest') && lastLeftAlive(s, h),
     set: ['f_empty_nest'],
     text: (s, h) => `${h.lastLeftChildName()}搬出去的那天，你幫${lastLeftHe(s, h)}把最後一個箱子搬上車，回到家才發現，屋子裡的每個角落都比昨天更寬敞。飯桌上少了幾副碗筷，連你煮的菜量都沒學會減少。`,
     choices: [
@@ -401,7 +402,8 @@ export default [
     weight: (s, h) => (widowed(h) ? 4 : 0),
     tags: ['aging', 'grief', 'family'],
     cond: (s, h) => widowed(h),
-    text: (s, h) => '你還是不小心煮了兩人份的飯菜。出門時你習慣回頭說「我出去了」，然後想起屋裡沒有人會應。這一年你學會了很多事，像是怎麼一個人睡在一張大床上。',
+    // the wedding is remembered here, where no echo is spoken over grief (engine/memory.js): the memory is a fact about the past
+    text: (s, h) => `你還是不小心煮了兩人份的飯菜。出門時你習慣回頭說「我出去了」，然後想起屋裡沒有人會應。${h.recall(`love:wed${s.flags._married || 1}`) ? `夜裡你想起${h.recall(`love:wed${s.flags._married || 1}`)}。` : ''}這一年你學會了很多事，像是怎麼一個人睡在一張大床上。`,
     choices: [
       {
         label: '讓家人與朋友陪伴',
@@ -512,6 +514,7 @@ export default [
     choices: [
       {
         label: '裝扶手與止滑墊，請家人定期來看',
+        set: ['elder_rails'],
         effects: { health: -3, social: +2 },
         result: (s, h) => `${h.childrenNearby().length > 0 ? '孩子週末帶著工具箱' : '隔壁的鄰居帶著工具箱'}，在浴室與走廊裝上扶手。你嘴上說「用不到」，每次抓到那根冰涼的金屬，都覺得很安心。`,
         schedule: [{ id: 'aging_fall_recovery', inYears: [0, 1] }],
@@ -540,7 +543,11 @@ export default [
     ages: [72, 100],
     weight: 0,
     tags: ['aging', 'followup'],
-    text: (s, h) => '幾個月之後，你不再需要拐杖，也不再每一步都緊盯著地板。你站在走廊中央，對著空氣緩緩轉了一圈，輕輕說：「看，沒事。」窗外的陽光剛好照到你的腳邊。',
+    text: (s, h) => (h.has('elder_housed')
+      ? '幾個月之後，你不再需要拐杖。在新住處的走廊中央，你對著空氣緩緩轉了一圈，輕輕說：「看，沒事。」護理員路過，笑著替你鼓掌，窗外的陽光剛好照到你的腳邊。'
+      : h.has('elder_rails')
+        ? '幾個月之後，你不再需要拐杖。浴室裡那根冰涼的扶手你還是每次都抓著，走廊中央，你對著空氣緩緩轉了一圈，輕輕說：「看，沒事。」窗外的陽光剛好照到你的腳邊。'
+        : '幾個月之後，你不再需要拐杖，也不再每一步都緊盯著地板。你站在走廊中央，對著空氣緩緩轉了一圈，輕輕說：「看，沒事。」窗外的陽光剛好照到你的腳邊。'),
     effects: { health: +3, happiness: +3 },
   },
   {
@@ -816,7 +823,7 @@ export default [
       {
         label: '寫下心願，也和家人好好談一談',
         effects: { happiness: +2, social: +3 },
-        set: ['wishes_written'],
+        set: ['wishes_written', 'wishes_talked'],
         result: (s, h) => (h.childrenNearby().length > 0
           ? '你和孩子們圍坐在桌邊，把心願一條條念給他們聽。他們一開始不想談，後來也說出了自己的想法，那天晚上大家吃了一頓特別久的飯。'
           : '你把幾個最親近的人請到家裡，把心願一條條念給他們聽。他們一開始不想談，後來也說出了自己的想法，那天晚上大家吃了一頓特別久的飯。'),
@@ -827,7 +834,7 @@ export default [
       {
         label: '錄下想說的話，留給在乎的人',
         effects: { happiness: +3, social: +2 },
-        set: ['wishes_written'],
+        set: ['wishes_written', 'wishes_recorded'],
         result: '你對著手機或錄音機說了半小時，有些是叮嚀，有些是笑話，最後你唱了一小段年輕時最愛的歌。錄完你覺得輕盈了許多。',
         highlight: '留下了一段想對家人說的話。',
         schedule: [{ id: 'aging_final_reflection', inYears: [2, 8] }],
@@ -850,7 +857,7 @@ export default [
     weight: 0.5,
     tags: ['aging', 'reflection', 'finale'],
     cond: (s, h) => !h.has('final_reflection_done'),
-    text: (s, h) => `${h.stat('social') >= 55 ? '屋子裡有人在說笑、有人在煮湯，你坐在窗邊聽著這些聲音，覺得自己被好好地圍著。' : '屋子很安靜，你坐在窗邊聽著鐘擺的聲音，想起了許多已經不在身邊的人。'}你回頭看這一生，有${h.hasChildren() ? '孩子們的笑聲' : '朋友們的臉'}，有遺憾，也有許多值得笑的瞬間。`,
+    text: (s, h) => `${h.has('wishes_talked') ? '上次和家人把心願談開之後，你心裡一直很安穩。' : h.has('wishes_recorded') ? '那段錄音你沒有再聽過，卻知道它放在哪裡。' : ''}${h.stat('social') >= 55 ? '屋子裡有人在說笑、有人在煮湯，你坐在窗邊聽著這些聲音，覺得自己被好好地圍著。' : '屋子很安靜，你坐在窗邊聽著鐘擺的聲音，想起了許多已經不在身邊的人。'}你回頭看這一生，有${h.hasChildren() ? '孩子們的笑聲' : '朋友們的臉'}，有遺憾，也有許多值得笑的瞬間。`,
     choices: [
       {
         label: '寫一封信給最重要的人',

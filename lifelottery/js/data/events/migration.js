@@ -554,7 +554,9 @@ export default [
     weight: 0,
     tags: ['migration', 'work', 'followup'],
     text: (s, h) => (h.isMigrant()
-      ? '外派的日子比想像的孤單：同事都是同鄉，假日是國際學校的家長會，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。'
+      ? (h.livesAlone()
+        ? '外派的日子比想像的孤單：同事都是同鄉，下了班各自回到家具齊全的公寓，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。'
+        : '外派的日子比想像的孤單：同事都是同鄉，假日是國際學校的家長會，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。')
       : '你聽過許多外派同事的故事：拿到高薪、住進大房子，卻在週末時分覺得世界是空的。你在心裡記著，這些故事會不會有一天是你的。'),
     effects: (s, h) => { if (h.isMigrant()) { h.change('wealth', +2); h.change('social', -2); h.change('knowledge', +3); h.change('happiness', +1); } else h.change('knowledge', +1); },
   },
@@ -1229,10 +1231,10 @@ export default [
     ages: [20, 78],
     weight: 0,
     tags: ['migration', 'family', 'followup', 'return'],
-    followCond: (s, h) => { const r = h.lastReunion(); return !!r && s.year - r.year <= 1 && r.how === 'return' && (r.partner || r.kids.length > 0); },
+    followCond: (s, h) => { const r = h.lastReunion(); return !!r && s.year - r.year <= 1 && r.how === 'return' && (r.partner || s.children.some((c) => c.alive !== false && r.kids.includes(c.name))); }, // a child who died in the meantime is not at the door
     text: (s, h) => {
       const r = h.lastReunion() || { kids: [], partner: false, apartYears: 0 };
-      const kids = s.children.filter((c) => r.kids.includes(c.name));
+      const kids = s.children.filter((c) => c.alive !== false && r.kids.includes(c.name));
       const youngest = kids.length ? kids.reduce((a, b) => (b.birthYear > a.birthYear ? b : a)) : null;
       const age = youngest ? s.year - youngest.birthYear : 0;
       if (youngest && r.apartYears >= 2 && age <= 8) {

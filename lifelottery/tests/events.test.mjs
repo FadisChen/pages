@@ -11,6 +11,7 @@ import { makeHelpers, HELPER_NAMES } from '../js/engine/helpers.js';
 import { getSummary } from '../js/engine/summary.js';
 import { COUNTRIES } from '../js/data/countries.js';
 import { createRngState, rand, randInt, pick } from '../js/engine/rng.js';
+import { scaled } from './lib/scale.mjs';
 
 const BAD = /undefined|NaN|\[object|null/;
 
@@ -35,7 +36,8 @@ function buildStates(n) {
 }
 
 let STATES = null;
-const states = () => (STATES ||= buildStates(3000));
+const STATE_COUNT = scaled(3000, 800, 300); // (`npm run test:quick` samples fewer random states)
+const states = () => (STATES ||= buildStates(STATE_COUNT));
 
 test('event definitions: structure, ids, effect keys, schedule targets', () => {
   const errors = validateEvents(ALL_EVENTS);
@@ -118,7 +120,7 @@ test('events: cond/text/result/ai/weight never throw and never print undefined/N
 
 test('events: function effects keep stats finite and in range (clones of 600 random states)', () => {
   const errors = [];
-  for (const base of states().slice(0, 600)) {
+  for (const base of states().slice(0, scaled(600, 150, 80))) {
     for (const ev of ALL_EVENTS) {
       const list = [[ev.id, ev.effects], ...(ev.choices || []).map((c, i) => [`${ev.id}#${i}`, c.effects])];
       for (const [id, eff] of list) {

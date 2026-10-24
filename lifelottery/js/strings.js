@@ -185,6 +185,14 @@ export const S = {
       ageOf: (n) => `${n} 歲`,
       smoker: '有吸菸習慣',
       noPartner: '目前沒有伴侶',
+      // where a family member lives (getStatus().household, Phase 6C)
+      where: {
+        with_you: '同住', apart: '分開住', home_country: '在家鄉', abroad: '在國外', with_partner: '跟著伴侶',
+        with_other_parent: '跟著另一位家長', with_grandparents: '跟著祖父母', independent: '自己住',
+      },
+      memoriesTitle: '回憶',
+      noMemories: '還沒有特別想記住的事',
+      memoryAge: (n) => `${n} 歲`,
       noChildren: '目前沒有子女',
       girl: '女兒',
       boy: '兒子',
