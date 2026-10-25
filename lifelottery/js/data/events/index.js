@@ -13,6 +13,8 @@ import health from './health.js';
 import aging from './aging.js';
 import world from './world.js';
 import regional from './regional.js';
+import VARIANTS from './variants.js';
+import MEMORIES from './memories.js';
 
 /** File name -> events, kept separate so tests can check id prefixes per file. */
 export const EVENT_FILES = { seed, childhood, youth, adult_work, adult_family, migration, health, aging, world, regional };
@@ -23,4 +25,23 @@ export const EVENT_PREFIX = {
   migration: 'migration_', health: 'health_', aging: 'aging_', world: 'world_', regional: 'regional_',
 };
 
-export default Object.values(EVENT_FILES).flat();
+const ALL = Object.values(EVENT_FILES).flat();
+
+// Phase 5C: alternative phrasings of the most frequent ordinary events (variants.js, { eventId: [variant, ...] }).
+// The event's own `text` stays variant 0; the engine rotates through the list by the player's earlier lives (events.js).
+for (const ev of ALL) if (VARIANTS[ev.id]) ev.variants = VARIANTS[ev.id];
+
+// Phase 6C: the clause each choice keeps as a memory (memories.js, { eventId: { choice label: phrase } }). An option that also has a `familyResult`
+// (written for a child whose family decides) keeps its own `memory` for the family and takes this phrase as `memoryYou`, for the person who chooses it.
+for (const ev of ALL) {
+  const M = MEMORIES[ev.id];
+  if (!M || !ev.choices) continue;
+  for (const c of ev.choices) {
+    if (M[c.label] === undefined) continue;
+    if (c.familyResult !== undefined && c.familyResult !== false) c.memoryYou = M[c.label];
+    else if (c.memory === undefined) c.memory = M[c.label];
+  }
+}
+
+export { VARIANTS, MEMORIES };
+export default ALL;

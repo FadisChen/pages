@@ -18,6 +18,7 @@ import { moneyText, zhNumber, niceRound, currencyOf, priceIndex } from '../js/da
 import { GROUPS } from '../js/data/names.js';
 import YEARLY from '../js/data/yearly.js';
 import { RULES, snapshot } from './lib/coherence.mjs';
+import { scaled } from './lib/scale.mjs';
 
 const H = (s) => makeHelpers(s);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,7 +51,7 @@ test('religion data: every country has a distribution that sums to 1, every over
 });
 
 test('religion: a life gets a family religion at birth, drawn by the home country and culture group', () => {
-  const tally = (code, n = 1500, extra = {}) => {
+  const tally = (code, n = scaled(1500, 600, 300), extra = {}) => {
     const t = {};
     for (let i = 0; i < n; i++) {
       const s = createLife({ era: 'present' }, `rel-${code}-${i}`, { countryCode: code, ...extra });

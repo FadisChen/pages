@@ -73,12 +73,12 @@ function parseHash() {
   return { name: key, arg: rest.length ? decodeURIComponent(rest.join('/')) : null };
 }
 
-/** Decide which screen to actually show, given what exists in the session. */
-function resolve({ name, arg }) {
+/** Decide which screen to actually show, given what exists in the session (restoring a saved life loads the engine on demand). */
+async function resolve({ name, arg }) {
   if (!SCREENS.includes(name)) return { name: 'notfound', arg: null };
   const needsLife = ['lottery', 'life', 'death', 'summary'];
   if (needsLife.includes(name)) {
-    const s = session.restore();
+    const s = await session.restore();
     if (!s) return { name: 'landing', arg: null, replace: true };
     if (name === 'lottery' && (s.age > 0 || !s.alive)) return { name: s.alive ? 'life' : 'death', arg: null, replace: true };
     if (name === 'life' && !s.alive) return { name: 'death', arg: null, replace: true };
@@ -110,7 +110,9 @@ const ctx = {
 
 async function route() {
   const token = ++mountToken;
-  const parsed = resolve(parseHash());
+  let parsed;
+  try { parsed = await resolve(parseHash()); } catch (e) { console.error(e); parsed = { name: 'landing', arg: null }; }
+  if (token !== mountToken) return;
   if (parsed.replace) {
     const target = parsed.name === 'landing' ? '#/' : `#/${parsed.name}`;
     history.replaceState(null, '', `${location.pathname}${location.search}${target}`);

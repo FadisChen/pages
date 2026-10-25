@@ -90,6 +90,7 @@ const ICONS = {
   briefcase: '<rect x="4" y="8" width="16" height="11" rx="2"/><path d="M9 8V6.2A1.2 1.2 0 0 1 10.2 5h3.6A1.2 1.2 0 0 1 15 6.2V8"/><path d="M4 13h16"/>',
   lock: '<rect x="5.5" y="11" width="13" height="9" rx="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
   mapPin: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+  replay: '<path d="M5 12a7 7 0 1 0 2.1-5"/><path d="M5 4v4h4"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
   swap: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
   rings: '<circle cx="9.5" cy="12" r="5"/><circle cx="14.5" cy="12" r="5"/>',
   family2: '<circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><circle cx="12" cy="15" r="2.2"/><path d="M3.5 19c.3-2.6 2-4 4.5-4M20.5 19c-.3-2.6-2-4-4.5-4"/>',

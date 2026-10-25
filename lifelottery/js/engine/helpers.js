@@ -15,12 +15,15 @@ import { moneyText } from '../data/money.js';
 import { FOCUS_BY_ID } from './focus.js';
 import { describeCause } from './mortality.js';
 import { rand, between, randInt, chance, pick, clamp, hash01 } from './rng.js';
+import { remember, memoryOf, speech, listMemories, resting } from './memory.js';
 
 export { hash01 };
 import {
   STAT_KEYS, EDU_LEVELS, JOBS, ctxOf, annualIncome, applyDelta, pushLog, addHighlight, incomeAtLeast, byIncome, aliveKids,
   startJob, loseJob, retire, setPartner, newPartner, endRelationship, marry, divorce, addChild, addCondition, removeCondition,
   migrate, leaveSchool, enroll, inTertiary, setUrban, setCity, stableFlip, drinksAlcohol,
+  parentsPresent, standInKin, weddingAbsence, weddingFolk, partnerParentsGone,
+  ensureHousehold, livesWithWho, kidsWith, reunite, moveWithin, setCohabiting, setParentsHome, setKidsWhere, moveInWithChild, kidLeaves, caregiverWord, sendFamilyAway, APART_WHERE,
 } from './systems.js';
 
 /**
@@ -32,6 +35,22 @@ export function techLag(incomeAt, urban) {
   const lag = { H: 0, UM: 2, LM: 4, L: 7 }[incomeAt] ?? 0;
   return lag + (!urban && incomeAt !== 'H' ? 2 : 0);
 }
+
+// the family's festival, kept alone in another country (h.festivalScene when nobody of the family lives with the person)
+const ALONE_FESTIVAL = {
+  adult: [
+    (name) => `${name}這天沒有人在身邊。你照著小時候記得的樣子把屋子整理乾淨，煮了幾樣家鄉的味道，一個人慢慢吃完。`,
+    (name) => `${name}到了。你一個人把桌子擦乾淨，做了一道記憶裡的菜，吃到一半才發現，自己想家想得比預期的厲害。`,
+    (name, pic) => `${name}的夜裡，你一個人待在家，屋子安安靜靜。你煮了一鍋熱的，邊吃邊翻著${pic}裡的舊照片，把每一張都看了一遍。`,
+    (name) => `${name}這天你請了假，一個人去平常常去的地方走走，回到家煮一點熱的，把想說的祝福留給遠方的人。`,
+  ],
+  elder: [
+    (name) => `${name}這天，屋子很安靜。你把家裡整理了一遍，煮了一點記憶裡的味道，一個人慢慢吃，一邊等著遠方的消息。`,
+    (name, pic) => `${name}的傍晚，你坐在窗邊，把${pic}裡的舊照片一張張翻過。沒有人來敲門，你替每個想念的人在心裡說了一句祝福。`,
+    (name) => `${name}到了，你一個人做了一道只在這天才做的菜。吃著吃著，你想起從前這個日子有多熱鬧，笑了一下。`,
+    (name) => `${name}這天沒有誰在身邊。你穿上乾淨的衣服，把桌子擺好，像從前一樣，替每個不在場的人留了一個位子。`,
+  ],
+};
 
 /** Record a death on the state (also used for the natural-mortality death in life.js). */
 export function recordDeath(s, causeId) {
@@ -169,6 +188,11 @@ export class Helpers {
     const k = kind || (s.age < 13 ? 'child' : s.age >= 65 ? 'elder' : 'adult');
     const info = this.festivalInfo();
     let text = festivalScene(info, s.homeCountryCode, this.homeCountry().region, k);
+    // Phase 6C: nobody of the family is there (abroad, alone): the festival is kept in an empty room, not at the family's long table
+    if (k !== 'child' && this.aloneAbroad()) {
+      const pool = ALONE_FESTIVAL[k] || ALONE_FESTIVAL.adult;
+      text = pool[Math.floor(hash01(`${s.seed}|alonefest|${info.key}|${s.age}`) * pool.length)](info.name, this.techReady(2008) ? '手機' : '相簿');
+    }
     if (k !== 'child' && s.countryCode !== s.homeCountryCode) {
       const call = this.techReady(2005) ? '視訊' : '長途電話';
       text += k === 'adult'
@@ -330,6 +354,45 @@ export class Helpers {
     const f = this.s.family;
     return f.mother.alive && f.father.alive ? '爸媽' : f.mother.alive ? '媽媽' : f.father.alive ? '爸爸' : '身邊的大人';
   }
+  // ---- family continuity (Phase 5D): who is still here, and how to write the people who are not ----
+  /** Which parents are alive: 'both' | 'mother' | 'father' | 'none'. */
+  parentsPresent() { return parentsPresent(this.s); }
+  /** Both parents have died. */
+  parentsGone() { return parentsPresent(this.s) === 'none'; }
+  /** Exactly one parent is alive. */
+  oneParent() { const p = parentsPresent(this.s); return p === 'mother' || p === 'father'; }
+  /**
+   * The parents as a word for a sentence about the present: '爸媽' (both alive), '媽媽', '爸爸', or `fallback` when both have died
+   * (default '長輩'). Unlike parentsLabel() it never says "身邊的大人", so it also fits an adult.
+   */
+  parentsOr(fallback = '長輩') {
+    const p = parentsPresent(this.s);
+    return p === 'both' ? '爸媽' : p === 'mother' ? '媽媽' : p === 'father' ? '爸爸' : fallback;
+  }
+  /** The mother or the father who is still alive: '母親' | '父親' | '' (both alive → '' is NOT returned, both dead → ''); only meaningful with oneParent(). */
+  parentLeft() { const p = parentsPresent(this.s); return p === 'mother' ? '母親' : p === 'father' ? '父親' : ''; }
+  /** Pick a sentence by which parents are alive: h.byParents({ both: '…', mother: '…', father: '…', none: '…', one: '…' (used for mother/father when those are missing), _: '…' }). */
+  byParents(map) {
+    const p = parentsPresent(this.s);
+    const v = map[p] ?? ((p === 'mother' || p === 'father') ? map.one : undefined) ?? map._ ?? map.default;
+    return typeof v === 'function' ? v(this.s, this) : v ?? '';
+  }
+  /** '零用錢' for a child, a teenager or a student living on their family's money; '私房錢' for a young person who already works or is married. */
+  pocketMoney() {
+    const s = this.s;
+    return s.age < 18 || (s.age < 22 && s.edu.inSchool && !this.employed() && !this.married()) ? '零用錢' : '私房錢';
+  }
+  /** The uncle, aunt or elder who stands in for absent parents ('叔叔', '姑姑', '舅舅', '阿姨', '伯父'; after 40 the eldest sibling '年紀最長的手足'; '' when there is nobody). Stable per life. */
+  standIn() { return standInKin(this.s); }
+  /** Whether the partner's own parents are (made) gone too: decided once per life from the partner's age. */
+  partnerParentsGone() { return partnerParentsGone(this.s); }
+  /** '兩家人' while at least one of your parents is alive, else '親友們': who fills the table at your wedding. */
+  weddingFolk() { return weddingFolk(this.s); }
+  /**
+   * One sentence for the parents who cannot be at the wedding (empty seats and a photo at the table, a prayer at the grave, an
+   * offering at the altar, an uncle who stands in; by religion). '' when both parents are alive. Add it after the wedding scene.
+   */
+  weddingAbsence() { return weddingAbsence(this.s, (this.s.flags._married || 0) >= (this.married() ? 2 : 1)); }
   /**
    * Has a technology that appeared in the rich countries in `baseYear` (e.g. smartphones 2008, mobile phones 1995,
    * the web 1995) reached this person? Later for poorer countries and for the countryside (see techLag).
@@ -369,6 +432,113 @@ export class Helpers {
   stable(key, p = 0.5) {
     return stableFlip(this.s, key, p);
   }
+
+  // ---- memories (Phase 6C): moments the life keeps and calls back (see memory.js) ----
+  /**
+   * Keep a moment: `key` ('kind:what', unique: a second call with the same key replaces the first), `phrase` a clause in the second person
+   * and the past tense that completes "你想起…，" ("是叔叔借了車，送你去診所"). `opts`: `age` (default now), `tag` (one of memory.js DOMAINS:
+   * school work money family love health move bond life), `w` 1..3 (3 = a moment the whole life turns on). Returns true when stored.
+   */
+  remember(key, phrase, opts) { return remember(this.s, key, phrase, opts); }
+  /** What was kept under `key`, ready for a sentence ("" too when it was spoken within the last ten years, or is only the plain record of a choice): "十歲那年，是叔叔借了車，送你去診所" ("" when there is nothing): write `你想起${h.recall('f:regional_malaria_season')}。`. Pure: it changes nothing. */
+  recall(key) { const m = memoryOf(this.s, key); return m && !m.u && !resting(this.s, m) ? speech(this.s, m) : ''; }
+  /** Only the clause that was kept ("是叔叔借了車，送你去診所"), "" when there is none. */
+  recallPhrase(key) { const m = memoryOf(this.s, key); return m && !m.u && !resting(this.s, m) ? m.p : ''; }
+  /** Is there a memory under this key? */
+  hasMemory(key) { return !!memoryOf(this.s, key); }
+  /** The memories of a domain or a key prefix ('family', 'loss', 'f' ...; none = all), oldest first: [{ key, phrase, age, tag, spoken, text }]. */
+  memories(tag) { return listMemories(this.s, tag); }
+
+  // ---- household (Phase 6B): who lives with whom ----
+  /** Raw household record (see systems.js): { parents, partner, kids: [where], far, alone, sep ... }. Created on first use. */
+  household() { return ensureHousehold(this.s); }
+  /**
+   * Does the person live under one roof with these people? `who`: 'parents' (a living parent), 'partner' (the partner they are
+   * together with: a married couple can live apart), 'children' (at least one living child lives with them, grown-up ones included).
+   */
+  livesWith(who) { return livesWithWho(this.s, who); }
+  /**
+   * The opposite for narration: the person HAS such family (a living parent, a partner, a living child) but does not live with them.
+   * A married partner who works in another country, children left with the grandparents or grown-up children with homes of their own count as apart.
+   */
+  apartFrom(who) {
+    const s = this.s;
+    if (who === 'parents') return this.parentsAlive() > 0 && !livesWithWho(s, 'parents');
+    if (who === 'partner') return this.hasPartner() && !livesWithWho(s, 'partner');
+    if (who === 'children' || who === 'kids') return aliveKids(s) > 0 && !livesWithWho(s, 'children');
+    return false;
+  }
+  /** Abroad, and nobody of the family (parents, partner, children) lives with the person. */
+  aloneAbroad() { return ensureHousehold(this.s).aloneAbroad; }
+  /** Nobody of the family (parents, partner, children) lives with the person, abroad or not. */
+  livesAlone() { return !livesWithWho(this.s, 'parents') && !livesWithWho(this.s, 'partner') && !livesWithWho(this.s, 'children'); }
+  /** Living children who live with the person (grown-up ones included), as child records { name, gender, birthYear }. */
+  childrenWithYou() { return kidsWith(this.s, 'with_you'); }
+  /** Living children under 18 who live with the person. */
+  minorsWithYou() { return kidsWith(this.s, 'with_you').filter((c) => this.s.year - c.birthYear < 18); }
+  /** Living children under 18 who live elsewhere: with the partner, the grandparents or relatives (the ones a labour migrant leaves at home). */
+  childrenApart() {
+    const hh = ensureHousehold(this.s);
+    return this.s.children.filter((c, i) => c.alive && this.s.year - c.birthYear < 18 && APART_WHERE.includes(hh.kids[i]));
+  }
+  /** Where the i-th child lives: 'with_you' | 'with_partner' | 'with_grandparents' | 'home_country' | 'independent'. */
+  childLives(i = 0) { return ensureHousehold(this.s).kids[i]; }
+  /**
+   * Living children who are within reach of a visit: the ones who live with the person, and the grown-up ones who live in the same country
+   * (a child who stayed behind when the person moved abroad is far away until the person returns).
+   */
+  childrenNearby() {
+    const hh = ensureHousehold(this.s);
+    return this.s.children.filter((c, i) => c.alive && (hh.kids[i] === 'with_you' || (hh.kids[i] === 'independent' && !hh.far[i])));
+  }
+  /** Who looks after the children who are not with the person: '伴侶', '孩子的另一位家長' (after a divorce), '孩子的祖父母', '家鄉的親戚'; '你' when they all live with the person; '' without minors. */
+  caregiverOfChildren() { return caregiverWord(this.s); }
+  /** A living parent is within reach of a visit: the person does not live abroad, or the parents live with them. */
+  parentsNear() { return this.parentsAlive() > 0 && (!this.isMigrant() || livesWithWho(this.s, 'parents')); }
+  /** A living parent is far away: the person lives abroad and the parents do not live with them. */
+  parentsFar() { return this.parentsAlive() > 0 && this.isMigrant() && !livesWithWho(this.s, 'parents'); }
+  /** The married partner is somewhere else (working abroad, or left behind by the person): the couple live apart. */
+  coupleApart() { return this.married() && !livesWithWho(this.s, 'partner'); }
+  /** Name of the child who last left the parents' home (the system tells it in family_child_leaves / aging_empty_nest), or the first child. */
+  lastLeftChildName() {
+    const hh = ensureHousehold(this.s);
+    const c = hh.lastLeft !== undefined ? this.s.children[hh.lastLeft] : null;
+    return c ? c.name : this.childName(0);
+  }
+  /** The last reunion or return as plain data { year, apartYears, partner, kids: [names], how: 'join' | 'return' }, or null. */
+  lastReunion() { return ensureHousehold(this.s).lastReunion || null; }
+  /** What the person left behind when they last moved: { year, partner: bool, kids: [names], mode } or null while the whole family is together. */
+  leftBehind() { const hh = ensureHousehold(this.s); return hh.sep ? { ...hh.sep, kids: [...hh.sep.kids] } : null; }
+  /**
+   * One sentence about the family the person left behind when they moved ('' if nobody): "你把兩個孩子留給了伴侶照顧。" Use after migrate()
+   * in an event's `result`.
+   */
+  leftBehindLine() {
+    const hh = ensureHousehold(this.s);
+    const d = hh.lastDepart;
+    if (!d || d.year !== this.s.year || (!d.kids.length && !d.partner)) return '';
+    const who = caregiverWord(this.s);
+    const kids = d.kids.length > 1 ? `${'零一兩三四五六七八九'[d.kids.length] ?? d.kids.length}個孩子` : d.kids.length === 1 ? '孩子' : '';
+    if (kids && d.partner) return `你把${kids}和${this.partnerName()}留在了家鄉。`;
+    if (kids) return `你把${kids}留給了${who === '伴侶' ? this.partnerName() : who}照顧。`;
+    return `${this.partnerName()}沒有一起來，留在家鄉等你。`;
+  }
+  /** Move the family along / away. In effects: h.reunite() brings the partner and the children who were left behind; { partner: false } or { kids: false } limit it. Returns { partner, kids: [names] }. */
+  reunite(opts) { return reunite(this.s, opts); }
+  /** Move to another town or city of the same country: { with: 'alone' | 'partner' | 'family' } or by the circumstances. The person stops living with the parents. */
+  moveAway(opts) { moveWithin(this.s, opts); }
+  /** A couple move in together (true) or apart (false) by choice. Marriage moves the couple in together by itself. */
+  cohabit(together = true) { setCohabiting(this.s, together); }
+  /** The person stays while the partner and the minors are sent away to safety (flight). Returns { partner, kids: [names] }. */
+  sendFamilyAway() { return sendFamilyAway(this.s); }
+  /** A parent moves in with the person (true), or stops living with them (false). */
+  moveParentsIn(together = true) { setParentsHome(this.s, together); }
+  /** The person (an elder) moves in with a grown-up child who lives in the same country. Returns the child record or null. */
+  moveInWithChild() { return moveInWithChild(this.s); }
+  /** Set where the living minors who are not independent live (after a custody decision): h.setChildrenLive('with_you', ['with_you', 'with_partner']). Returns how many moved. */
+  setChildrenLive(where, only) { return setKidsWhere(this.s, where, only); }
+  /** The i-th child leaves the parents' home. */
+  childLeaves(i = 0) { return kidLeaves(this.s, i); }
 
   // ---- state changes ----
   set(flag, v = true) { this.s.flags[flag] = v; }
@@ -430,11 +600,16 @@ export class Helpers {
   divorce() { return divorce(this.s); }
   /** Add a child: { gender? }. Returns the child record (name is generated). */
   addChild(opts) { return addChild(this.s, opts); }
-  /** Move to another country (ISO3 code). Adjusts mortality risk by the life-expectancy gap. */
-  migrate(code) {
+  /**
+   * Move to another country (ISO3 code). Adjusts mortality risk by the life-expectancy gap. `opts.with` says who comes along
+   * (Phase 6B): 'alone' | 'partner' | 'family' | 'refugee' | 'keep'; without it the engine decides from the circumstances
+   * (refugees take whoever lives with them, students and most labour migrants go alone). Moving to the home country is a return:
+   * the partner and the children who were left behind live with the person again.
+   */
+  migrate(code, opts) {
     const s = this.s;
     const from = ctxOf(s).country;
-    if (!migrate(s, code)) return false;
+    if (!migrate(s, code, opts)) return false;
     const view = (c) => eraView(c, s.year);
     const f = view(from), t = view(BY_CODE[code]);
     const ratio = (f.le[s.gender]) / (t.le[s.gender]);
@@ -463,7 +638,13 @@ export class Helpers {
   childHe(i = 0) { const c = kidOf(this.s, i); return c ? (c.gender === 'F' ? '她' : '他') : '孩子'; }
   /** Name of the i-th living child (default: the first; the i-th child at all if none is alive); '孩子' if there is none. */
   childName(i = 0) { const c = kidOf(this.s, i); return c ? c.name : '孩子'; }
-  /** Name of the most recently born child. */
+  /** Name of the youngest child who is still alive ('孩子' if there is none): the right name for "the baby" in a scene of the present. */
+  youngestChildName() {
+    const kids = this.s.children.filter((c) => c.alive);
+    if (!kids.length) return '孩子';
+    return kids.reduce((a, b) => (b.birthYear > a.birthYear ? b : a)).name;
+  }
+  /** Name of the most recently born child (alive or not: use youngestChildName() for a scene of the present). */
   lastChildName() { const c = this.s.children[this.s.children.length - 1]; return c ? c.name : '孩子'; }
   motherName() { return this.s.family.mother.name; }
   fatherName() { return this.s.family.father.name; }

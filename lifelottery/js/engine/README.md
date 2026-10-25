@@ -39,7 +39,8 @@ if (!s.alive) getSummary(s);                    // review screen / share card / 
 
 | Function | Description |
 | --- | --- |
-| `createLife(settings, seed, opts?)` | New life. `settings`: `era` (`'past'`/`'present'`/`'future'`/`'random'`), `drawMode` (`'births'`/`'population'`), `pace` (`'short'`/`'standard'`/`'long'`), `autoChoice` (bool; a UI hint only). Optional `settings.birthYear` forces the "present" year. `seed` is any string/number: same seed + settings ⇒ identical life. `opts` can force `{ countryCode, gender, urban, wealthQ, birthYear }` (tests, "replay this life"). |
+| `createLife(settings, seed, opts?)` | New life. `settings`: `era` (`'past'`/`'present'`/`'future'`/`'random'`), `drawMode` (`'births'`/`'population'`), `pace` (`'short'`/`'standard'`/`'long'`), `autoChoice` (bool; a UI hint only). Optional `settings.birthYear` forces the "present" year. `seed` is any string/number: same seed + settings ⇒ identical life. `opts` can force `{ countryCode, gender, urban, wealthQ, birthYear, eraKey, city }` (tests, tools), carry the cross-life `novelty` counts, or carry a whole `birth` (next row). |
+| `createLife(settings, seed, { birth })` / `birthOf(state)` / `normalizeBirth(b)` | **Same start, live again** (Phase 5E). `birthOf(state)` returns the start of a life as plain JSON (`{ v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ, poolKey, name:{ given, family, full, givenToken, familyToken }, siblings, mother/father:{ alive, age, name }, religion, business }`), exact at any age (the parents' ages and `alive` are the values at birth). `createLife(settings, newSeed, { birth })` reuses all of it and takes everything else from the new seed: no random number is spent on the birth, so the life is a normal life from the first year on. The family-business answer (decided by `stableFlip`, which hashes the seed) is carried in `state.flags._fix = { family_business }`, which `stableFlip` honours. `normalizeBirth(b)` validates (`null` = unusable, e.g. unknown country; `.full === false` = only country, city, urban, gender, wealth, birth year and era are usable, the rest is drawn: this is how an old album record without a stored start is replayed). Without `birth` (or with `birth: undefined`) nothing changes: the same seed gives the same bytes as before (`tests/replay.test.mjs`). |
 | `advanceYear(state, { auto?, autoFocus? })` | Lives one year. Returns `{ entries, pendingChoice, died, focusPrompt }`. `entries` are the new log entries of this year. If a choice is pending, calling it again returns the same `pendingChoice` and does **not** advance. `auto: true` resolves choices by their `ai` weights and picks the life focus itself at each stage prompt (simulations); `autoFocus: false` keeps the focus alone (tests that force one). `focusPrompt` is true in the year a new life stage starts (see "Life focus"). |
 | `FOCI`, `availableFoci(state)`, `setFocus(state, id)`, `autoFocus(state)` | The life focus API, see "Life focus (Phase 4A)" below. |
 | `choose(state, optionIndex)` | Resolve the pending choice. `optionIndex` indexes `pendingChoice.options` (not the original `choices` array). Returns `{ entries, pendingChoice: null, died }`. Throws if nothing is pending or the index is invalid. |
@@ -68,6 +69,8 @@ kept in `state.settings.eraSetting`.
 
 ### birth.js (lottery reveal)
 
+`describeBirth(state)` also returns `placeText` (「孟買近郊的鄉村」 / 「孟買」) and `placeFull` (「印度孟買近郊的鄉村」 / 「印度的孟買」), both from `place.js` `placePhrases(country, city, urban)`; the life story (`eulogy.js`) uses the same function.
+
 * `describeBirth(state)` → `{ name, year, eraName, eraLabel, countryCode, countryName, region, income, city, urban, placeText, genderLabel, wealthQ, wealthLabel, wealthShort, babiesPer100, babiesText, lifeExpectancy, comparisons: [{ key: 'le'|'imr'|'school'|'gdp', label, unit, value, world, higherIsBetter }] }`.
   `eraName` is `過去 / 現在 / 未來`; `eraLabel` is `現在` or the birth year (`1962 年`) and reads as "{eraLabel}出生的 100 個嬰兒…". `babiesText` is ready to drop into "…出生的 100 個嬰兒裡，有{babiesText}和你同國。"
 * `babyShare(country, year, mode)` → `{ share, per100, oneIn }`; `babyShareText(...)`.
@@ -80,6 +83,10 @@ kept in `state.settings.eraSetting`.
 `lifespan { age, countryLe, worldLe, vsCountry, vsWorld }`, `education`, `jobs`, `partner`, `marriages/divorces`,
 `children { total, alive, names }`, `countriesLived`, `highlights` (curated: no repeats, one birthday, one "left home", at most `MAX_HIGHLIGHTS` = 12, still chronological), `featuredHighlight` (the most telling one, used by the share card), `counts { choices, events, milestones, years }`,
 per-stat `stats { peak, peakAge, mean, final }` and `statHistory`. `STAT_LABELS`, `EDU_LABELS`, `curateHighlights(raw, max?)`, `featuredHighlight(list)` are exported. The life state keeps the raw highlight list (`state.highlights`); only the summary is curated.
+
+### Eulogy (Phase 5B)
+
+`eulogy.js` (pure, no random numbers) writes the 生平: `composeEulogy(summary)` -> `{ v, text, short, shape, slots, opening }`; `text` is 3-5 sentences (60-260 characters), `short` 1-2 short sentences for the share card. It is a function of the summary fields the album keeps, so `eulogyOf(record)` gives an old record (no stored eulogy) the same words, and `getSummary()` also returns it as `summary.eulogy`. Phrasings are chosen by `hash01("name|birth year|age|country|gender")`; every slot has at least four (`TEMPLATES`). Tone (`shape`): infant, child, youth, calamity, migrant, long, hard, quiet; a suicide never names a method.
 
 ### Personal odds (Phase 4B)
 
@@ -181,9 +188,13 @@ health `health_`, aging `aging_`, world `world_`, regional `regional_`. Start fr
     effects, set, unset, schedule, highlight,
     result: 'text' | (s, h) => text,   // evaluated AFTER effects, so it may describe the outcome
     ai: 1 | (s, h) => number,          // weight for auto-choice
+    memory: 'text' | (s, h) => text | false,   // Phase 6C: the clause this choice keeps as a memory ("你想起十歲那年，…"); default 「面對「title」，你選了「label」」, see section 11
+    memoryYou: 'text' | (s, h) => text,        // same, for an option that also has a `familyResult` when somebody chooses it for themselves
   }],
+  memory: 'text' | (s, h) => text | false,     // Phase 6C: on an event without choices (or the default for its choices): a key moment of its own
 }
 ```
+The authored phrases of the choices live in `data/events/memories.js` (`{ eventId: { 'choice label': phrase } }`), attached by `events/index.js`.
 
 For an event with `choices`, event-level `effects`, `set` and `unset` apply when the situation is presented (its log entry carries the delta) and event-level `schedule`
 when the choice is resolved.
@@ -194,7 +205,7 @@ if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `t
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 138)
+### Helpers (`h`, all 181 in helpers.js, plus six from events.js; the household ones are in section 9, the memory ones in section 11)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
@@ -227,7 +238,7 @@ Call helpers as methods: `h.chance(0.3)`, never destructure.
   `festivalScene(kind?)` (60-160 characters of the family's festival for `'child' | 'adult' | 'elder'`, default by age; adds a line for someone living abroad and one that notices the neighbours' own festival), `drinks()` (stable per life: unlikely in Muslim families, less likely for women), `playsSports()` (stable per life: likelier for the young and for men, rare for the mother of several children).
 * **Geography (Phase 4A)**: `place()` → `{ coast, alt, climate }`; `coastal()`, `climate()` (`'tropical' | 'arid' | 'temperate' | 'continental' | 'polar' | 'highland'`), `altitude()` (`'low' | 'mid' | 'high'`), `highAltitude()` (>= 1,500 m), `snowy()` (continental, highland or polar), `hotClimate()` (tropical, arid or continental), `byClimate({ tropical, arid, temperate, continental, highland, polar, _ })` (falls back highland -> continental -> temperate …). Rural people take the coast and altitude of the nearby city and the **country's dominant climate**. Data: `data/geo.js` (every city of `countries.js`; a test fails when a city has no annotation).
 * **Money (Phase 4A)**: `money(usdPpp, { round? })` → natural zh-Hant amount in the local currency of the current country and year: `h.money(2000)` -> `新台幣四萬元`, `h.money(200)` -> `2.5 萬日圓` in Japan, `300 美元`, `1,200 奈拉`. `usdPpp` is in constant 2011 international dollars (the unit of `h.annualIncome()`): use `h.money(h.annualIncome() / 12 * 2)` for "twice a month's pay". `round`: omitted = a natural figure with at most two significant digits, `false` = exact units, a number = multiple of that many local units. Euro-area countries show their old currency before they joined. All PPP factors, inflation and currency names are estimates (`data/money.js` header).
-* **Changes**: `set(flag, v=true) unset(flag) inc(flag, n=1) change(stat, delta) addWealth(d) addCondition(id) removeCondition(id) startJob(id) loseJob() retire() dropOut() enroll(level?) reenroll() startSmoking() quitSmoking() setPartner({name,gender,age,status}) newPartner({gender?,status?,age?}) endRelationship(years?) marry() divorce() addChild({gender}) migrate(code) addRisk(mult, years?) log(text, title?) highlight(text) die(causeId)`.
+* **Changes**: `set(flag, v=true) unset(flag) inc(flag, n=1) change(stat, delta) addWealth(d) addCondition(id) removeCondition(id) startJob(id) loseJob() retire() dropOut() enroll(level?) reenroll() startSmoking() quitSmoking() setPartner({name,gender,age,status}) newPartner({gender?,status?,age?}) endRelationship(years?) marry() divorce() addChild({gender}) migrate(code, { with }?) addRisk(mult, years?) log(text, title?) highlight(text) die(causeId)`.
   * `newPartner({ gender?, status: 'dating' | 'married' = 'dating', age? })`: creates the partner (name from the person's own culture group; migrants and multi-group countries
     sometimes pair across groups; age near the person's; `gender` defaults to the usual mix incl. a small same-sex share) and returns the record. If the person already has an active partner
     nothing changes and that partner is returned (end the relationship first). `setPartner({})` without a `name` now uses it too, instead of "他"/"她".
@@ -244,6 +255,19 @@ Call helpers as methods: `h.chance(0.3)`, never destructure.
 
 Useful flags set by systems (read with `h.has`): `orphan`, `migrated`, `war` (set it yourself to raise conflict mortality). Flags beginning with `_` are
 engine-private — do not read or write them from events.
+
+### Family continuity (Phase 5D)
+
+A text about the family must fit who is alive *now*. The coherence auditor checks parents (both / one / none), the partner (dating, married, divorced, widowed, never), the children (count, alive, sons and daughters), the siblings (count) and the age of the scene (see `tests/lib/coherence.mjs`: rules `parents_dead`, `couple_gone`, `partner_gone`, `kids_dead`, `kids_count`, `kid_gender`, `siblings_count`, `adult_childish`, `young_elder`, `parent_pronoun`). Write the branch with these helpers instead of the assumption:
+
+* `parentsPresent()` → `'both' | 'mother' | 'father' | 'none'`; `parentsGone()` (both dead); `oneParent()` (exactly one alive); `parentLeft()` → `'母親' | '父親'` for the one who is alive (`''` otherwise).
+* `parentsOr(fallback = '長輩')` → `'爸媽' | '媽媽' | '爸爸'` or the fallback when both have died (unlike `parentsLabel()` it never says 身邊的大人, so it also suits an adult).
+* `byParents({ both, mother, father, none, one, _ })` picks a text by `parentsPresent()` (`one` serves `mother` and `father` when they are missing; `_` is the fallback; a function value is called with `(s, h)`).
+* `standIn()` → the uncle, aunt or elder who stands in for absent parents (`'叔叔' | '姑姑' | '舅舅' | '阿姨' | '伯父'` up to age 40, `'年紀最長的手足'` later if there are siblings, `''` if nobody). Stable per life, consumes no random numbers.
+* `weddingFolk()` → `'兩家人'` while one of your parents lives, else `'親友們'`; `weddingAbsence()` → one tender sentence for the parents who cannot come (empty seats and a photo, a prayer at the grave, an offering at the altar, the stand-in who gives you away; it follows the family religion and gets shorter at a second wedding); `''` if both are alive. `systems.js` appends the same sentence to the 結婚 line, so an event that narrates a wedding only needs `weddingFolk()` (not "兩家人") and may add `weddingAbsence()` when it is the event that marries the person. `partnerParentsGone()` says whether the partner's own parents are (made) gone as well, decided per life from the partner's age.
+* `youngestChildName()` → the youngest child who is **alive** (`lastChildName()` may name a child who has died); `pocketMoney()` → `'零用錢'` for a child or a student living on the family's money, `'私房錢'` for a young adult who works or is married.
+* Rules of thumb: "兩家人／雙方長輩／雙方家長／家長／回老家" assume living parents; `母親說…` in the present tense is a living mother (a memory needs 想起／當年／小時候／教的…); the child who calls "爸媽，你們…" needs a partner who is alive (`hasPartner()`); a count word ("兩個孩子") must match `childCount()`; "手足們" needs `siblings() > 1`.
+* Titles are static strings and are audited too (`至親病倒了`, `返鄉過節`), so do not put a family assumption in a title.
 
 ## 6. Data modules
 
@@ -281,9 +305,15 @@ Every country must map to existing groups (`tests/names.test.mjs`).
 ```
 cd lifelottery && npm test                 # or: node --test lifelottery/tests/*.test.mjs   (from the repo root)
 node --test tests/focus.test.mjs        # life focus: API, legality by age, prompts, old saves, effect directions on 2000 lives (LL_FOCUS_N=800 for a quick run)
+node tools/coherence-scan.mjs 3000 x --stress --novelty   # Phase 5D deep scan: 7 lives in 8 lose parents / partner / a child early (applyStress), every phrasing of every event is read (novelty counts 1-3)
 node --test tests/culture.test.mjs      # religion, festivals, city geography, local money, pandemic timing, narrow-state ordinary years, the new coherence rules
 # coherence rules added in Phase 4A (tests/lib/coherence.mjs): `festival` (a festival or religious word must fit the family's tradition; 農曆新年 only where `lunarNewYear()`), `climate` (snow needs a snowy climate, typhoons / sea level / going to sea need a coast), `drink` (no beer or toasts for a family that does not drink); the toddler rule now catches "你學會的第一個長句子" from age 4
 LL_SIM_N=1000 node --test tests/simulation.test.mjs    # quicker run (statistical tolerances get noisy below ~1000 lives)
+node --test tests/agency.test.mjs      # Phase 6A: decision tiers, family-decided events, the `agency` audit (section 10)
+node tools/agency-scan.mjs 1500 --static --cards   # who decides: choice cards shown under 18 by event, adult-only acts found in them, and the static audit of every choice event x age x household
+node --test tests/consequence.test.mjs   # Phase 6C: the consequence tracker threshold (about half of the major choices echoed, 51 % measured, 17 % before 6C), the memory API, the decider per stage, the drawer's household view (section 11)
+node tools/consequence-scan.mjs --lives=2000 [--static] [--dynamic] [--top=40] [--blind] [--json=out.json]   # which major choices leave a mark on the rest of the life, and which do not
+npm run test:quick                      # the whole suite with the heavy audits at a smaller size (LL_QUICK=1, about 4 minutes); `npm test` stays the complete run (section 7b)
 node tools/calibrate-risk.mjs [lives] [passes]          # regenerate data/riskref.js
 node tools/read-life.mjs --seed=x --country=NPL --religion=hindu --focus=work --city=比拉特納加   # print one whole life (also --era --gender --urban --wealth --birthYear)
 node tools/fetch-raw.mjs && node tools/build-data.mjs   # regenerate data/countries.js
@@ -291,6 +321,14 @@ node tools/fetch-raw.mjs && node tools/build-data.mjs   # regenerate data/countr
 Note: on Node 22 `node --test <directory>` is not supported (positional arguments are globs); use the glob form above.
 The "choices per life 15–45" target is only enforced once there are ≥ 300 events (`tests/simulation.test.mjs`, `CONTENT_THRESHOLD`);
 until then it is printed with a warning.
+
+### 7b. Quick and full runs
+
+`npm test` is the complete run (every audit at its full size, about 8 minutes on four cores; the statistical simulation test runs on worker threads). `npm run test:quick` sets `LL_QUICK=1`: the sampling audits
+(`tests/coherence.test.mjs` 1300 / 800 lives, `tests/events.test.mjs` 3000 / 600 random states, `tests/eulogy.test.mjs` 3000 lives, `tests/agency.test.mjs`
+1500 lives, `tests/consequence.test.mjs` 600 lives, `tests/simulation.test.mjs` 2000 lives in eight countries and ten extra fertility checks -> 1000 lives in four countries, ...) use `scaled(full, quick)` from `tests/lib/scale.mjs` instead. The rules and the checks are the
+same, only the number of sampled lives is smaller, so a quick run can miss a rare contradiction that the full run finds: run `npm test` before a release.
+`LL_SCALE=0.25 npm test` scales every `scaled()` size by that factor (a smoke run). The time budget the coherence audit asserts is 0.07 s a life (measured 0.042 with the files of a complete run sharing four cores). The health-focus lifespan band (0.5 to 3.2 years) is only asserted by the complete run: a quick run samples too few lives for it.
 
 ## 8. Known limitations
 
@@ -306,3 +344,135 @@ until then it is printed with a warning.
 * Geography is per city: a rural person takes the coast and altitude of the nearby city and the country's dominant climate; a whole country is not modelled (Chengdu is "temperate", the Tibetan plateau is not in the game). Lakes and rivers do not count as coast, so there are no inland fishers.
 * Money: the exchange of a 2011 PPP dollar into a local amount uses one constant factor per country and a simple inflation curve; hyperinflations, redenominations and currencies that changed names (apart from the euro) are ignored.
 * The life focus has no cost beyond its nudges: there is no "energy" to spread, and nothing stops a person from changing focus every year. Only the stage prompts ask.
+
+## 9. Household (Phase 6B): who lives with whom
+
+The engine knows the current country, but an event also has to know who is *there*: a lone labour migrant has no school run and no bedtime story. `state.household` (created lazily by `ensureHousehold(s)` on first use, so `life.js` and old saves are untouched) records it:
+
+```js
+state.household = {
+  v: 1,
+  parents: bool,          // lives under one roof with a living parent
+  partner: bool,          // lives with the partner (a married couple can live apart)
+  kids: [ where ],        // one per state.children[i]: 'with_you' | 'with_partner' | 'with_grandparents' | 'home_country' | 'independent'
+  far: [ bool ],          // grown-up children (independent) who are in another country than the person
+  aloneAbroad: bool,      // abroad, and no parent, partner or child lives with the person (derived)
+  joint: bool,            // multi-generation home: the person's own parents keep living with them
+  sep: null | { year, partner, kids: [names], from, to, mode },   // who was left behind by the last move, and since when
+  lastDepart, lastReunion: { year, apartYears, partner, kids: [names], how: 'join' | 'return' }, lastLeft, movedIn, apart, caregiverLost   // narration hooks
+}
+```
+
+`with_partner` = with the other parent (after a divorce, an ex); `with_grandparents` = with the person's parents; `home_country` = with relatives back home; `independent` = grown up and living on their own. No household decision draws a random number (every one is a `stableFlip` of the life), so a life that never migrates or divorces plays exactly as before.
+
+**Who maintains it** (`systems.js`)
+
+| Moment | What happens |
+| --- | --- |
+| a new life | lives with the parents |
+| leaving home | by the home region's norm (`HOME_LEAVE_AGE`: 20 in North America and Oceania, 22 Europe, 25 East Asia / Latin America / South Asia, 26 Middle East ...; ±3 years by life), at once with the flag `left_home`; later than 30 with `stayed_home` |
+| marriage | the couple moves in together; in the regions where joint families are the norm the couple stays with (the man's) parents (`joint`), else the person leaves the parents' home |
+| childbirth | the baby is with the person; with the mother when the father works abroad |
+| children grow up | `leave age` of the region (±3): `independent`; the first departure is told by `family_child_leaves`, the last of several by `aging_empty_nest` (both are scheduled by the household pass) |
+| divorce | the partner moves out; one decision per divorce for all minors (mothers keep them mostly, fathers in the patrilineal regions for the older ones); `family_custody` is scheduled and its choice decides |
+| widowhood | children who were with the dead partner come to you at home, or to the grandparents / relatives while you are abroad |
+| a parent dies | the last one: nobody left to live with; children with the grandparents go to relatives (the reunion becomes likelier) |
+| an old parent | moves in with the grown-up child by region and income (a log line says so), or at once when `caregiver_parent` is set ("把人接到身邊") |
+| migration | `migrate(code, { with })`: see below |
+| return | the partner and minors who were left behind live with the person again; `migration_return_reunion` is scheduled |
+| the yearly pass | from the second year apart a split family may reunite (`migration_family_joins`; rare in the Gulf states, never while irregular or a refugee) |
+
+**Who comes along** (`h.migrate(code, { with })`, `systems.js depart()`)
+
+* `'alone'`: nobody. The partner stays; the minors who lived with the person stay with the partner, else the grandparents, else relatives. `aloneAbroad` becomes true; `migration_apart_first_year` is scheduled. This is labour and study migration.
+* `'partner'`: the partner comes, the minors stay. `'family'`: the partner and every minor come (also those left behind earlier: a reunion). Skilled visas, company transfers, a lottery visa, family reunification.
+* `'refugee'`: whoever lives with the person comes, the parents who share the home too; a family sent ahead by `h.sendFamilyAway()` is joined. `'keep'`: nothing changes (a second move).
+* no `with`: the engine decides (`autoMigrationMode`): displaced people are refugees, students go alone, migrants from low- and lower-middle-income countries go alone (12 % take the family when they have minors), others take the family about half of the time. `h.moveAway({ with })` does the same for a move to a city of the same country (the countryside to the city: "留守兒童").
+* a move to the home country is a return and brings the family back together. A dating partner stays behind when the person goes abroad.
+
+**Helpers** (`helpers.js`)
+
+| Helper | Meaning |
+| --- | --- |
+| `h.livesWith('parents' \| 'partner' \| 'children')` | lives under one roof with a living parent / the partner / at least one living child (grown-up ones included) |
+| `h.apartFrom(who)` | has such family (a living parent, a partner, a living child) and does not live with them |
+| `h.aloneAbroad()` | abroad and nobody of the family lives with the person |
+| `h.childrenWithYou()` | living children who live with the person (child records); `h.minorsWithYou()` only those under 18 |
+| `h.caregiverOfChildren()` | who looks after the children who are not with the person, for text: `'伴侶'`, `'孩子的另一位家長'` (after a divorce), `'孩子的祖父母'`, `'家鄉的親戚'`; `'你'` when they all live with the person; `''` without minors |
+| `h.childrenApart()` | minors who live elsewhere (the children a labour migrant leaves) |
+| `h.childrenNearby()` | children within reach of a visit: with the person, or grown up in the same country |
+| `h.parentsNear()` / `h.parentsFar()` | a living parent is within reach (the person is not abroad, or they live together) / far away (abroad, not together) |
+| `h.coupleApart()` | married, and the partner lives somewhere else |
+| `h.livesAlone()` | nobody of the family lives with the person (abroad or not) |
+| `h.household()`, `h.childLives(i)`, `h.leftBehind()`, `h.lastReunion()`, `h.leftBehindLine()`, `h.lastLeftChildName()` | the raw record and narration helpers (`leftBehindLine()` = "你把兩個孩子留給了伴侶照顧。", use it in a `result` after `migrate()`) |
+| `h.reunite({ partner, kids })`, `h.moveParentsIn(bool)`, `h.cohabit(bool)`, `h.setChildrenLive(where, only)`, `h.childLeaves(i)`, `h.moveInWithChild()`, `h.sendFamilyAway()` | changes events make (the custody choice, "接來同住", moving in together, an elder who goes to live with a grown-up child) |
+
+**Writing a scene under one roof.** An event about the kitchen, the school gate, the bedroom door, the family meal or a parent's care has to say who it is about: gate it with `cond` (`h.minorsWithYou()`, `h.livesWith('partner')`, `h.parentsNear()`) or branch the text (`h.livesAlone()`, `h.isMigrant()`); for people who live apart write the remote version (a video call, a remittance, a flight home, a sibling or the partner who cares). Events with `variants` (variants.js) name a child by age, so gate them on "no child of that age lives elsewhere". The audit rule `household` (`tests/lib/rules-household.mjs`) flags scenes of one roof with family who live elsewhere ("一起吃飯", "接送", "餵", "哄睡", "陪著", "牽著", "抱著" ...) unless the text frames them as a video call, a visit, a memory or a denial; `node tools/coherence-scan.mjs 3000 x --migrant` plays lives that get a family and move abroad (alone, with the family, as refugees, as students, back, reunited).
+
+## 10. Decision agency (Phase 6A): who makes the decision?
+
+A small child with malaria must not choose between buying medicine and seeing a doctor. The engine knows four decision tiers, lets an event say "the family decides this", and lets a choice say "this one is written for a young person".
+
+| Tier | Ages | `h.agency()` | Who decides |
+| --- | --- | --- | --- |
+| infant | 0-5 | `'infant'` | the family, for events with `decider: 'family'`; ordinary child-sized choices (a tantrum, a stray dog) are still the child's |
+| child | 6-11 | `'child'` | the same |
+| teen | 12-17 | `'teen'` | the teenager chooses, from choices written for a teenager |
+| adult | 18 and over | `'adult'` | the player, from the original choices |
+
+**Event and choice fields** (`events.js`; `validateEvents` checks them)
+
+| Field | Meaning |
+| --- | --- |
+| event `decider: 'family'` | an infant or a child never gets a card. The engine (`decideForFamily`) picks one of the choices whose `cond` passes, weighted by `ai` times the circumstances below, applies its effects, flags and follow-ups, and logs **one ordinary `event` entry** (`kind: 'event'`, plus `by: 'family'`): the event's text, then the choice's `familyResult`. It is not a choice (`getSummary().counts.choices` does not count it, no `choice` entry is written). From 12 on the field does nothing: the same life continues byte for byte with or without it (`tests/agency.test.mjs`) |
+| choice `familyResult` | what the family did, told from the child's side (string or `(s, h) => string`). Required on every choice of a family-decided event unless it is `who: 'child'`; `false` marks a choice that is never offered to a family deciding for a child (its `cond` keeps it for older people). Name who decided (`h.whoDecides('salt')`) and tell only the parents who are alive |
+| choice `who: 'child'` | written from a young person's point of view (ask, tell, hide, help, go along). The `agency` audit lets it mention an adult act. Teen choices of a family-decided event are `who: 'child'` with `cond: (s, h) => h.agency() === 'teen'`; the family's options carry `cond: (s, h) => h.agency() !== 'teen'` (the data files name them `notTeen` / `teenOnly`) |
+| choice `cost` 0..3 | how much money or effort the option takes. A comfortable family leans to the dear options and a poor one to the free ones: weight x `exp(0.75 a (cost - 1.5))`, `a = clamp((familyMeans - 3) / 1.6, -1.3, 1.3)` |
+| choice `reach` 0..2 | how much the option depends on a clinic, a road or a service: weight x `exp(-0.8 r reach)`, `r` = 0.7 in the countryside + 0.6 (low income) or 0.3 (lower-middle) |
+| `choices` length | now 2-6: an event that words things differently for a child's family, a teenager and an adult lists all of them and hides the others with `cond`; no more than 3 are visible at a time |
+
+`familyMeans(s)` (exported) is the wealth quintile, moved by the income group of the country in that year (L -1, LM -0.4, UM +0.2, H +0.6), the countryside (-0.5) and the parents (one parent -0.7, none -1.4). `familyFactor(s, choice)` is the multiplier above (1 for a choice without `cost` and `reach`). The family decides with the same random generator as everything else (one draw, like an automatic choice), so lives stay reproducible.
+
+**Helpers** (added to the helper class by `events.js`; `helpers.js` is not touched): `h.agency()`, `h.isKid()` (under 12), `h.isTeen()` (12-17), `h.whoDecides(salt)` (the word a child uses for the one who decides: `'爸爸'`, `'媽媽'`, `'爸媽'`, `'奶奶'`; with one parent only that parent or `'奶奶'`; with none `h.standIn()`'s uncle, aunt or elder, else `'身邊的大人'`; stable for the life, the age and the salt, draws no random numbers), `h.means()` (`'thin' | 'ok' | 'good'`), `h.carryYou()` (`'抱著你'` up to 3, `'背著你'` up to 7, else `'牽著你'`).
+
+**Writing an event the family decides.** (1) Give the event `decider: 'family'`. (2) The setup `text` must not ask the child anything ("你不知道該不該出發" becomes "大人們壓低聲音商量著要不要出發" for `h.isKid()`), and the same goes for its `variants`. (3) Keep the original choices for adults and give them `cond: notTeen`; add a `familyResult` that names `h.whoDecides(...)` and uses `h.means()` / the place for colour. (4) Add two or three `teenOnly` choices with `who: 'child'` (ask the family, tell them, help, go along, spend your own pocket money). (5) Never let the child be the doer of an adult act in a `familyResult` ("爸爸向鄰居借了機車，帶著你騎去診所", not "你借了車"). The `agency` audit (`tests/lib/rules-agency.mjs`, registered in `coherence.mjs`; `node tools/agency-scan.mjs [lives] [--static] [--cards]`) flags spending, buying, borrowing, taking someone to hospital, evacuating the family, negotiating, farming decisions, quitting, investing, moving house, signing and paying fees in anything offered to somebody under 15 (loans, contracts, investing and quitting for 15-17 as well), unless the sentence is child-framed or somebody else is the doer. `tests/agency.test.mjs` runs it over 1500 lives and over every choice event x age 0-17 x five synthetic households.
+
+## 11. Memories and consequences (Phase 6C)
+
+A life keeps the moments it turns on and speaks of them again, and a choice leaves a mark on what comes after. `engine/memory.js` is a leaf module (it imports only `hash01`).
+
+**State.** `state.memories = [ { k, p, a, g, t?, w?, n?, l?, u?, s? } ]`, at most 48, plain JSON, absent in a life that has none (an old save loads as it was):
+`k` key (`'kind:what'`: `c:` a choice, `f:` a decision the family took, `e:` an event, `loss:` `love:` `kid:` `move:` `work:` system moments), `p` the phrase, a clause in the second
+person and the past tense that completes "你想起…，" (`'是叔叔借了車，送你去診所'`), `a` the age it happened at, `g` the domain (`school work money family love health move bond life`),
+`t` up to three specific tags of the event it came from, `w` weight 1-3, `n` how often it was spoken, `l` the age it was last spoken at, `u` 1 for the plain record 「面對「title」，你選了「label」」 of a choice that has no authored phrase (kept for the consequence tracker, **never spoken**: not by `reflection`, `echoFor`, `h.recall`, the keepsake or the 回憶 list), `s` 1 when the choice has a follow-up of its own (the other memories are called back first).
+Nothing in the memory system draws a random number (every choice is `hash01(seed, age, key)`), so adding memories never changes which events a life meets.
+
+**Who writes memories.**
+
+| Moment | Key | Phrase |
+| --- | --- | --- |
+| a choice of the player | `c:<event id>` | the choice's `memory` (string, `(s, h) => string`, or `false` for none) or the event's; else 「面對「title」，你選了「label」」 |
+| a decision the family took for a child under 12 | `f:<event id>` | the choice's `memory`, which names `h.whoDecides()`; else 「爸媽為「title」拿了主意」 |
+| an event with its own `memory` | `e:<event id>` | the event's `memory` |
+| the first job, a wedding, a divorce, a child's birth, the death of a parent / partner / child, every move to another country | `work:first` `love:wed<n>` `love:div<n>` `kid:<n>` `loss:<who>` `move:<n>` | fixed phrases written in `systems.js` |
+| any event or choice | any | `h.remember(key, phrase, { age, tag, w })` |
+
+An option that has a `familyResult` is written from the child's side; its `memory` is only used when the family decided. When an adult picks the same option the plain 「你選了…」 memory is kept.
+
+**Who speaks them.**
+
+* `reflection(s)` (events.js `yearlyEntry`): an ordinary year may become one or two memories in a line of its own ("夜裡睡不著，你想起前年，…，也想起十六歲那年，…"). The memory spoken least comes first; at most one a year, at least six years apart (`REFLECT_GAP`): three or four in a life, so most quiet years stay ordinary years. Only authored phrases are spoken, and a memory rests for ten years after it was spoken (`FRESH_AFTER`; `h.recall` stays quiet too).
+* `echoFor(s, ev, domain)` (events.js, `addEcho`): an event or a choice result of the same kind as an older memory (a shared specific tag, or the same part of life) carries one short line in the log entry's `echo` field ("這讓你想起…"). Events that look back on a whole life (tags `reflection`, `midlife`, `late`) fit any memory and may speak two. Six to eight in a life (`ECHO_SCALE`). Never on grief, war, disaster, death or an ordinary milestone. The life screen shows `echo` as a quiet italic line (`.entry-echo`) and the pacing counts its characters.
+* `h.recall(key)` ("十歲那年，是叔叔借了車，送你去診所"), `h.recallPhrase(key)`, `h.hasMemory(key)`, `h.memories(tag)` for an event that wants to name one itself: `你想起${h.recall('f:regional_malaria_season')}。`. They change nothing.
+* `summary.keepsake` (`keepsakeOf`: a decision the family took, a loss, or an authored moment, turned into the third person) (there is no `summary.memories`; the family drawer reads the newest five from `getStatus(s).memories`); `eulogy.js` tells the keepsake in the sentence about the family ("她始終記得五歲那年，媽媽整夜守在她身邊…"), the first thing to go when the story is too long.
+
+A memory that was spoken (in any line: `pushLog` calls `noteSpoken`) is not spoken again for ten years (`FRESH_AFTER`) and never in the year it was made. The tuning constants are in `reflection()` / `echoFor()`; `tests/consequence.test.mjs` pins the density (6-16 callbacks per life; measured 3.3 reflections and 6.4 echoes on average, a little more in a life of 80 years or more).
+
+**Audit.** A memory is a fact about the past: `tests/lib/coherence.mjs` checks each phrase once, when it is made, against the state of that year (`memory:<key>` flags; the quoted label of a past choice is removed first), and does not check the lines that speak it again against today's state.
+
+**The consequence tracker** (`tools/consequence-scan.mjs`, `TRACE` hooks in `events.js`): the static part lists, for every major choice, its flags, follow-ups and readers; the dynamic part plays lives and records, for every choice, whether a follow-up fired, a text or condition read one of its flags, or a memory it made was spoken again. The share of choice firings with an echo is the number `tests/consequence.test.mjs` holds at 47 % or more (51 % measured on 2000 lives; 17 % before Phase 6C). The first goal was 80 %, which needed about 20 spoken callbacks in a life and read as a tic; the density was cut on purpose and the number is what it honestly is. `--blind` lists follow-ups scheduled by several options of one event that read none of the flags telling the options apart (a place for "stay" and "leave" to contradict: `world_ukraine_later` used to).
+
+**The person who decides.** `whoDecides` is now fixed per life stage (infant 0-5, child 6-11): two decisions in the same year, or the same stage, name the same adult. The `salt` argument is still accepted and no longer changes the answer.
+
+**Household view.** `getStatus(s).household = { mother, father, partner, children[] }` with `with_you | apart | home_country | abroad | with_partner | with_other_parent | with_grandparents | independent | ''`; the family drawer words them (`strings.js people.where`) and lists `getStatus(s).memories` (the newest five) under 回憶.
+

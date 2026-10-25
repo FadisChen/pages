@@ -255,7 +255,9 @@ export default [
     tags: ['culture', 'childhood', 'play'],
     cond: (s, h) => h.yearIn(1966, 1998) && (h.urban() || ['UM', 'H'].includes(h.incomeAt()) || h.year() >= 1972),
     text: (s, h) => (['UM', 'H'].includes(h.incomeAt())
-      ? '客廳裡那台電視成了全家晚上的中心，你守著卡通開播的時間，一分鐘都不肯遲到，連吃飯都要端到電視前面，一邊嚼一邊盯著螢幕，湯匙好幾次戳到鼻子。'
+      ? (h.seenEvent('world_tv_arrives')
+        ? '晚飯後全家都擠在電視前面，你守著卡通開播的時間，一分鐘都不肯遲到，連吃飯都要端到電視前面，一邊嚼一邊盯著螢幕，湯匙好幾次戳到鼻子。'
+        : '客廳裡那台電視成了全家晚上的中心，你守著卡通開播的時間，一分鐘都不肯遲到，連吃飯都要端到電視前面，一邊嚼一邊盯著螢幕，湯匙好幾次戳到鼻子。')
       : `${h.urban() ? '巷子裡' : '村裡'}只有一戶人家有電視。晚上大家端著板凳擠進他家，一齣連續劇看完，你已經趴在大人腿上睡著了，夢裡還在跟著劇情緊張，隔天上學第一件事，就是跟同伴講昨天演到哪裡。`),
     effects: { happiness: +3, social: +2, knowledge: +1 },
   },
@@ -513,12 +515,14 @@ export default [
     ages: [4, 12],
     weight: 0.9,
     tags: ['family', 'migration', 'regional'],
-    cond: (s, h) => !h.incomeAtLeast('H') && h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'CAS', 'MENA', 'EAS') && h.wealthQ() <= 3 && h.parentsAlive() > 0,
+    // a parent who works in another country than the child lives in: the child stays in the home country with the other parent (Phase 6C: the household, not the country of today)
+    cond: (s, h) => !h.incomeAtLeast('H') && h.isRegion('SEA', 'SAS', 'LAC', 'SSA', 'CAS', 'MENA', 'EAS') && h.wealthQ() <= 3 && h.parentsAlive() === 2 && !h.isMigrant() && h.livesWith('parents'),
     text: (s, h) => {
       const who = h.parentAlive('mother') && (h.isRegion('SEA', 'SAS') || !h.parentAlive('father')) ? '媽媽' : h.parentAlive('father') ? '爸爸' : '媽媽';
-      if (h.year() < 2000) return `${who}到很遠的地方工作，一年才回來一兩次。你靠著信封裡的照片和匯款單記得他的樣子，有時覺得他像一位很好的親戚。他回來的那幾天，你繞著他轉，捨不得睡。`;
+      const he = who === '媽媽' ? '她' : '他'; // the parent who works abroad
+      if (h.year() < 2000) return `${who}到很遠的地方工作，一年才回來一兩次。你靠著信封裡的照片和匯款單記得${he}的樣子，有時覺得${he}像一位很好的親戚。${he}回來的那幾天，你繞著${he}轉，捨不得睡。`;
       if (h.year() < 2013) return `${who}在國外工作。電話卡一張張用完，你握著話筒不知道該說什麼，每次都只說：「我很好。」`;
-      return `${who}在國外工作。每個週末你在螢幕裡看見他的臉，他總問你有沒有好好吃飯。有時網路卡住，你就對著那張凍結的臉笑，直到畫面又動起來，兩個人一起笑出聲。`;
+      return `${who}在國外工作。每個週末你在螢幕裡看見${he}的臉，${he}總問你有沒有好好吃飯。有時網路卡住，你就對著那張凍結的臉笑，直到畫面又動起來，兩個人一起笑出聲。`;
     },
     effects: { happiness: -3, social: -2, wealth: +2 },
     set: ['c_parent_away'],
@@ -1112,7 +1116,7 @@ export default [
         label: '搖頭，繞路回家',
         effects: { social: -1, happiness: +1 },
         set: ['c_refused_corner'],
-        result: '你說「我媽在等我」，然後走開。背後響起的笑聲讓你耳朵發燙，但沒有人追上來。',
+        result: (s, h) => `你說「${h.parentAlive('mother') ? '我媽在等我' : '家裡的人在等我'}」，然後走開。背後響起的笑聲讓你耳朵發燙，但沒有人追上來。`,
         schedule: [{ id: 'youth_gang_offer', inYears: [3, 5] }],
         ai: 2,
       },
@@ -1146,7 +1150,7 @@ export default [
       {
         label: '跟大人討價還價，只補一科',
         effects: { knowledge: +2, happiness: -1 },
-        result: '你分析了自己的弱項，提出只補數學。大人驚訝地看著你，最後點了頭。這是你第一次靠自己的腦袋談判成功。',
+        result: '你分析了自己的弱項，提出只補數學。大人驚訝地看著你，最後點了頭。這是你第一次靠自己的腦袋說服大人。',
         ai: 1.5,
       },
       {

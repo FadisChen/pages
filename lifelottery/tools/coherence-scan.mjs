@@ -1,6 +1,9 @@
 // Deep coherence scan (exploratory companion of tests/coherence.test.mjs).
 //
-//   node tools/coherence-scan.mjs [lives=3000] [prefix=scan] [--rule=work,school] [--samples=2] [--json=out.json]
+//   node tools/coherence-scan.mjs [lives=3000] [prefix=scan] [--rule=work,school] [--samples=2] [--json=out.json] [--stress] [--novelty] [--migrant]
+//   --stress   7 lives in 8 lose family early (parents at random ages, a partner, a child), see applyStress() in tests/lib/coherence.mjs
+//   --novelty  3 lives in 4 start with novelty counts 1-3 on every event with phrasings, so every variant text is read
+//   --migrant  7 lives in 8 get a family and move abroad (labour alone, study, skilled with the family, refugees, couples in two countries, returns): the household rule
 //
 // Plays `lives` lives over eras / draw modes (every 4th forced to a country from a coverage list), renders every
 // text against the state at that moment, applies the allowlist and prints the remaining flags grouped by
@@ -21,7 +24,7 @@ const samples = +opt.samples || 1;
 // coverage list: every country (so the long tail of regional events is exercised)
 const countries = COUNTRIES.map((c) => c.code);
 const t0 = Date.now();
-const res = runAudit(lifeConfigs(N, { prefix, countries }), {});
+const res = runAudit(lifeConfigs(N, { prefix, countries, stress: !!opt.stress, novelty: !!opt.novelty, migrant: !!opt.migrant }), {});
 const groups = groupFlags(res.flags).filter((g) => !only || only.has(g.rule));
 
 console.log(`lives ${res.stats.lives}  entries ${res.stats.entries}  time ${((Date.now() - t0) / 1000).toFixed(1)}s`);

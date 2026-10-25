@@ -7,6 +7,10 @@
 //
 // The state-mutating primitives (startJob, marry, addChild, migrate, ...) are exported so that
 // helpers.js (and therefore events) use exactly the same code paths as the systems.
+//
+// Phase 6B added `state.household` (who lives with whom): see the "Household" section below. It is created lazily
+// (ensureHousehold), kept up to date by marry / divorce / addChild / migrate / the yearly pass, and never draws a
+// random number (every household decision is a stableFlip), so a life without migration or divorce is untouched.
 
 import { BY_CODE } from '../data/countries.js';
 import { eraView, incomeGroupAt } from '../data/eras.js';
@@ -18,6 +22,7 @@ import { randomName } from './birth.js';
 import { drawGroup, getPool, childFamilyToken } from '../data/names.js';
 import { fxOf } from './focus.js';
 import { placeGeo } from '../data/geo.js';
+import { remember, noteSpoken, speech, resting } from './memory.js';
 
 export const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 export const EDU_LEVELS = ['none', 'primary', 'secondary', 'tertiary', 'graduate'];
@@ -54,6 +59,8 @@ export function ctxOf(s) {
  * the random generator (h.stable is this function).
  */
 export function stableFlip(s, key, p = 0.5) {
+  const fixed = s.flags && s.flags._fix; // set only by a "same start" life (createLife { birth }): answers carried over from the first life
+  if (fixed && Object.prototype.hasOwnProperty.call(fixed, key)) return !!fixed[key];
   if (!(p > 0)) return false;
   if (p >= 1) return true;
   return hash01(`${s.seed}|${s.birthYear}|${s.name.full}|${key}`) < p;
@@ -79,6 +86,7 @@ export function pushLog(s, kind, title, text, delta) {
   const e = { age: s.age, year: s.year, kind, title, text };
   if (delta && Object.keys(delta).length) e.delta = delta;
   s.log.push(e);
+  if (kind !== 'death') noteSpoken(s, text); // a memory said again in this line counts as spoken (memory.js)
   return e;
 }
 
@@ -220,6 +228,7 @@ export function pickJob(s, candidates = JOB_IDS) {
 export function startJob(s, id) {
   const j = JOBS[id];
   if (!j) throw new Error(`unknown job ${id}`);
+  if (!(s.flags._jobs && s.flags._jobs.length)) remember(s, 'work:first', `你有了第一份工作，是${j.name}`, { tag: 'work', w: 3 });
   s.work.job = id;
   s.work.status = j.type;
   s.flags._jobs = s.flags._jobs || [];
@@ -338,7 +347,91 @@ export function annualIncome(s) {
 // People around you: parents, partner, children
 // ---------------------------------------------------------------------------------------------
 
+/** Who is still alive among the parents: 'both' | 'mother' | 'father' | 'none'. */
+export function parentsPresent(s) {
+  const { mother, father } = s.family;
+  return mother.alive && father.alive ? 'both' : mother.alive ? 'mother' : father.alive ? 'father' : 'none';
+}
+
+/**
+ * Who stands in for absent parents at a wedding or a first day: an uncle, an aunt, an elder of the family while the person is
+ * young enough for one to be alive (up to 40), the eldest brother or sister later on (if there are any), else nobody (''). Decided once
+ * per life with `hash01`, no random numbers consumed.
+ */
+export function standInKin(s) {
+  if (s.age <= 40) return ['叔叔', '姑姑', '舅舅', '阿姨', '伯父'][Math.floor(hash01(`${s.seed}|${s.birthYear}|${s.name.full}|standin`) * 5)];
+  return s.family.siblings > 0 ? '年紀最長的手足' : '';
+}
+
+/** Have the partner's parents died too? (not simulated: decided per life by the partner's age, so a wedding at 60 is often a wedding without any parents). */
+export function partnerParentsGone(s) {
+  const a = s.partner ? s.partner.age : s.age;
+  return stableFlip(s, 'pt_parents_gone', clamp((a - 38) / 40, 0, 0.9));
+}
+
+/**
+ * One tender sentence about the parents who cannot be at the wedding (the empty seats at the table, a prayer, an offering, an
+ * uncle who gives the bride or groom away); the tradition follows the family religion. '' when both parents are alive.
+ */
+export function weddingAbsence(s, again = (s.flags._married || 0) >= 2) {
+  const pp = parentsPresent(s);
+  const far = parentsFar(s);
+  if (pp === 'both') return far && !again ? `婚禮那天，遠在${BY_CODE[s.homeCountryCode].name}的爸媽只能透過${farLink(s)}參加，${farLink(s)}那頭傳來他們壓不住的笑聲，和一點點哽咽。` : '';
+  // a second wedding: the empty seats were already told once
+  if (again) return pp === 'none' ? '這一次，你只在心裡對過世的爸媽說：「我慢慢走到這裡了。」' : `這一次，你只在心裡對過世的${pp === 'mother' ? '父親' : '母親'}說了一聲。`;
+  const rel = s.religion || 'none';
+  if (pp === 'none') {
+    const kin = standInKin(s);
+    const both = partnerParentsGone(s);
+    const by = kin ? `${kin}坐在旁邊，替你們主婚` : '沒有人替你們主婚，你和對方自己牽著手，向賓客一桌一桌敬了過去';
+    const seats = both ? '雙方過世的父母都沒能到場，主桌上留了四個空位' : '你過世的爸媽沒能到場';
+    switch (rel) {
+      case 'muslim': return `婚禮前一天，你到墓地為過世的爸媽唸了一段祈禱，把明天的事告訴他們。${by}。`;
+      case 'christian': return `牧師在禱詞裡提到你過世的爸媽，你低頭停了一下。${kin ? `${kin}陪你走到台前` : '你一個人走到台前'}。`;
+      case 'hindu': case 'sikh': return `儀式開始前，你在家中的神龕前點了一盞燈，請不在了的爸媽也來祝福。${by}。`;
+      case 'buddhist': case 'folk': return `婚禮前你先到牌位前為過世的爸媽上了香，告訴他們今天的事。主桌替他們留了兩個位子，${by}。`;
+      case 'jewish': return `華蓋旁點了一盞小燈，紀念過世的爸媽。${by}。`;
+      default: return `${seats}，桌上擺著他們的相片。${by}。`;
+    }
+  }
+  const dead = pp === 'mother' ? '父親' : '母親', alive = pp === 'mother' ? '母親' : '父親';
+  if (far) return `婚禮那天，遠在${BY_CODE[s.homeCountryCode].name}的${alive}只能透過${farLink(s)}參加，你替過世的${dead}在桌上留了一個位子，擺著${dead}的相片。`;
+  switch (rel) {
+    case 'muslim': return `婚禮前你到墓地為過世的${dead}唸了一段祈禱，婚禮上${alive}握著你的手，眼眶紅紅的。`;
+    case 'hindu': case 'sikh': case 'buddhist': case 'folk': return `儀式前你在${dead}的牌位或神龕前點了香，婚禮上${alive}坐在主桌，旁邊替過世的${dead}留了一個位子。`;
+    default: return `婚禮上，${alive}坐在主桌，旁邊替過世的${dead}留了一個位子，擺著${dead}的相片。`;
+  }
+}
+
+/** The person lives abroad and a living parent does not live with them. */
+function parentsFar(s) {
+  return isAbroad(s) && parentsAliveCount(s) > 0 && !ensureHousehold(s).parents;
+}
+
+/** How the family far away keeps in touch in this year and place: 視訊 | 電話 | 長途電話 (the lag of the technology follows income and the countryside, like h.techReady). */
+function farLink(s) {
+  const lag = ({ H: 0, UM: 2, LM: 4, L: 7 }[ctxOf(s).income] ?? 0) + (!s.urban && ctxOf(s).income !== 'H' ? 2 : 0);
+  return s.year >= 2012 + lag ? '視訊' : s.year >= 1996 + lag ? '電話' : '長途電話';
+}
+
+/** Who sits with the person at the wedding table: '兩家人' as long as one of the person's own parents lives, else the partner's side, '親友'. */
+export function weddingFolk(s) {
+  return parentsPresent(s) === 'none' || parentsFar(s) ? '親友們' : '兩家人';
+}
+
+/** At a parent's death the person remembers what that parent did for them (a decision the family took when they were small), if it was kept: "你想起十歲那年，是爸爸借了車，送你去診所。" */
+function parentRecall(s, who) {
+  if (s.age < 14) return '';
+  const word = who === 'mother' ? '媽媽' : '爸爸';
+  const m = (s.memories || []).filter((x) => x.k.startsWith('f:') && !x.u && !resting(s, x) && x.p.includes(word) && s.age - x.a >= 3).sort((a, b) => (a.n || 0) - (b.n || 0) || a.a - b.a)[0];
+  return m ? `你想起${speech(s, m)}。` : '';
+}
+
 function parentDeathText(s, who, ctx) {
+  return `${parentDeathBase(s, who, ctx)}${parentRecall(s, who)}`;
+}
+
+function parentDeathBase(s, who, ctx) {
   const label = who === 'mother' ? '母親' : '父親';
   const young = s.age < 18;
   const poor = s.family.wealthQ <= 2;
@@ -372,6 +465,8 @@ function agePeople(s, ctx) {
         wealth: s.age < 18 && who === 'father' && s.family.wealthQ <= 3 ? -3 : 0,
       });
       pushLog(s, 'event', who === 'mother' ? '母親過世' : '父親過世', parentDeathText(s, who, ctx), delta);
+      remember(s, `loss:${who}`, `你的${who === 'mother' ? '母親' : '父親'}過世了`, { tag: 'family', w: 3 });
+      householdOnParentDeath(s);
       if (s.age >= 12) s.pending.push({ id: 'regional_culture_funeral', atAge: s.age }); // the rites of the family's tradition, told in the same year
       if (!s.family.mother.alive && !s.family.father.alive && s.age < 18) {
         s.flags.orphan = true;
@@ -390,11 +485,18 @@ function agePeople(s, ctx) {
       const q = baselineQ(ctx.country, pt.gender, s.year - pt.age, pt.age - 1);
       if (rand(s.rng) < q) {
         const wasMarried = pt.status === 'married';
+        const apart = !ensureHousehold(s).partner; // the couple lived in different places (one of them was working far away)
         pt.status = 'widowed';
+        householdOnPartnerGone(s, 'widowed');
         const delta = applyDelta(s, { happiness: wasMarried ? -14 : -8, social: -4, health: -2 });
         pushLog(s, 'milestone', wasMarried ? '失去伴侶' : '失去心上人',
-          wasMarried ? `${pt.name}走了。家裡每個角落都還留著對方的習慣，你花了很長一段時間才學會一個人吃飯。` : `${pt.name}意外地離開了這個世界，你們原本還有很多計畫。`, delta);
+          wasMarried
+            ? (apart && isAbroad(s)
+              ? `${pt.name}走了。消息是從電話那頭傳來的，你人在${BY_CODE[s.countryCode].name}，連最後一面都沒能見到。那段時間你常常拿著${farLink(s) === '視訊' ? '手機' : '話筒'}，卻想不到還能撥給誰。`
+              : `${pt.name}走了。家裡每個角落都還留著對方的習慣，你花了很長一段時間才學會一個人吃飯。`)
+            : `${pt.name}意外地離開了這個世界，你們原本還有很多計畫。`, delta);
         addHighlight(s, `${pt.name}離世。`);
+        remember(s, 'loss:partner', `${pt.name}離開了人世`, { tag: 'love', w: 3 });
         planRemarriage(s, wasMarried ? 0.3 : 0.7);
       }
     }
@@ -409,8 +511,513 @@ function agePeople(s, ctx) {
       const delta = applyDelta(s, { happiness: -16, health: -4, social: -2 });
       pushLog(s, 'milestone', '失去孩子', `${c.name}在${age}歲時離開了你。沒有任何道理可以安慰這件事，你只是一天一天地撐過去。`, delta);
       addHighlight(s, `失去了孩子${c.name}。`);
+      remember(s, `loss:kid:${c.name}`, `${c.name}在${age}歲時離開了你`, { tag: 'family', w: 3 });
     }
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Household (Phase 6B): who lives with whom
+//
+//   state.household = {
+//     v: 1,
+//     parents: bool,        // lives under one roof with a living parent
+//     partner: bool,        // lives with the partner (a married couple can live apart: one of them works abroad or far away)
+//     kids: [ where ],      // one entry per state.children[i]: 'with_you' | 'with_partner' | 'with_grandparents' | 'home_country' | 'independent'
+//     far: [ bool ],        // grown-up children (independent) who are in another country than the person (they stayed behind)
+//     aloneAbroad: bool,    // abroad, and nobody of the family lives with the person
+//     joint: bool,          // married into / stayed in a multi-generation home (own parents keep living with the couple)
+//     sep: null | { year, partner, kids: [names], from, to, mode },   // who the person left behind when moving, and since when
+//     lastReunion, lastLeft, lastLeftYear, movedIn ...                // narration hooks (names, years)
+//   }
+//
+// Where things happen: `migrate()` (who comes along: alone / partner / family / refugee / keep), `marry()`, `divorce()` (custody),
+// `addChild()` (where the baby lives), the widowhood and parent-death code in agePeople(), and `householdYear()` once a year
+// (leaving home by the norms of the home country, children growing up, a parent moving in, families reuniting).
+// Nothing in here draws a random number: every decision is a `stableFlip` or a plain rule, so the random stream of a life that never
+// migrates or divorces is exactly what it was before the household existed.
+// ---------------------------------------------------------------------------------------------
+
+export const KID_WHERE = ['with_you', 'with_partner', 'with_grandparents', 'home_country', 'independent'];
+/** Where a minor can be when the family is split: with the other parent, the grandparents, or other relatives back home. */
+export const APART_WHERE = ['with_partner', 'with_grandparents', 'home_country'];
+
+const GULF_STATES = new Set(['SAU', 'ARE', 'QAT', 'KWT', 'OMN', 'BHR']); // sponsorship rules keep most labour migrants there on their own
+
+const HOME_LEAVE_AGE = { NAM: 20, OCE: 20, EUR: 22, LAC: 25, EAS: 25, SEA: 24, CAS: 24, MENA: 26, SAS: 25, SSA: 21 };
+/** Share of couples who go on living in the (man's) parents' home after the wedding: [man, woman] by region of the home country. */
+const JOINT_FAMILY = { SAS: [0.6, 0.08], MENA: [0.5, 0.06], CAS: [0.5, 0.08], SSA: [0.35, 0.08], SEA: [0.3, 0.1], EAS: [0.25, 0.06], LAC: [0.12, 0.06], EUR: [0.03, 0.02], NAM: [0.02, 0.02], OCE: [0.02, 0.02] };
+/** Yearly chance (before age and sex modifiers) that an old parent moves in with the grown-up child, by region. */
+const PARENT_MOVES_IN = { SAS: 0.035, MENA: 0.035, CAS: 0.03, SSA: 0.03, SEA: 0.028, EAS: 0.026, LAC: 0.016, EUR: 0.004, NAM: 0.004, OCE: 0.004 };
+
+const parentsAliveCount = (s) => (s.family.mother.alive ? 1 : 0) + (s.family.father.alive ? 1 : 0);
+const hasActivePartner = (s) => !!s.partner && (s.partner.status === 'married' || s.partner.status === 'dating');
+const isAbroad = (s) => s.countryCode !== s.homeCountryCode;
+const kidYears = (s, c) => s.year - c.birthYear;
+const homeRegion = (s) => (BY_CODE[s.homeCountryCode] || {}).region;
+
+/** Age at which a person (key 'self') or the i-th child (key `kid${i}`) leaves the parents' home by the norms of the home region: same for the same life. */
+function leaveAgeOf(s, key) {
+  const base = HOME_LEAVE_AGE[homeRegion(s)] ?? 23;
+  const jitter = Math.floor(hash01(`${s.seed}|${s.birthYear}|${s.name.full}|leave:${key}`) * 8) - 3; // -3 .. +4
+  return Math.max(17, base + jitter);
+}
+
+/** Has the person reached the age at which living with the parents is no longer the default (or said so by leaving home)? */
+function pastHomeAge(s, hh) {
+  if (hh.joint) return false;
+  if (s.flags.left_home) return true;
+  let age = leaveAgeOf(s, 'self');
+  if (s.flags.stayed_home) age = Math.max(age, 30);
+  return s.age >= age;
+}
+
+/** After a wedding: does the couple go on living with (the man's) parents? Decided once per marriage. */
+function jointFamily(s) {
+  const [pm, pf] = JOINT_FAMILY[homeRegion(s)] || [0.1, 0.05];
+  const inc = (BY_CODE[s.homeCountryCode] || {}).income;
+  const mult = inc === 'L' || inc === 'LM' ? 1.25 : inc === 'H' ? 0.6 : 1;
+  return stableFlip(s, `joint:${s.flags._married || 1}`, (s.gender === 'M' ? pm : pf) * mult);
+}
+
+/** After a divorce: do the minor children stay with the person? One decision per divorce (siblings stay together). Mothers usually keep them; in the patrilineal regions fathers keep the older ones. */
+function custodyWithYou(s) {
+  const region = homeRegion(s);
+  const patri = region === 'MENA' || region === 'SAS' || region === 'CAS';
+  const minors = s.children.filter((c) => c.alive && kidYears(s, c) < 18);
+  const youngest = minors.length ? Math.min(...minors.map((c) => kidYears(s, c))) : 0;
+  const p = s.gender === 'F' ? (patri ? (youngest <= 7 ? 0.8 : 0.45) : 0.82) : (patri ? (youngest <= 7 ? 0.2 : 0.62) : 0.22);
+  return stableFlip(s, `custody:${s.flags._divorces || 0}`, p);
+}
+
+/** Where a child lives by default (used when a child is born and to derive the household of an old save). */
+function defaultKidWhere(s, hh, i) {
+  const c = s.children[i];
+  const pt = s.partner;
+  if (kidYears(s, c) >= leaveAgeOf(s, `kid${i}`)) return 'independent';
+  if (pt && pt.status === 'divorced') return custodyWithYou(s) ? 'with_you' : 'with_partner';
+  // a couple who live apart (one works abroad): the baby is with the mother
+  if (pt && pt.status === 'married' && !hh.partner && hh.sep && hh.sep.partner) return s.gender === 'M' ? 'with_partner' : 'with_you';
+  return 'with_you';
+}
+
+/** Household of a life that has none yet: a new life, or a save from before Phase 6B (assumed to live together). */
+function deriveHousehold(s) {
+  const hh = { v: 1, parents: false, partner: false, kids: [], far: [], aloneAbroad: false, joint: false, sep: null };
+  hh.parents = parentsAliveCount(s) > 0 && (s.age < 17 || (!isAbroad(s) && !pastHomeAge(s, hh)));
+  hh.partner = !!s.partner && s.partner.status === 'married';
+  return hh;
+}
+
+function refreshAlone(s, hh) {
+  const withYou = s.children.some((c, i) => c.alive && hh.kids[i] === 'with_you');
+  hh.aloneAbroad = isAbroad(s) && !hh.partner && !hh.parents && !withYou;
+}
+
+/**
+ * The household of the person, created (without random numbers) on first use: a new life starts living with the parents; a save from
+ * before Phase 6B is derived from what it already has (parents until the norm age, a married partner at home, children by the leave age
+ * or the custody rule). Also keeps `kids` / `far` aligned with `children` and repairs invalid entries.
+ */
+export function ensureHousehold(s) {
+  let hh = s.household;
+  if (!hh || typeof hh !== 'object' || Array.isArray(hh)) hh = s.household = deriveHousehold(s);
+  if (typeof hh.parents !== 'boolean') hh.parents = parentsAliveCount(s) > 0 && !isAbroad(s) && (s.age < 17 || !pastHomeAge(s, hh));
+  if (typeof hh.partner !== 'boolean') hh.partner = !!s.partner && s.partner.status === 'married';
+  if (!Array.isArray(hh.kids)) hh.kids = [];
+  if (!Array.isArray(hh.far)) hh.far = [];
+  const n = s.children.length;
+  for (let i = 0; i < n; i++) {
+    if (!KID_WHERE.includes(hh.kids[i])) hh.kids[i] = defaultKidWhere(s, hh, i);
+    hh.far[i] = !!hh.far[i];
+  }
+  hh.kids.length = n;
+  hh.far.length = n;
+  refreshAlone(s, hh);
+  return hh;
+}
+
+/** Alive children living with the person (grown-up ones included). */
+export function kidsWith(s, where) {
+  const hh = ensureHousehold(s);
+  return s.children.filter((c, i) => c.alive && hh.kids[i] === where);
+}
+
+/** Where the i-th child lives (see KID_WHERE). */
+export function kidWhere(s, i) {
+  return ensureHousehold(s).kids[i];
+}
+
+/** Indices of alive minors (under 18) who are away from the person: with the other parent, the grandparents or relatives. */
+function apartMinorIdx(s, hh) {
+  const out = [];
+  s.children.forEach((c, i) => { if (c.alive && kidYears(s, c) < 18 && APART_WHERE.includes(hh.kids[i])) out.push(i); });
+  return out;
+}
+
+/** Does the person live with `who` ('parents' | 'partner' | 'children')? */
+export function livesWithWho(s, who) {
+  const hh = ensureHousehold(s);
+  if (who === 'parents') return hh.parents && parentsAliveCount(s) > 0;
+  if (who === 'partner') return hh.partner && hasActivePartner(s);
+  if (who === 'children' || who === 'kids') return s.children.some((c, i) => c.alive && hh.kids[i] === 'with_you');
+  return false;
+}
+
+// ---- transitions --------------------------------------------------------------------------------------
+
+/** A wedding: the couple moves in together; they stay with the man's parents in the regions where that is the norm, else the person leaves the parents' home. */
+function householdOnMarry(s) {
+  const hh = ensureHousehold(s);
+  if (!(hh.sep && hh.sep.partner)) hh.partner = true;
+  if (hh.parents && s.age >= 16) {
+    if (jointFamily(s)) hh.joint = true;
+    else hh.parents = false;
+  } else if (!hh.parents && s.age <= 36 && parentsAliveCount(s) > 0 && !isAbroad(s) && jointFamily(s)) {
+    hh.parents = true;
+    hh.joint = true;
+  }
+  refreshAlone(s, hh);
+}
+
+/** The partner is gone: divorce (custody of the minors who live with a parent) or widowhood (children with the dead partner go to relatives, or home with you). */
+function householdOnPartnerGone(s, how) {
+  const hh = ensureHousehold(s);
+  hh.partner = false;
+  hh.apart = false;
+  if (hh.sep) hh.sep.partner = false;
+  const minors = []; // the children who still live in a parent's home (minors, and grown-up children who have not left yet)
+  s.children.forEach((c, i) => { if (c.alive && hh.kids[i] !== 'independent') minors.push(i); });
+  if (how === 'divorce') {
+    const mine = custodyWithYou(s);
+    for (const i of minors) if (hh.kids[i] === 'with_you' || hh.kids[i] === 'with_partner') hh.kids[i] = mine ? 'with_you' : 'with_partner';
+  } else {
+    for (const i of minors) {
+      if (hh.kids[i] !== 'with_partner') continue;
+      if (!isAbroad(s)) hh.kids[i] = 'with_you';
+      else {
+        hh.kids[i] = parentsAliveCount(s) > 0 ? 'with_grandparents' : 'home_country';
+        hh.caregiverLost = s.year; // the family reunion becomes likelier: nobody is left at home to look after the children
+      }
+    }
+  }
+  refreshAlone(s, hh);
+}
+
+/** A parent has died: nobody left to live with, and children who were with the grandparents are now with relatives. */
+function householdOnParentDeath(s) {
+  const hh = ensureHousehold(s);
+  if (parentsAliveCount(s) === 0) {
+    hh.parents = false;
+    s.children.forEach((c, i) => {
+      if (c.alive && hh.kids[i] === 'with_grandparents') {
+        const partnerAtHome = hasActivePartner(s) && s.partner.status === 'married' && !hh.partner && hh.sep && hh.sep.partner;
+        hh.kids[i] = partnerAtHome ? 'with_partner' : isAbroad(s) ? 'home_country' : 'with_you'; // not abroad: the child comes to live with the person
+        if (hh.kids[i] === 'home_country') hh.caregiverLost = s.year;
+      }
+    });
+  }
+  refreshAlone(s, hh);
+}
+
+/** Take the partner and the minors along (or back): `kids` = the minors who are not independent, wherever they are. */
+function bringFamily(s, hh, { partner = true, kids = true } = {}) {
+  const moved = { partner: false, kids: [] };
+  if (partner && hasActivePartner(s) && !hh.partner && (s.partner.status === 'married' || (hh.sep && hh.sep.partner))) { hh.partner = true; moved.partner = true; }
+  if (kids) {
+    s.children.forEach((c, i) => {
+      if (c.alive && kidYears(s, c) < 18 && APART_WHERE.includes(hh.kids[i])) { hh.kids[i] = 'with_you'; hh.far[i] = false; moved.kids.push(c.name); }
+    });
+  }
+  return moved;
+}
+
+/** Where a minor stays when the person leaves: with the other parent if there is a married partner at home, else with the grandparents, else with relatives. */
+function leftBehindWhere(s, hh) {
+  if (s.partner && s.partner.status === 'married' && !hh.partner) return 'with_partner';
+  return parentsAliveCount(s) > 0 ? 'with_grandparents' : 'home_country';
+}
+
+/**
+ * Who goes with the person when they move (abroad, or to a city far from home). `mode`:
+ *   'alone'   nobody: the partner stays, the minors who lived with the person stay with the partner / grandparents / relatives
+ *   'partner' the partner comes, the minors stay
+ *   'family'  the partner and all the minors come (also those who were left behind earlier: a reunion)
+ *   'refugee' whoever lives with the person comes: partner, minors and the parents who share the home
+ *   'keep'    nothing changes: everybody who lives with the person goes on living with them (a second move)
+ * Without a mode the engine decides from the circumstances (autoMigrationMode).
+ */
+function depart(s, hh, mode, meta) {
+  const leftNames = [];
+  let partnerLeft = false;
+  if (mode === 'keep' || mode === 'refugee') {
+    // everybody who lives with the person (the parents who share the home too) goes on living with them; a family sent ahead to safety is joined again
+    if (mode === 'refugee' && hh.sep && hh.sep.mode === 'sent') { bringFamily(s, hh); hh.sep = null; }
+  } else {
+    if (mode === 'family') bringFamily(s, hh);
+    else if (mode === 'partner') bringFamily(s, hh, { kids: false });
+    if (mode === 'alone' && hh.partner) { hh.partner = false; partnerLeft = hasActivePartner(s); }
+    else if (hasActivePartner(s) && s.partner.status === 'dating' && meta.from !== meta.to && !(hh.sep && hh.sep.partner)) partnerLeft = true; // a boyfriend or girlfriend stays behind when the person goes abroad
+    if (mode !== 'family') {
+      for (let i = 0; i < s.children.length; i++) {
+        const c = s.children[i];
+        if (c.alive && kidYears(s, c) < 18 && hh.kids[i] === 'with_you') { hh.kids[i] = leftBehindWhere(s, { ...hh, partner: mode === 'partner' }); leftNames.push(c.name); }
+      }
+    }
+    if (hh.parents) { hh.parents = false; hh.joint = false; }
+  }
+  if (leftNames.length || partnerLeft) {
+    const keep = hh.sep && hh.sep.year;
+    hh.sep = { year: keep ?? s.year, partner: partnerLeft || !!(hh.sep && hh.sep.partner), kids: leftNames.concat(hh.sep ? hh.sep.kids.filter((n) => !leftNames.includes(n)) : []), from: meta.from, to: meta.to, mode };
+    if (!s.pending.some((p) => p.id === 'migration_apart_first_year')) s.pending.push({ id: 'migration_apart_first_year', atAge: s.age + 1 });
+  }
+  hh.lastDepart = { year: s.year, mode, kids: leftNames, partner: partnerLeft };
+  // the family that came along (or was already together) leaves nobody apart
+  if (hh.sep && !apartMinorIdx(s, hh).length && !(hh.sep.partner && hasActivePartner(s) && !hh.partner)) hh.sep = null;
+}
+
+/** The person is back in the home country: the partner and the minors who were left behind live with them again, the grown-up children are near again. */
+function returnHome(s, hh) {
+  const apartYears = hh.sep ? s.year - hh.sep.year : 0;
+  const moved = bringFamily(s, hh);
+  s.children.forEach((c, i) => { hh.far[i] = false; });
+  hh.parents = parentsAliveCount(s) > 0 && (hh.parents || !pastHomeAge(s, hh)); // parents who came along live with the person at home too
+  hh.lastReunion = { year: s.year, apartYears, partner: moved.partner, kids: moved.kids, how: 'return' };
+  hh.sep = null;
+  if ((moved.partner || moved.kids.length) && apartYears >= 1 && !s.pending.some((p) => p.id === 'migration_return_reunion')) s.pending.push({ id: 'migration_return_reunion', atAge: s.age });
+}
+
+/**
+ * How the engine decides who comes along when an event moved the person without saying so (world, regional and seed events):
+ * refugees take everyone who lives with them; students go alone; migrants from poor countries mostly go alone (labour); people from
+ * richer countries with children take the family about half of the time; couples without children come together about half of the time.
+ */
+function autoMigrationMode(s, hh, to) {
+  const f = s.flags;
+  if (f.war || f.displaced || f.m_refugee || (f._displacedAt !== undefined && s.year - f._displacedAt <= 6)) return 'refugee';
+  if (s.edu.inSchool || f.m_student) return 'alone';
+  const home = BY_CODE[s.homeCountryCode] || {};
+  const poor = home.income === 'L' || home.income === 'LM';
+  const minors = s.children.some((c, i) => c.alive && kidYears(s, c) < 18 && hh.kids[i] === 'with_you');
+  const key = (name, p) => stableFlip(s, `mig:${s.year}:${name}`, p);
+  if (minors) return key('family', poor ? 0.12 : 0.55) ? 'family' : 'alone';
+  if (hh.partner) return key('partner', poor ? 0.3 : 0.6) ? 'family' : 'alone';
+  return 'alone';
+}
+
+/** Move the household when the person changes country (called by migrate()). */
+function householdOnMigrate(s, from, to, opts = {}) {
+  const hh = ensureHousehold(s);
+  if (to === s.homeCountryCode) returnHome(s, hh);
+  else depart(s, hh, opts.with && opts.with !== 'auto' ? opts.with : autoMigrationMode(s, hh, to), { from, to });
+  refreshAlone(s, hh);
+}
+
+/**
+ * Move to another town or city of the same country (the countryside to the city, a posting far away). Same companions as migrate():
+ * { with: 'alone' | 'partner' | 'family' | 'keep' } or by the circumstances. The person stops living with the parents.
+ */
+export function moveWithin(s, opts = {}) {
+  const hh = ensureHousehold(s);
+  const poor = ['L', 'LM'].includes((BY_CODE[s.homeCountryCode] || {}).income);
+  const minors = s.children.some((c, i) => c.alive && kidYears(s, c) < 18 && hh.kids[i] === 'with_you');
+  let mode = opts.with;
+  if (!mode || mode === 'auto') {
+    const key = (name, p) => stableFlip(s, `mov:${s.year}:${name}`, p);
+    mode = minors ? (key('family', poor ? 0.4 : 0.75) ? 'family' : 'alone') : hh.partner ? (key('partner', 0.7) ? 'family' : 'alone') : 'alone';
+  }
+  depart(s, hh, mode, { from: s.countryCode, to: s.countryCode });
+  refreshAlone(s, hh);
+}
+
+/**
+ * Family members who stay behind are brought to the person (or sent to the person): the partner and the minors who live elsewhere come to
+ * live with them. `opts`: { partner = true, kids = true }. Returns { partner: bool, kids: [names] } of who actually joined.
+ */
+export function reunite(s, opts = {}) {
+  const hh = ensureHousehold(s);
+  const apartYears = hh.sep ? s.year - hh.sep.year : 0;
+  const moved = bringFamily(s, hh, opts);
+  if (moved.partner || moved.kids.length) hh.lastReunion = { year: s.year, apartYears, partner: moved.partner, kids: moved.kids, how: 'join' };
+  const left = apartMinorIdx(s, hh);
+  if (hh.sep && !left.length && !(hh.sep.partner && hasActivePartner(s) && !hh.partner)) hh.sep = null;
+  refreshAlone(s, hh);
+  return moved;
+}
+
+/** A couple moves in together / apart by choice (family_cohabit, a trial separation). A married couple who live apart on purpose stay apart until they say so. */
+export function setCohabiting(s, together) {
+  const hh = ensureHousehold(s);
+  hh.partner = !!together && hasActivePartner(s);
+  hh.apart = !together && hasActivePartner(s) && s.partner.status === 'married';
+  refreshAlone(s, hh);
+}
+
+/** The person stays while the family is sent away to safety (flight_decision): the partner takes the minors, or the minors go with the grandparents or relatives. */
+export function sendFamilyAway(s) {
+  const hh = ensureHousehold(s);
+  const names = [];
+  let partnerGone = false;
+  if (hh.partner && hasActivePartner(s)) { hh.partner = false; partnerGone = true; }
+  const where = partnerGone ? 'with_partner' : parentsAliveCount(s) > 0 ? 'with_grandparents' : 'home_country';
+  s.children.forEach((c, i) => {
+    if (c.alive && kidYears(s, c) < 18 && hh.kids[i] === 'with_you') { hh.kids[i] = where; names.push(c.name); }
+  });
+  if (partnerGone || names.length) {
+    hh.sep = { year: s.year, partner: partnerGone, kids: names, from: s.countryCode, to: null, mode: 'sent' };
+    hh.lastDepart = { year: s.year, mode: 'sent', kids: names, partner: partnerGone };
+    if (!s.pending.some((p) => p.id === 'migration_apart_first_year')) s.pending.push({ id: 'migration_apart_first_year', atAge: s.age + 1 });
+  }
+  refreshAlone(s, hh);
+  return { partner: partnerGone, kids: names };
+}
+
+/** A parent moves in with the person (or leaves again): `true` needs a living parent. */
+export function setParentsHome(s, together) {
+  const hh = ensureHousehold(s);
+  hh.parents = !!together && parentsAliveCount(s) > 0;
+  hh.joint = hh.parents;
+  if (hh.parents) hh.movedIn = s.year;
+  refreshAlone(s, hh);
+}
+
+/** Set where the (alive, not independent) children live: `where` is a KID_WHERE value; `only` limits it to the children currently in these places. */
+export function setKidsWhere(s, where, only) {
+  if (!KID_WHERE.includes(where)) return 0;
+  const hh = ensureHousehold(s);
+  let n = 0;
+  s.children.forEach((c, i) => {
+    if (!c.alive || hh.kids[i] === 'independent' || hh.kids[i] === where) return;
+    if (only && !only.includes(hh.kids[i])) return;
+    hh.kids[i] = where;
+    hh.far[i] = false;
+    n++;
+  });
+  refreshAlone(s, hh);
+  return n;
+}
+
+/** A grown-up child (the youngest independent one) moves in with the person, e.g. an elder who goes to live with the family. */
+export function moveInWithChild(s) {
+  const hh = ensureHousehold(s);
+  let pick = -1;
+  s.children.forEach((c, i) => { if (c.alive && hh.kids[i] === 'independent' && !hh.far[i] && (pick < 0 || c.birthYear > s.children[pick].birthYear)) pick = i; });
+  if (pick < 0) return null;
+  hh.kids[pick] = 'with_you';
+  refreshAlone(s, hh);
+  return s.children[pick];
+}
+
+/** One child leaves the parents' home by choice (an event narrates it). */
+export function kidLeaves(s, i) {
+  const hh = ensureHousehold(s);
+  const c = s.children[i];
+  if (!c || hh.kids[i] === 'independent') return false;
+  hh.kids[i] = 'independent';
+  hh.lastLeft = i;
+  hh.lastLeftYear = s.year;
+  refreshAlone(s, hh);
+  return true;
+}
+
+/** Zh-Hant words for whoever looks after the children who are not with the person: '伴侶', '孩子的另一位家長' (after a divorce), '孩子的祖父母', '家鄉的親戚'; '你' when they live with you; '' without children. */
+export function caregiverWord(s) {
+  const hh = ensureHousehold(s);
+  const idx = [];
+  s.children.forEach((c, i) => { if (c.alive && hh.kids[i] !== 'independent') idx.push(i); });
+  if (!idx.length) return '';
+  const apart = idx.filter((i) => hh.kids[i] !== 'with_you');
+  if (!apart.length) return '你';
+  // the youngest child who is away decides (the one who needs a carer most)
+  const j = apart.reduce((a, b) => (s.children[b].birthYear > s.children[a].birthYear ? b : a));
+  switch (hh.kids[j]) {
+    case 'with_partner': return hasActivePartner(s) && s.partner.status === 'married' ? '伴侶' : '孩子的另一位家長'; // after a divorce it is the other parent, not a partner
+    case 'with_grandparents': return '孩子的祖父母';
+    default: return '家鄉的親戚';
+  }
+}
+
+/** The yearly pass: leaving home, children growing up, a parent moving in, a split family trying to reunite. */
+function householdYear(s, ctx) {
+  const hh = ensureHousehold(s);
+  const f = s.flags;
+  // the partner: a married partner lives at home unless the person left them behind; a gone partner lives nowhere
+  if (!hasActivePartner(s)) { hh.partner = false; if (hh.sep) hh.sep.partner = false; }
+  else if (s.partner.status === 'married' && !hh.partner && !hh.apart && !(hh.sep && hh.sep.partner)) hh.partner = true;
+  if (hh.partner) hh.apart = false;
+  // parents
+  const alive = parentsAliveCount(s);
+  if (!alive) hh.parents = false;
+  else if (s.age < 17) hh.parents = true;
+  else if (hh.parents && pastHomeAge(s, hh)) hh.parents = false;
+  // "把人接到身邊" (seed_parent_illness): the parent who fell ill lives with the person from then on
+  if (!hh.parents && alive && f.caregiver_parent) { hh.parents = true; hh.joint = true; hh.movedIn = s.year; }
+  // an old parent moves in with the grown-up child (the norm in some regions, rare in others), unless the person already decided
+  if (!hh.parents && alive && s.age >= 38 && !isAbroad(s) && !f.f_parent_plan && !f.elder_housed && hh.movedIn === undefined) { // (once per life: the line is told once)
+    const oldest = Math.max(s.family.mother.alive ? s.family.mother.age : 0, s.family.father.alive ? s.family.father.age : 0);
+    if (oldest >= 72 && s.age <= 72) {
+      const lone = alive === 1;
+      const money = { L: 1.3, LM: 1.15, UM: 1, H: 0.8 }[ctx.income] ?? 1; // poorer households live together more: nobody can pay for two homes or for care
+      const p = (PARENT_MOVES_IN[ctx.home.region] ?? 0.02) * money * (lone ? 1.6 : 0.7) * (oldest >= 80 ? 1.5 : 1) * (hh.partner || hasActivePartner(s) ? 1 : 0.8);
+      if (stableFlip(s, `movein:${s.age}`, p)) {
+        hh.parents = true;
+        hh.joint = true; // a multi-generation home: they stay until they die
+        hh.movedIn = s.year;
+        const pp = parentsPresent(s);
+        const who = pp === 'both' ? '爸媽' : pp === 'mother' ? '母親' : '父親';
+        const they = pp === 'both' ? '他們' : pp === 'mother' ? '她' : '他';
+        pushLog(s, 'event', `${who}搬來同住`, byIncome(ctx.income, {
+          L: `${who}年紀大了，一個人守著老屋，你放心不下。你把${who}接來同住，屋裡最通風的那個角落成了${they}的位子，每天早晨你起床時，總會先聽見${they}在灶邊輕輕走動的聲音。`,
+          LM: `${who}一個人住，鄰居說最近常看到${they}在樓梯上休息。你們商量過幾次，最後${who}把日用品打包，搬來和你同住。屋裡多了一雙拖鞋，也多了一個總是先把稀飯煮好的人。`,
+          UM: `${who}年紀大了，樓梯愈爬愈吃力。你把房間重新排過，請${they}搬來同住。起初${they}什麼都想幫忙，後來慢慢習慣了被照顧，傍晚就坐在窗邊，等你回家。`,
+          H: `${who}住的地方離你不近，每次通完電話你都放不下心。你整理出一間有扶手和夜燈的房間，${who}搬了過來。第一個週末，你們一起吃了久違的一頓飯，${they}把筷子擺得整整齊齊。`,
+        }), applyDelta(s, { social: 2, health: -1 }));
+      }
+    }
+  }
+  // the children grow up and leave by the norms of the home region; the first to leave (and the last one, if there are several) get their own event
+  const left = [];
+  s.children.forEach((c, i) => {
+    if (!c.alive || hh.kids[i] === 'independent') return;
+    const leave = leaveAgeOf(s, `kid${i}`), ageNow = kidYears(s, c);
+    // (a much older child who lives with the person moved in on purpose: an elder who went to live with a grown-up child)
+    if (ageNow >= leave && ageNow <= leave + 8) {
+      const was = hh.kids[i];
+      left.push({ i, was });
+      hh.kids[i] = 'independent';
+      hh.far[i] = isAbroad(s) && was !== 'with_you'; // a child who stayed behind while the person lives abroad is far away once grown up
+    }
+  });
+  if (left.length) {
+    hh.lastLeft = left[0].i;
+    hh.lastLeftYear = s.year;
+    if (left.some((l) => l.was === 'with_you')) {
+      const stay = s.children.some((c, i) => c.alive && hh.kids[i] === 'with_you');
+      const queue = (id) => { if (s.seen[id] === undefined && !s.pending.some((p) => p.id === id)) s.pending.push({ id, atAge: s.age }); };
+      if (!f.f_child_left) queue('family_child_leaves');
+      else if (!stay && s.children.filter((c) => c.alive).length > 1) queue('aging_empty_nest');
+    }
+  }
+  // a split family looks for a way to live together again (the event migration_family_joins tells it)
+  if (hh.sep) {
+    const apartKids = apartMinorIdx(s, hh);
+    const partnerApart = hh.sep.partner && hasActivePartner(s) && !hh.partner;
+    if (!apartKids.length && !partnerApart) hh.sep = null;
+    else if (isAbroad(s) || hh.sep.to === hh.sep.from) {
+      const years = s.year - hh.sep.year;
+      const refugee = f.m_refugee || f.m_irregular;
+      if (years >= 2 && !refugee && !s.pending.some((p) => p.id === 'migration_family_joins')) {
+        let p = 0.05 + 0.02 * Math.min(years - 2, 4);
+        if (f.m_save_family) p += 0.1;
+        if (f.m_residency || f.m_citizen || f.m_work_visa || f.m_regularized) p += 0.06;
+        if (hh.caregiverLost === s.year || hh.caregiverLost === s.year - 1) p += 0.25;
+        if (GULF_STATES.has(s.countryCode)) p *= 0.15;
+        if (s.stats.wealth < 20) p *= 0.5;
+        if (stableFlip(s, `reunion:${s.year}`, Math.min(0.6, p))) s.pending.push({ id: 'migration_family_joins', atAge: s.age });
+      }
+    }
+  }
+  refreshAlone(s, hh);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -558,7 +1165,8 @@ function schooling(s, ctx) {
   }
   if (y === 16) {
     const { mother, father } = s.family;
-    const crowd = mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手' : father.alive ? '你看見父親在觀眾席裡拚命揮手' : '你特別想起不在現場的雙親';
+    const farAway = isAbroad(s) && !ensureHousehold(s).parents; // studying abroad: the parents are not in the audience
+    const crowd = farAway && (mother.alive || father.alive) ? `你把學位證書的照片傳回家，螢幕那頭的${mother.alive && father.alive ? '爸媽' : mother.alive ? '母親' : '父親'}比你還激動` : mother.alive && father.alive ? '你看見父母在觀眾席裡拚命揮手' : mother.alive ? '你看見母親在觀眾席裡拚命揮手，也想起沒能看到這一天的父親' : father.alive ? '你看見父親在觀眾席裡拚命揮手，也想起沒能看到這一天的母親' : '你特別想起不在現場的雙親，心裡對他們說了一聲「我畢業了」';
     pushLog(s, 'milestone', '大學畢業', `你拿到學位。畢業典禮上，${crowd}。`, applyDelta(s, { happiness: 4, knowledge: 2 }));
     addHighlight(s, '大學畢業。');
     if (s.flags._tertYears === 4 && incomeRank[inc] >= 2 && chance(s.rng, (incomeRank[inc] === 3 ? 0.32 : 0.2) * (fxOf(s).tertiary ?? 1))) { s.flags._tertYears = 6; return; }
@@ -767,7 +1375,7 @@ function work(s, ctx) {
     if (s.gender === 'F' && s.age < 55 && !s.children.some((c) => c.alive && s.year - c.birthYear <= 5) && s.flags._lfp !== false && chance(s.rng, 0.06)) {
       const id = pickJob(s);
       startJob(s, id);
-      pushLog(s, 'event', '重返職場', `孩子漸漸長大，你重新出去工作，這次是${JOBS[id].name}。`, applyDelta(s, { happiness: 3, wealth: 2, social: 2 }));
+      pushLog(s, 'event', '重返職場', variant(s, 'rework', [`孩子漸漸長大，你重新出去工作，這次是${JOBS[id].name}。`, `孩子又大了一些，你第二次走回職場，這次是${JOBS[id].name}。流程變了不少，但你知道怎麼從頭追上。`]), applyDelta(s, { happiness: 3, wealth: 2, social: 2 }));
     } else if (s.age >= 70) w.status = 'retired';
   }
 }
@@ -949,7 +1557,9 @@ function makePartner(s, ctx, status, opts = {}) {
     age = Math.max(s.age < 18 && gender !== s.gender ? 17 : 16, age);
   }
   const group = partnerGroup(s);
-  const nm = randomName(s.rng, group, gender);
+  let nm = randomName(s.rng, group, gender);
+  // nobody in the family shares a full name with the partner (a child born before the partner arrived may already have drawn it): draws again only on a clash
+  for (let tries = 0; tries < 6 && !opts.name && [s.name.full, s.family.mother.name, s.family.father.name, ...s.children.map((c) => c.name)].includes(nm.full); tries++) nm = randomName(s.rng, group, gender);
   s.flags._partnerFt = nm.familyToken;
   s.flags._partnerGt = nm.givenToken;
   s.flags._partnerPool = group;
@@ -967,6 +1577,9 @@ export function newPartner(s, opts = {}) {
   const status = opts.status === 'married' ? 'married' : 'dating';
   s.partner = makePartner(s, ctx, 'dating', opts);
   s.flags._coolUntil = 0;
+  const hh = ensureHousehold(s);
+  hh.partner = false; // a new person: nobody has moved in yet
+  if (hh.sep) hh.sep.partner = false;
   if (status === 'married') marry(s);
   return s.partner;
 }
@@ -983,6 +1596,9 @@ export function endRelationship(s, years) {
   const f = s.flags;
   const cool = years ?? randInt(s.rng, 2, 4);
   s.partner = null;
+  const hh = ensureHousehold(s);
+  hh.partner = false;
+  if (hh.sep) hh.sep.partner = false;
   f._coolUntil = s.age + cool;
   if (f._marryAt < 999) {
     // Still hoping to marry: the next relationship comes after the cooldown, and the wedding later still.
@@ -994,6 +1610,10 @@ export function endRelationship(s, years) {
 
 export function setPartner(s, p) {
   s.partner = p;
+  const hh = ensureHousehold(s);
+  hh.partner = !!p && p.status === 'married';
+  if (hh.sep) hh.sep.partner = false;
+  refreshAlone(s, hh);
 }
 
 export function marry(s) {
@@ -1004,6 +1624,8 @@ export function marry(s) {
   s.partner.status = 'married';
   s.partner.since = s.year;
   s.flags._married = (s.flags._married || 0) + 1;
+  remember(s, `love:wed${s.flags._married}`, `你和${s.partner.name}結了婚`, { tag: 'love', w: 3 });
+  householdOnMarry(s);
   // the wedding rite of the family's tradition is told in the same year (regional_culture_wedding_rite, once per life)
   if (s.seen.regional_culture_wedding_rite === undefined && !s.pending.some((p) => p.id === 'regional_culture_wedding_rite')) s.pending.push({ id: 'regional_culture_wedding_rite', atAge: s.age });
   if (s.work.status === 'student' && s.edu.inSchool && s.age < 18 && ctx.view.childMarriage > 10) leaveSchool(s, null);
@@ -1013,6 +1635,10 @@ export function divorce(s) {
   if (!s.partner || s.partner.status !== 'married') return false;
   s.partner.status = 'divorced';
   s.flags._divorces = (s.flags._divorces || 0) + 1;
+  remember(s, `love:div${s.flags._divorces}`, `你和${s.partner.name}的婚姻走到了盡頭`, { tag: 'love', w: 3 });
+  householdOnPartnerGone(s, 'divorce');
+  // who the children live with is told by family_custody (the default of householdOnPartnerGone stands if it never comes up)
+  if (s.children.some((c) => c.alive && kidYears(s, c) <= 15) && s.seen.family_custody === undefined && !s.pending.some((p) => p.id === 'family_custody')) s.pending.push({ id: 'family_custody', atAge: s.age });
   planRemarriage(s, 0.45);
   return true;
 }
@@ -1036,13 +1662,24 @@ function childBirthText(s, c, first) {
   if (s.urban && gi === 0) gi = 1; // a city has a clinic or a hospital, not just a midwife in a dark room
   const inc = order[gi];
   const parent = first ? '你成為了父母' : '家裡又添了一個孩子';
-  const where = byIncome(inc, {
+  const hh = ensureHousehold(s);
+  const idx = s.children.indexOf(c);
+  let where = byIncome(inc, {
     L: '產婆在昏暗的屋子裡接生，所幸一切平安。',
     LM: s.urban ? '在擠滿了人的公立醫院裡，孩子哭出了第一聲。' : '在村裡的衛生所，孩子哭出了第一聲。',
     UM: '在醫院的產房外，家人焦急地等待。',
     H: '在明亮的產房裡，護理師把包得緊緊的小小身體遞給你。',
   });
-  return `${parent}。${c.name}出生了。${where}`;
+  if (hh.kids[idx] === 'with_partner') where = `你人在${BY_CODE[s.countryCode].name}，第一聲哭聲是從電話那頭傳來的，你把話筒貼在耳朵上，聽了很久。`; // the father is away
+  else if (isAbroad(s) && !hh.partner && !hh.parents) where = `你在${BY_CODE[s.countryCode].name}的醫院裡，身邊沒有熟悉的家人，護理師握了握你的手，孩子哭出了第一聲。`; // born abroad, nobody of the family there
+  // the first child is the news for the grandparents; for parents who have died it is a quiet word to them
+  let news = '';
+  if (first) {
+    const pp = parentsPresent(s);
+    if (pp === 'none') news = '你想起過世的爸媽，在心裡對他們說：「你們的家，又多了一個人。」';
+    else if (pp !== 'both') news = `你第一個打電話告訴${pp === 'mother' ? '母親' : '父親'}，電話那頭停了一下，接著傳來${pp === 'mother' ? '她' : '他'}壓不住的笑聲。`;
+  }
+  return `${parent}。${c.name}出生了。${where}${news}`;
 }
 
 /** Add a child to the family. Returns the child record. */
@@ -1066,6 +1703,8 @@ export function addChild(s, opts = {}) {
   for (let tries = 0; tries < 12 && taken().has(nm.full); tries++) nm = randomName(s.rng, pool, gender, famToken);
   const child = { name: nm.full, gender, birthYear: s.year, alive: true, religion: s.religion }; // children grow up in the family's tradition
   s.children.push(child);
+  remember(s, `kid:${s.children.length}`, `${child.name}出生了`, { tag: 'family', w: 3 });
+  ensureHousehold(s); // the baby lives with the person, or with the partner when the couple live apart
   s.flags._birthThisYear = true;
   return child;
 }
@@ -1114,6 +1753,7 @@ function fertility(s, ctx) {
   if (!married) p *= ctx.country.region === 'MENA' || ctx.country.region === 'SAS' ? 0.1 : ctx.country.region === 'SSA' ? 0.9 : 0.7;
   if (female && s.edu.inSchool && !s.flags._adultEd) p *= 0.3;
   if (alive === 0 && total > 0 && total < want) p *= 1.2;
+  if (couple && married && !ensureHousehold(s).partner) p *= 0.4; // a married couple who live in different places see each other a few weeks a year
   p *= fxOf(s).fertility ?? 1;
   if (chance(s.rng, p)) birth(s, ctx, false);
 }
@@ -1168,7 +1808,7 @@ function love(s, ctx) {
   }
   // Married: divorce hazard
   const hz = { EAS: 0.009, SEA: 0.008, SAS: 0.003, CAS: 0.008, MENA: 0.006, SSA: 0.008, EUR: 0.012, NAM: 0.014, LAC: 0.009, OCE: 0.012 }[ctx.country.region];
-  const mult = (pt.since > s.year - 6 && s.age < 22 ? 1.8 : 1) * (s.stats.happiness < 35 ? 1.4 : 1);
+  const mult = (pt.since > s.year - 6 && s.age < 22 ? 1.8 : 1) * (s.stats.happiness < 35 ? 1.4 : 1) * (ensureHousehold(s).partner ? 1 : 1.35); // years apart wear a marriage down
   if (chance(s.rng, hz * mult * (fx.divorce ?? 1))) {
     const name = pt.name;
     divorce(s);
@@ -1182,7 +1822,7 @@ function loveText(s, ctx) {
   return byIncome(ctx.income, {
     L: `你認識了${pt.name}。你們常常在田埂邊、水井旁或市集的角落說上幾句話。`,
     LM: `你和${pt.name}開始走得很近。朋友們都看出來了，只有你們還裝作若無其事。`,
-    UM: `你和${pt.name}開始約會。你們常在${s.work.status === 'employed' ? '下班' : s.edu.inSchool ? '放學' : '收工'}後去街邊吃宵夜，聊到店家要打烊。`,
+    UM: `你和${pt.name}開始約會。你們常在${s.work.status === 'employed' ? '下班' : s.edu.inSchool ? (s.age < 20 ? '放學' : '下課') : '收工'}後去街邊吃宵夜，聊到店家要打烊。`,
     H: `你和${pt.name}開始交往。第一次約會你緊張得換了三次衣服。`,
   });
 }
@@ -1192,15 +1832,20 @@ function doMarriage(s, ctx) {
   marry(s);
   const pt = s.partner;
   if (child) {
-    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，家人就替你決定了婚事。${s.gender === 'F' ? `你嫁給了比你大不少的${pt.name}` : `你和${pt.name}成了家`}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
+    pushLog(s, 'milestone', '很年輕就結婚', `你才${s.age}歲，${parentsPresent(s) === 'none' ? '親戚' : '家人'}就替你決定了婚事。${s.gender === 'F' ? `你嫁給了比你大不少的${pt.name}` : `你和${pt.name}成了家`}，婚後的日子，你得很快學會長大。`, applyDelta(s, { happiness: -6, health: -2, social: -2, knowledge: -1 }));
     addHighlight(s, '很年輕就結婚。');
   } else {
+    const gone = parentsPresent(s) === 'none';
+    const wine = drinksAlcohol(s) ? '酒' : '茶';
+    const absent = weddingAbsence(s);
     pushLog(s, 'milestone', '結婚', byIncome(ctx.income, {
       L: `你和${pt.name}結了婚。沒有華麗的場面，鄰居都來幫忙，晚上大家一起吃了一頓飯。`,
       LM: `你和${pt.name}結婚了。親戚們從各地趕來，場地很簡單，但每個人都笑得很大聲。`,
-      UM: `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯${drinksAlcohol(s) ? '酒' : '茶'}。`,
+      UM: gone || weddingFolk(s) === '親友們'
+        ? `你和${pt.name}的婚禮上，${gone ? `${pt.name}那邊的親友` : '朋友和同事們'}擠了一整桌，大家彼此敬了很多杯${wine}。`
+        : `你和${pt.name}的婚禮上，兩家人擠在同一桌，彼此敬了很多杯${wine}。`,
       H: `你和${pt.name}結婚了。婚禮之後，你們收拾好滿屋子的禮物，開始學習怎麼一起過日子。`,
-    }), applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
+    }) + absent, applyDelta(s, { happiness: 8, social: 4, wealth: -2 }));
     addHighlight(s, `與${pt.name}結婚。`);
   }
 }
@@ -1220,8 +1865,14 @@ export function setCity(s, name) {
   s.city = name || (cities && cities.length ? cities[Math.floor(rand(s.rng) * cities.length)] : s.city);
 }
 
-export function migrate(s, code) {
+/**
+ * Move to another country. `opts.with` says who comes along ('alone' | 'partner' | 'family' | 'refugee' | 'keep', see depart(); moving to
+ * the home country is a return and brings the family back together); without it the engine decides from the circumstances.
+ */
+export function migrate(s, code, opts = {}) {
   if (!BY_CODE[code] || code === s.countryCode) return false;
+  const from = s.countryCode;
+  ensureHousehold(s); // the household as it was before the move
   s.countryCode = code;
   // Migrants live in a city of the new country (mostly urban).
   setCity(s);
@@ -1230,9 +1881,12 @@ export function migrate(s, code) {
   if (!s.flags._countries.includes(code)) s.flags._countries.push(code);
   s.flags.migrated = true;
   s.flags._movedAt = s.year;
+  s.flags._moves = (s.flags._moves || 0) + 1;
+  remember(s, `move:${s.flags._moves}`, code === s.homeCountryCode ? `你回到了${BY_CODE[code].name}` : `你離開${BY_CODE[from].name}，到${BY_CODE[code].name}生活`, { tag: 'move', w: 3 });
   // Where you live changes how much lives in each part of the wealth model.
   const ctx = ctxOf(s);
   s.stats.wealth = clamp(s.stats.wealth + 0.5 * (wealthTarget(s, ctx) - s.stats.wealth), 0, 100);
+  householdOnMigrate(s, from, code, opts);
   return true;
 }
 
@@ -1293,6 +1947,7 @@ function statsDrift(s, ctx) {
 export function runSystems(s) {
   const ctx = ctxOf(s);
   s.flags._birthThisYear = false;
+  ensureHousehold(s);
   agePeople(s, ctx);
   schooling(s, ctx);
   smoking(s, ctx);
@@ -1300,6 +1955,7 @@ export function runSystems(s) {
   work(s, ctx);
   love(s, ctx);
   fertility(s, ctx);
+  householdYear(s, ctx);
   wealthDynamics(s, ctx);
   statsDrift(s, ctx);
 }

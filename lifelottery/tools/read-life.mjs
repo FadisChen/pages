@@ -43,7 +43,7 @@ export function renderLife(s) {
   out.push('');
   for (const e of s.log) {
     const d = e.delta ? ' [' + Object.entries(e.delta).map(([k, v]) => `${k[0]}${v > 0 ? '+' : ''}${v}`).join(' ') + ']' : '';
-    out.push(`${String(e.age).padStart(3)} ${e.kind.padEnd(9)} ${e.title && e.kind !== 'year' ? e.title + '：' : ''}${e.text}${d}`);
+    out.push(`${String(e.age).padStart(3)} ${e.kind.padEnd(9)} ${e.title && e.kind !== 'year' ? e.title + '：' : ''}${e.text}${d}${e.echo ? `\n${' '.repeat(14)}↳ ${e.echo}` : ''}`);
   }
   const sum = getSummary(s);
   out.push('', `--- 重要時刻（${sum.highlights.length}） ---`, ...sum.highlights.map((h) => `${h.age} 歲：${h.text}`));

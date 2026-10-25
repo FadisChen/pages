@@ -21,7 +21,8 @@ export default function mount(ctx, root) {
   if (unlocked.length) toast(S.ach.toast(unlocked.map((id) => (S.ach.items[id] || [id])[0])), 'ach');
   return () => {
     view.destroy();
-    // Leaving the review (anywhere but a page reload) closes the book on this life.
-    ctx.session.discard();
+    // Leaving the review (anywhere but a page reload) closes the book on this life, unless the player has already
+    // started another one from here (同一起點，再活一次): that new life is not ours to discard.
+    if (ctx.session.recordId === rec.id || !ctx.session.hasLife) ctx.session.discard();
   };
 }

@@ -13,6 +13,15 @@
 //   graduation | skilled points -> visa result | company transfer -> expat life | flight -> camp -> asylum
 //   hearing -> new start | irregular route -> papers limbo | remittance -> family joins / fruit |
 //   credentials -> result | return decision -> readjust + business.
+//
+// Who comes along (Phase 6B)
+//   Every move says who goes with the person: { with: 'alone' | 'partner' | 'family' | 'refugee' | 'keep' } (see
+//   systems.js depart()). Labour and study migration is alone (the partner and the children stay with each other,
+//   the grandparents or relatives), skilled visas and company transfers bring the family, refugees take whoever lives
+//   with them. The engine schedules `migration_apart_first_year` when somebody is left behind and
+//   `migration_return_reunion` when the family is together again; `migration_family_joins` is the reunion (the
+//   system schedules it too, from the second year apart). Left-behind moments: missed birthday on a video call,
+//   a remittance that pays the school fees, a parent in hospital far away, a couple who live in two countries.
 
 import { BY_CODE } from '../countries.js';
 
@@ -146,12 +155,27 @@ function topDest(s, kind = 'labor') {
   return BY_CODE[list.slice().sort((a, b) => b[1] - a[1])[0][0]].name;
 }
 
-/** Move to `code` and remember when. Returns true if the person actually moved. */
-function moveTo(s, h, code) {
-  if (!code || !h.migrate(code)) return false;
+/** Move to `code` and remember when. `opts.with` says who comes along (see the header). Returns true if the person actually moved. */
+function moveTo(s, h, code, opts) {
+  if (!code || !h.migrate(code, opts)) return false;
   h.set('m_year', s.year);
   return true;
 }
+
+const NUM = ['零', '一', '兩', '三', '四', '五', '六', '七', '八', '九'];
+/** "孩子" / "兩個孩子" / "三個孩子" for a count. */
+const kidsPhrase = (n) => (n <= 1 ? '孩子' : n < 10 ? `${NUM[n]}個孩子` : `${n}個孩子`);
+/** How the family keeps in touch from far away, by the year and the place: { how, far } = '視訊' / '螢幕那頭', '電話' / '電話那頭', '寫信' / '遠方'. */
+const linkOf = (h) => (h.techReady(2012) ? { how: '視訊', far: '螢幕那頭', wait: '視訊接通', device: '手機' } : h.techReady(1996) ? { how: '電話', far: '電話那頭', wait: '電話接通', device: '話筒' } : { how: '寫信', far: '遠方', wait: '回信', device: '電報' });
+const NOBODY = { name: '孩子', birthYear: 0 };
+/** Ages of the children who are not with the person. */
+const apartAges = (s, h) => h.childrenApart().map((c) => s.year - c.birthYear);
+const youngestApart = (s, h) => { const kids = h.childrenApart(); return kids.length ? kids.reduce((a, b) => (b.birthYear > a.birthYear ? b : a)) : null; };
+/** The people who come to the new country with the person, as a phrase: "孩子與伴侶" / "伴侶" / "孩子" / "". */
+const familyHere = (s, h) => {
+  const kids = h.minorsWithYou().length, partner = h.livesWith('partner');
+  return kids && partner ? '孩子與伴侶' : partner ? '伴侶' : kids ? '孩子' : '';
+};
 
 const destFlag = (h) => { const c = h.flag('m_dest'); return typeof c === 'string' && BY_CODE[c] ? c : null; };
 const destFlagName = (h) => { const c = destFlag(h); return c ? BY_CODE[c].name : '海外'; };
@@ -201,11 +225,12 @@ export default [
         effects: (s, h) => {
           h.setUrban(true);
           h.setCity();
+          h.moveAway(); // the partner and children come along or stay with the grandparents; the person stops living in the parents' home
           if (!h.employed()) h.startJob(h.eduYears() >= 9 ? 'factory' : 'laborer');
           h.change('social', -3); h.change('wealth', +2); h.change('knowledge', +2); h.change('happiness', +1);
         },
         set: ['m_city'],
-        result: (s, h) => `你搬進了${h.city()}的一間小房間，窗外就是另一棟樓的牆。第一個晚上你覺得這個地方太吵，第三個晚上你已經習慣了街上的喧鬧聲。`,
+        result: (s, h) => `你搬進了${h.city()}的一間小房間，窗外就是另一棟樓的牆。第一個晚上你覺得這個地方太吵，第三個晚上你已經習慣了街上的喧鬧聲。${h.leftBehindLine()}`,
         highlight: (s, h) => `從鄉下搬到了${h.city()}。`,
         schedule: [{ id: 'migration_city_first_year', inYears: [1, 2] }],
         ai: (s, h) => (h.isPoor() ? 1.8 : 1.1),
@@ -256,12 +281,12 @@ export default [
       {
         label: '透過合法仲介，借錢付費用',
         effects: (s, h) => {
-          if (moveTo(s, h, pickDest(s, h, 'work')) && !h.employed()) h.startJob(abroadJob(h));
+          if (moveTo(s, h, pickDest(s, h, 'work'), { with: 'alone' }) && !h.employed()) h.startJob(abroadJob(h));
           h.set('m_contract'); h.change('wealth', -3); h.change('social', -5); h.change('happiness', -1);
         },
         set: ['m_abroad_decided'],
         result: (s, h) => (h.isMigrant()
-          ? `你簽了字，拎著一個行李袋走進機場。三個月後，你人在${h.countryName()}，宿舍是八人房，薪水第一次入帳時，你立刻去匯了款。`
+          ? `你簽了字，拎著一個行李袋走進機場。${h.leftBehindLine()}三個月後，你人在${h.countryName()}，宿舍是八人房，薪水第一次入帳時，你立刻去匯了款。`
           : '手續一直沒有辦完，你只好留在原地。仲介說下次還有機會，你點點頭，沒有再多問。'),
         highlight: (s, h) => (h.isMigrant() ? `出國工作，來到${h.countryName()}。` : null),
         schedule: [{ id: 'migration_contract_life', inYears: [1, 2] }, { id: 'migration_contract_end', inYears: [3, 5] }],
@@ -271,12 +296,12 @@ export default [
         label: '找費用較低的非正式管道',
         effects: (s, h) => {
           if (h.chance(0.4)) { h.change('wealth', -6); h.change('happiness', -5); h.set('m_scammed'); }
-          else { h.unset('m_scammed'); if (moveTo(s, h, pickDest(s, h, 'work')) && !h.employed()) h.startJob(abroadJob(h)); h.set('m_irregular'); h.change('wealth', -2); h.change('social', -5); h.addRisk(1.05, 3); }
+          else { h.unset('m_scammed'); if (moveTo(s, h, pickDest(s, h, 'work'), { with: 'alone' }) && !h.employed()) h.startJob(abroadJob(h)); h.set('m_irregular'); h.change('wealth', -2); h.change('social', -5); h.addRisk(1.05, 3); }
         },
         set: ['m_abroad_decided'],
         result: (s, h) => (h.has('m_scammed')
           ? '你把錢交出去之後，對方就再也聯絡不上了。你坐在門口很久，家人沒有罵你，只是輕輕地說「還好人沒事」。'
-          : `你跟著非正式的管道抵達${h.countryName()}，沒有正式的合約，也沒有人可以求助。第一份工作是他人介紹的，薪水少，但是可以預支。`),
+          : `你跟著非正式的管道抵達${h.countryName()}，沒有正式的合約，也沒有人可以求助。${h.leftBehindLine()}第一份工作是他人介紹的，薪水少，但是可以預支。`),
         unset: ['m_scammed'],
         schedule: [{ id: 'migration_papers_limbo', inYears: [1, 3] }],
         ai: (s, h) => (h.isPoor() ? 0.2 : 0.05),
@@ -357,7 +382,7 @@ export default [
         label: '申請獎學金出國',
         effects: (s, h) => {
           const p = h.byIncome({ L: 0.4, LM: 0.45, UM: 0.55, H: 0.6 });
-          if (h.chance(p)) { if (moveTo(s, h, pickDest(s, h, 'study'))) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +6); h.change('social', -5); h.change('wealth', -2); h.change('happiness', +1); }
+          if (h.chance(p)) { if (moveTo(s, h, pickDest(s, h, 'study'), { with: 'alone' })) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +6); h.change('social', -5); h.change('wealth', -2); h.change('happiness', +1); }
           else { h.change('happiness', -2); h.change('knowledge', +2); }
         },
         set: ['m_study_decided'],
@@ -371,7 +396,7 @@ export default [
       {
         label: '自費出國，用家裡的積蓄',
         cond: (s, h) => h.incomeAtLeast('UM') || h.stat('wealth') >= 40,
-        effects: (s, h) => { if (moveTo(s, h, pickDest(s, h, 'study'))) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +5); h.change('wealth', -5); h.change('social', -4); },
+        effects: (s, h) => { if (moveTo(s, h, pickDest(s, h, 'study'), { with: 'alone' })) h.enroll(h.eduAtLeast('tertiary') ? 'graduate' : 'tertiary', { quiet: true }); h.set('m_student'); h.change('knowledge', +5); h.change('wealth', -5); h.change('social', -4); },
         set: ['m_study_decided'],
         result: (s, h) => `家人把積蓄一點一點湊出來。你抵達${h.countryName()}那天，行李箱裡塞滿了家鄉的零食，一半在海關被拿走了。`,
         schedule: [{ id: 'migration_after_graduation', inYears: [3, 5] }],
@@ -419,7 +444,7 @@ export default [
       {
         label: '再去別的國家闖闖看',
         cond: (s, h) => h.isMigrant() && h.has('m_student'),
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled')); h.change('social', -3); h.change('knowledge', +2); h.change('happiness', +1); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled'), { with: 'keep' }); h.change('social', -3); h.change('knowledge', +2); h.change('happiness', +1); },
         result: (s, h) => `你換了一個國家，換了一座城市，也換了一種語言。在${h.countryName()}的第一個晚上，你坐在新房東的客廳裡，覺得世界很大。`,
         unset: ['m_student'],
         ai: 0.8,
@@ -480,7 +505,7 @@ export default [
     effects: (s, h) => {
       if (h.has('m_visa_ok')) {
         const d = destFlag(h);
-        if (d && moveTo(s, h, d)) { h.change('wealth', +3); h.change('social', -6); h.change('happiness', +3); h.highlight(`取得居留，移居${h.countryName()}。`); }
+        if (d && moveTo(s, h, d, { with: 'family' })) { h.change('wealth', +3); h.change('social', -6); h.change('happiness', +3); h.highlight(`取得居留，移居${h.countryName()}。`); }
       } else { h.change('happiness', -4); }
       h.unset('m_visa_ok'); h.unset('m_dest');
     },
@@ -496,19 +521,19 @@ export default [
     choices: [
       {
         label: '接受外派，自己先去',
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled')); h.change('wealth', +2); h.change('social', -4); h.change('knowledge', +3); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled'), { with: 'alone' }); h.change('wealth', +2); h.change('social', -4); h.change('knowledge', +3); },
         set: ['m_transfer'],
-        result: (s, h) => `你把家裡的鑰匙交給朋友，一個人飛往${h.countryName()}。公司替你租了一間家具齊全的公寓，乾淨得像樣品屋，你卻睡不著。`,
+        result: (s, h) => `你把家裡的鑰匙交給朋友，一個人飛往${h.countryName()}。${h.leftBehindLine()}公司替你租了一間家具齊全的公寓，乾淨得像樣品屋，你卻睡不著。`,
         highlight: (s, h) => `被公司外派到${h.countryName()}。`,
-        schedule: [{ id: 'migration_expat_life', inYears: [1, 2] }],
+        schedule: [{ id: 'migration_expat_life', inYears: [1, 2] }, { id: 'migration_family_joins', inYears: [1, 2], p: 0.7 }],
         ai: 0.6,
       },
       {
         label: '談好條件，全家一起搬',
         cond: (s, h) => h.hasPartner() || h.hasChildren(),
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled')); h.change('wealth', +2); h.change('social', -3); h.change('knowledge', +3); h.set('m_family_moved'); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled'), { with: 'family' }); h.change('wealth', +2); h.change('social', -3); h.change('knowledge', +3); h.set('m_family_moved'); },
         set: ['m_transfer'],
-        result: (s, h) => `你們整理了家當，一件件裝箱。孩子與伴侶在${h.countryName()}的新家，一起吃了第一頓外賣，沒有人說話，但每個人的眼睛都亮著。`,
+        result: (s, h) => `你們整理了家當，一件件裝箱。${familyHere(s, h) || '你們'}在${h.countryName()}的新家，一起吃了第一頓外賣，沒有人說話，但每個人的眼睛都亮著。`,
         schedule: [{ id: 'migration_expat_life', inYears: [1, 2] }],
         ai: 0.7,
       },
@@ -529,7 +554,9 @@ export default [
     weight: 0,
     tags: ['migration', 'work', 'followup'],
     text: (s, h) => (h.isMigrant()
-      ? '外派的日子比想像的孤單：同事都是同鄉，假日是國際學校的家長會，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。'
+      ? (h.livesAlone()
+        ? '外派的日子比想像的孤單：同事都是同鄉，下了班各自回到家具齊全的公寓，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。'
+        : '外派的日子比想像的孤單：同事都是同鄉，假日是國際學校的家長會，和當地人的對話僅止於點餐。你學著自己去逛菜市場，第一次用當地語言討價還價成功時，開心得像考了滿分。')
       : '你聽過許多外派同事的故事：拿到高薪、住進大房子，卻在週末時分覺得世界是空的。你在心裡記著，這些故事會不會有一天是你的。'),
     effects: (s, h) => { if (h.isMigrant()) { h.change('wealth', +2); h.change('social', -2); h.change('knowledge', +3); h.change('happiness', +1); } else h.change('knowledge', +1); },
   },
@@ -544,7 +571,7 @@ export default [
     choices: [
       {
         label: '接受名額，帶著家人遠行',
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'work')); h.change('social', -6); h.change('wealth', +1); h.change('happiness', +2); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'work'), { with: 'family' }); h.change('social', -6); h.change('wealth', +1); h.change('happiness', +2); },
         set: ['m_lottery'],
         result: (s, h) => `你賣掉了不太值錢的家具，把重要的東西裝進幾個箱子。落地${h.countryName()}那天，海關人員對你說「歡迎」，你一時沒反應過來這是對你說的。`,
         highlight: (s, h) => `抽中移民名額，搬到${h.countryName()}。`,
@@ -570,7 +597,7 @@ export default [
     choices: [
       {
         label: '申請團聚，搬去與家人同住',
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'work')); h.change('social', -2); h.change('happiness', +2); h.change('wealth', +1); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'work'), { with: 'family' }); h.change('social', -2); h.change('happiness', +2); h.change('wealth', +1); },
         set: ['m_reunion'],
         result: (s, h) => `家人在${h.countryName()}的機場等你。你從出口走出來，被緊緊抱住，行李箱倒在地上，沒有人撿。`,
         ai: (s, h) => (h.isPoor() ? 0.8 : 0.4),
@@ -649,7 +676,7 @@ export default [
       {
         label: '帶著能帶走的人一起離開',
         effects: (s, h) => {
-          moveTo(s, h, pickDest(s, h, 'refuge'));
+          moveTo(s, h, pickDest(s, h, 'refuge'), { with: 'refugee' });
           h.set('m_refugee'); h.change('health', -3); h.change('happiness', -4); h.change('wealth', -4); h.change('social', -4); h.addRisk(1.12, 3);
         },
         set: ['m_fled'],
@@ -660,7 +687,7 @@ export default [
       },
       {
         label: '先送家人離開，自己留下來',
-        effects: (s, h) => { h.change('happiness', -5); h.change('social', -3); h.addRisk(1.08, 2); },
+        effects: (s, h) => { h.sendFamilyAway(); h.change('happiness', -5); h.change('social', -3); h.addRisk(1.08, 2); },
         set: ['m_fled', 'm_split'],
         result: '你站在車站，看著家人的臉從車窗裡一點一點變小。你揮手，直到手臂發酸才放下。之後的每個夜晚，你都把電話放在枕邊。',
         ai: 1,
@@ -718,7 +745,7 @@ export default [
       {
         label: '不再等了，轉往其他國家',
         cond: (s, h) => h.isMigrant() && h.has('m_refugee'),
-        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled')); h.unset('m_status_ok'); h.change('happiness', -3); h.change('social', -3); h.change('wealth', -2); },
+        effects: (s, h) => { moveTo(s, h, pickDest(s, h, 'skilled'), { with: 'keep' }); h.unset('m_status_ok'); h.change('happiness', -3); h.change('social', -3); h.change('wealth', -2); },
         result: (s, h) => `你背起行李，繼續往前走。在${h.countryName()}的第一個月，你睡在朋友的朋友家，沙發很短，你蜷成一個很小的圈。`,
         unset: ['m_refugee'],
         schedule: [{ id: 'migration_new_start', inYears: [1, 2] }],
@@ -986,16 +1013,32 @@ export default [
     highlight: '寄回去的錢，在家鄉蓋起了新的家。',
   },
   {
+    // The reunion. Scheduled by the remittance choice, the company transfer and, from the second year apart, by the yearly household
+    // pass (systems.js). It fires only while somebody is still apart; its effect brings the partner and the minors to live with the person.
     id: 'migration_family_joins',
-    followCond: (s, h) => h.isMigrant(),
+    followCond: (s, h) => (h.isMigrant() || !!(h.leftBehind() && h.leftBehind().to === h.leftBehind().from)) && (h.childrenApart().length > 0 || (h.apartFrom('partner') && !!h.leftBehind() && h.leftBehind().partner)),
     title: '機場的出口',
+    once: false,
+    cooldown: 4,
     ages: [23, 66],
     weight: 0,
     tags: ['migration', 'family', 'followup'],
-    text: (s, h) => (h.isMigrant()
-      ? '家人終於辦成了簽證。你在機場的出口舉著寫了名字的紙板，看著熟悉的臉龐一個一個走出來，才發現自己準備了一大堆話，一句也說不出。'
-      : '你一直想著把家人接來一起生活，現實卻比預期更複雜。文件、費用、時機，每一項都像在排隊。你把期待收好，對自己說「慢慢來」，等下一次機會。'),
-    effects: (s, h) => { if (h.isMigrant()) { h.change('happiness', +5); h.change('social', +5); h.change('wealth', -3); } else h.change('happiness', -1); },
+    text: (s, h) => {
+      const kids = h.childrenApart();
+      const partner = h.apartFrom('partner') && !!h.leftBehind() && h.leftBehind().partner;
+      const names = kids.length > 1 ? `${kids[0].name}和${kids[1].name}${kids.length > 2 ? '他們' : ''}` : kids.length ? kids[0].name : '';
+      const place = h.isMigrant() ? '機場的出口' : '車站的出口';
+      const who = partner && kids.length ? `${h.partnerName()}牽著${names}` : partner ? h.partnerName() : names;
+      const apart = h.leftBehind() ? s.year - h.leftBehind().year : 0;
+      const first = partner && kids.length ? '熟悉的臉龐一個一個走出來' : kids.length > 1 ? '孩子們一個一個走出來' : '熟悉的身影走出來';
+      return `等了這麼久，手續終於辦成了。你在${place}舉著寫了名字的紙板，看著${first}${apart >= 3 ? `，才發現${kids.length ? `${kids[0].name}已經長高了這麼多` : `${h.partnerName()}鬢邊多了幾根白髮`}` : ''}。${who}朝你走來，你準備了一大堆話，一句也說不出。`;
+    },
+    effects: (s, h) => {
+      const r = h.reunite();
+      if (r.partner || r.kids.length) { h.change('happiness', +5); h.change('social', +4); h.change('wealth', -3); }
+      else h.change('happiness', -1);
+    },
+    highlight: (s, h) => { const r = h.lastReunion(); return r && r.year === s.year ? (r.kids.length ? '把留在家鄉的孩子接到身邊，一家人又在一起了。' : '把伴侶接到身邊，兩個人不再隔著國界。') : null; },
   },
   {
     id: 'migration_remittance_receive',
@@ -1028,6 +1071,181 @@ export default [
         ? '你買了一張電話卡，在公用電話亭撥長途。投下的每一分鐘都像錢在燒，你和家人把最重要的話擠進十分鐘，掛電話後才想起忘了問最想問的那件事。'
         : '你把信寫了又撕，撕了又寫，最後寄出去的只有薄薄一頁。回信要等一個月，你每天都去看信箱。信封上的郵票，是你特地挑過的。'),
     effects: { happiness: -3, social: -1, wealth: -1 },
+  },
+  // =====================================================================================
+  // C2. 留在原處的人（Phase 6B）：孩子、伴侶與父母不在身邊的日子
+  // =====================================================================================
+  {
+    // Scheduled by the engine the year after somebody was left behind (or sent away): systems.js depart() / sendFamilyAway().
+    id: 'migration_apart_first_year',
+    followCond: (s, h) => !!h.leftBehind() && (h.childrenApart().length > 0 || (h.apartFrom('partner') && h.leftBehind().partner)),
+    title: '分開的第一年',
+    once: false,
+    cooldown: 5,
+    ages: [18, 70],
+    weight: 0,
+    tags: ['migration', 'family', 'followup', 'homesick'],
+    text: (s, h) => {
+      const lb = h.leftBehind() || {};
+      const kids = h.childrenApart();
+      const link = linkOf(h);
+      const who = h.caregiverOfChildren();
+      const kid = youngestApart(s, h) || { ...NOBODY, birthYear: s.year - 6 };
+      const sent = lb.mode === 'sent';
+      const kidsWord = kidsPhrase(kids.length);
+      const room = h.isMigrant() ? `${h.countryName()}的宿舍` : `${h.city()}的出租屋`;
+      const first = h.isMigrant() ? '你離開家的第一年' : '你進城的第一年';
+      if (sent) {
+        return kids.length || lb.partner
+          ? `${lb.partner ? h.partnerName() : kidsWord}離開後，家裡安靜得不像自己的家。你每天最先做的事，是看有沒有新的消息，最後做的事，是${link.how}確認他們平安。${lb.partner && kids.length ? `${kids[0].name}在${link.far}報平安時，聲音聽起來比以前懂事了。` : ''}`
+          : '家人走後，你一個人守著空下來的屋子。';
+      }
+      if (kids.length && who === '伴侶') {
+        return `${first}，${kidsWord}留在家鄉，由${h.partnerName()}一個人帶著。你在${room}裡等${link.wait}，${link.how === '寫信' ? `${kid.name}的字跡一次比一次工整` : `${kid.name}的聲音一次比一次大`}，你卻一次比一次更不敢問「想不想我」。`;
+      }
+      if (kids.length && who === '孩子的祖父母') {
+        return `${first}，${kidsWord}留在家鄉，交給祖父母帶著。${link.how === '寫信' ? `信裡夾著${kid.name}歪歪扭扭的塗鴉，你把信紙貼在胸口，貼到發皺，才捨得折起來。` : `${link.far}傳來${kid.name}${kid.birthYear >= s.year - 5 ? '口齒不清的撒嬌' : '搶著報告的聲音'}，你把${link.device === '手機' ? '手機' : '話筒'}貼在耳朵上，貼到發燙，才捨得掛斷。`}`;
+      }
+      if (kids.length) {
+        return `${first}，${kidsWord}託給家鄉的親戚照顧。每個月寄錢的那一天，你都要在${link.how === '寫信' ? '信' : link.how}裡問三次「有沒有吃飽」，那是你唯一能替${kid.name}做的事。`;
+      }
+      return `${first}，${h.partnerName()}留在家鄉等你。你們靠${link.how === '寫信' ? '一封封信' : link.how}過日子，說的都是天氣、價錢和「保重」，真正想說的那幾句，總在${link.how === '寫信' ? '信寄出之後' : '掛斷之後'}才浮上來。`;
+    },
+    effects: { happiness: -3, social: -1, wealth: +1 },
+  },
+  {
+    id: 'migration_missed_birthday',
+    title: '隔著螢幕的生日',
+    ages: [21, 55],
+    once: false,
+    cooldown: 4,
+    weight: 0.9,
+    tags: ['migration', 'family', 'children', 'homesick'],
+    cond: (s, h) => h.isMigrant() && h.childrenApart().length > 0 && !h.displaced(),
+    text: (s, h) => {
+      const kid = youngestApart(s, h) || { ...NOBODY, birthYear: s.year - 6 };
+      const age = s.year - kid.birthYear;
+      const link = linkOf(h);
+      const who = h.caregiverOfChildren() === '伴侶' ? h.partnerName() : h.caregiverOfChildren() === '孩子的祖父母' ? '祖父母' : '家裡的人';
+      if (link.how === '視訊') return `${kid.name}滿${age}歲的那天，你${h.wageEarner() ? '加班' : '忙'}到很晚，趕在對方睡著前撥了視訊。蛋糕上的蠟燭早就吹熄了，${who}把鏡頭轉過來，孩子隔著螢幕對你揮手，說：「你唱得好難聽。」你還是把整首生日快樂唱完，唱到最後一句，聲音有點抖。`;
+      if (link.how === '電話') return `${kid.name}滿${age}歲的那天，你排了很久的隊，才打通那通越洋電話。電話卡的分鐘數一格一格往下掉，${who}把話筒遞給孩子，孩子只說了一句「謝謝${h.male() ? '爸爸' : '媽媽'}」就跑開了，你握著話筒，聽見背景裡有人在切蛋糕。`;
+      return `${kid.name}滿${age}歲的那天，你把存了三個月的錢匯回去，又寫了一封很長的信。信要一個多月才會到，等孩子拆開時，生日早已過去，你只能想像那天他們會不會在桌上多放一副碗筷。`;
+    },
+    effects: { happiness: -3, social: -1, wealth: -1 },
+  },
+  {
+    id: 'migration_school_fees_remit',
+    title: '寄回去的學費',
+    ages: [22, 60],
+    once: false,
+    cooldown: 5,
+    weight: 0.8,
+    tags: ['migration', 'family', 'children', 'money'],
+    cond: (s, h) => h.isMigrant() && working(h) && richerThanHome(s, h) && apartAges(s, h).some((a) => a >= 5 && a <= 17),
+    text: (s, h) => {
+      const kid = h.childrenApart().find((c) => s.year - c.birthYear >= 5) || h.childrenApart()[0] || NOBODY;
+      const who = h.caregiverOfChildren() === '伴侶' ? h.partnerName() : h.caregiverOfChildren() === '孩子的祖父母' ? '孩子的祖父母' : '家裡的人';
+      return `開學前，${who}在${linkOf(h).how === '寫信' ? '信裡' : linkOf(h).far}報了學費和制服的數字。你把這個月的薪水扣掉房租和伙食，剩下的全匯了回去，只留下幾個硬幣。收據上寫的是${kid.name}的名字，你把那張紙${h.techReady(2005) ? '拍下來存在手機裡' : '折好夾進小本子'}，在宿舍的床邊坐了很久：${kid.name}可以安心上學，這就是你為什麼在這裡。`;
+    },
+    effects: { wealth: -2, happiness: +2, social: +1 },
+  },
+  {
+    id: 'migration_parent_far_illness',
+    title: '病床在很遠的地方',
+    ages: [28, 68],
+    weight: 0.7,
+    tags: ['migration', 'family', 'parents', 'caregiving'],
+    cond: (s, h) => h.isMigrant() && h.parentsFar() && Math.max(s.family.mother.alive ? s.family.mother.age : 0, s.family.father.alive ? s.family.father.age : 0) >= 62 && !h.has('m_parent_far'),
+    text: (s, h) => {
+      const link = linkOf(h);
+      const who = h.siblings() > 0 ? '手足' : '鄰居';
+      const news = link.how === '寫信' ? `一封蓋著加急戳記的電報送到宿舍門口，是${who}發來的：` : `深夜，${link.far}傳來${who}壓低的聲音：`;
+      return `${news}${h.parentsOr('長輩')}住院了，醫生說要觀察一陣子。你${link.how === '寫信' ? '捏著那張薄薄的電報紙' : `握著${link.device}`}站在${h.countryName()}的宿舍走廊，離病房有一整片海那麼遠。請假要經過許多手續，機票貴得離譜，身邊的人都說「你先顧好自己」。`;
+    },
+    choices: [
+      {
+        label: '請假、買機票，飛回去守幾天',
+        effects: { wealth: -4, social: +3, happiness: -1, health: -1 },
+        set: ['m_parent_far'],
+        result: (s, h) => `你搭了最早的一班飛機回去，在病床邊守了十天。${h.parentsOr('長輩')}睜開眼睛看見你，第一句話是：「你怎麼回來了，工作怎麼辦？」你笑著說沒事，回程那天，機場的出境隊伍好長。`,
+        ai: (s, h) => (h.stat('wealth') > 35 ? 1.5 : 0.8),
+      },
+      {
+        label: '寄錢回去，請手足先照顧',
+        effects: { wealth: -3, happiness: -3, social: 0 },
+        set: ['m_parent_far'],
+        result: (s, h) => `你把存款轉給${h.siblings() > 0 ? '手足' : '鄰居'}，${linkOf(h).how === '寫信' ? '一天發兩封電報' : '一天打兩次電話'}問病情。你沒能在病床邊，只能在${h.countryName()}把${linkOf(h).how === '視訊' ? '手機' : '電話'}放在枕頭旁，這樣再遠的鈴聲你都不會漏掉。`,
+        ai: (s, h) => (h.isPoor() ? 1.6 : 1),
+      },
+      {
+        label: '每天視訊，等狀況穩定再說',
+        cond: (s, h) => h.techReady(2012),
+        effects: { happiness: -2, social: +1, wealth: -1 },
+        set: ['m_parent_far'],
+        result: (s, h) => `你每天晚上固定視訊，手足把鏡頭對準病床。${h.parentsOr('長輩')}說${h.parentsPresent() === 'both' ? '他們' : h.parentsPresent() === 'mother' ? '她' : '他'}看到你就夠了，叫你別再亂花錢。你點頭，視訊掛斷後，把房間的燈關了很久才睡。`,
+        ai: 1.2,
+      },
+    ],
+  },
+  {
+    id: 'migration_couple_apart_choice',
+    title: '兩個國家的婚姻',
+    ages: [24, 60],
+    weight: 0.7,
+    tags: ['migration', 'family', 'marriage', 'chain'],
+    cond: (s, h) => h.isMigrant() && h.coupleApart() && h.yearsAbroad() >= 2 && !h.has('m_couple_decided') && !h.displaced(),
+    text: (s, h) => `你和${h.partnerName()}已經隔著國界過了好幾年。${linkOf(h).how}裡講的都是帳單、孩子和誰家辦了喜事，${linkOf(h).how === '寫信' ? '信尾那句「保重」' : '睡前那句「晚安」'}變得像一道固定的手續。有一天${h.partnerHe()}輕輕地問：「我們這樣，還要多久？」`,
+    choices: [
+      {
+        label: '想辦法把伴侶接過來一起生活',
+        cond: (s, h) => !h.has('m_irregular') && !h.has('m_refugee'),
+        effects: (s, h) => { const r = h.reunite({ kids: false }); h.change('wealth', -3); h.change('happiness', r.partner ? +4 : 0); h.change('social', +2); },
+        set: ['m_couple_decided'],
+        result: (s, h) => (h.livesWith('partner')
+          ? `文件跑了大半年，${h.partnerName()}終於拖著行李站在你的門口。小小的房間第一次有了兩個人的聲音，你們笑著說，連吵架都好懷念。`
+          : '申請遇到了卡關，你補了好幾份文件。晚上你對著螢幕說「再等等」，其實是在對自己說。'),
+        ai: (s, h) => (h.stat('wealth') > 40 ? 1.7 : 1),
+      },
+      {
+        label: '每年請假回去，維持現在的樣子',
+        effects: { happiness: -1, social: +1, wealth: -1 },
+        set: ['m_couple_decided'],
+        result: '你把一年裡最長的假全留給家鄉。每次見面像是重新認識一遍，臨走前一晚，兩個人都不太說話，只是把行李箱拉鍊拉開又拉上。',
+        ai: 1.1,
+      },
+      {
+        label: '說好再撐幾年，就回家',
+        effects: { happiness: +1, wealth: +1, social: 0 },
+        set: ['m_couple_decided', 'm_promise_return'],
+        result: (s, h) => `你們在${linkOf(h).how === '視訊' ? '螢幕前' : linkOf(h).how === '電話' ? '電話裡' : '信裡'}約定了一個年份，把它寫在日曆的角落。有了日期，等待的人和被等待的人，都比較有力氣把日子過下去。`,
+        ai: 1.5,
+      },
+    ],
+  },
+  {
+    // Scheduled by the engine when a family that had been apart for a year or more lives together again (systems.js returnHome()).
+    id: 'migration_return_reunion',
+    title: '回到家的第一晚',
+    once: false,
+    cooldown: 5,
+    ages: [20, 78],
+    weight: 0,
+    tags: ['migration', 'family', 'followup', 'return'],
+    followCond: (s, h) => { const r = h.lastReunion(); return !!r && s.year - r.year <= 1 && r.how === 'return' && (r.partner || s.children.some((c) => c.alive !== false && r.kids.includes(c.name))); }, // a child who died in the meantime is not at the door
+    text: (s, h) => {
+      const r = h.lastReunion() || { kids: [], partner: false, apartYears: 0 };
+      const kids = s.children.filter((c) => c.alive !== false && r.kids.includes(c.name));
+      const youngest = kids.length ? kids.reduce((a, b) => (b.birthYear > a.birthYear ? b : a)) : null;
+      const age = youngest ? s.year - youngest.birthYear : 0;
+      if (youngest && r.apartYears >= 2 && age <= 8) {
+        return `你推開家門，${youngest.name}站在門邊盯著你看了好一會兒，然後轉頭小聲問身後的大人：「這個人是誰？」你蹲下來，張開手，心裡像被人用力捏了一下。那天晚上，孩子睡在離你最遠的那一邊，半夜卻悄悄把一隻腳伸過來，抵住你的小腿。`;
+      }
+      if (youngest && r.partner && h.hasPartner()) return `你們回到了同一個屋簷下。${h.partnerName()}把${kidsPhrase(kids.length)}叫到你面前，孩子的個頭比你記得的高了許多，第一頓飯，大家都客客氣氣的，像是在互相打聽彼此的近況。`;
+      if (youngest) return `${youngest.name}長高了，聲音也變了，站在你面前竟然有點拘謹。你們吃了第一頓飯，沒有人知道該先說什麼，最後是孩子夾了一塊菜放進你碗裡，什麼也沒說。`;
+      if (!h.hasPartner()) return `你回到了家，屋子比你記得的小了一點。親人們輪流來看你，桌上的飯菜一道接著一道，沒有人問你這些年好不好，只是不停地替你夾菜。`;
+      return `你回到了家，${h.partnerName()}已經把飯菜擺好。這麼多年，你們第一次不必掛斷電話就能看著對方的臉。你們有好多話要說，卻只是安靜地吃完了那一頓飯。`;
+    },
+    effects: (s, h) => { h.change('happiness', +3); h.change('social', +2); h.change('wealth', -1); },
   },
   {
     id: 'migration_ethnic_community',
@@ -1122,8 +1340,15 @@ export default [
     cooldown: 10,
     weight: 0.7,
     tags: ['migration', 'homesick', 'travel', 'family'],
-    cond: (s, h) => h.isMigrant() && (h.siblings() > 0 || h.parentsAlive() > 0),
-    text: (s, h) => `你隔了${h.yearsAbroad() >= 3 ? '好幾年' : '一陣子'}才回${homeName(s)}。巷口的店換了招牌，認識的人老了，連你記得的路都改了。親戚們把你當客人，招待得周到，也有一點生疏。你在老家的屋頂下睡了幾晚，才慢慢找回口音。`,
+    cond: (s, h) => h.isMigrant() && (h.siblings() > 0 || h.parentsAlive() > 0 || h.childrenApart().length > 0 || h.coupleApart()),
+    text: (s, h) => {
+      const kid = youngestApart(s, h);
+      const home = h.childrenApart().length || h.coupleApart();
+      const tail = kid && s.year - kid.birthYear <= 9
+        ? `${kid.name}躲在${h.caregiverOfChildren() === '伴侶' ? h.partnerName() : '大人'}的腿後面，看了你好一會兒，才肯把手伸過來。你在老家的屋頂下睡了幾晚，臨走前，孩子問你下次什麼時候回來，你答不出來。`
+        : h.coupleApart() ? `${h.partnerName()}替你把房間收拾得跟你離開時一模一樣。你在老家的屋頂下睡了幾晚，兩個人話不多，很多事只是坐在一起就夠了。` : '你在老家的屋頂下睡了幾晚，才慢慢找回口音。';
+      return `你隔了${h.yearsAbroad() >= 3 ? '好幾年' : '一陣子'}才請到假回${homeName(s)}。巷口的店換了招牌，認識的人老了，連你記得的路都改了。${home ? '' : '親戚們把你當客人，招待得周到，也有一點生疏。'}${tail}`;
+    },
     effects: { happiness: +2, social: +2, wealth: -2 },
   },
   {
@@ -1132,15 +1357,15 @@ export default [
     ages: [28, 62],
     weight: 0.8,
     tags: ['migration', 'children', 'identity'],
-    cond: (s, h) => h.isMigrant() && h.hasChildren(),
-    text: (s, h) => `${h.childName(0)}在學校說著當地語言，回到家有時用你聽不太懂的俚語。你努力用家鄉話跟孩子聊天，孩子用生疏的口音回你。你們都在學對方的語言，也在學同一種愛。`,
+    cond: (s, h) => h.isMigrant() && h.minorsWithYou().length > 0,
+    text: (s, h) => `${(h.minorsWithYou()[0] || { name: '孩子' }).name}在學校說著當地語言，回到家有時用你聽不太懂的俚語。你努力用家鄉話跟孩子聊天，孩子用生疏的口音回你。你們都在學對方的語言，也在學同一種愛。`,
     effects: { happiness: +2, social: +2, knowledge: +1 },
   },
   {
     id: 'migration_return_decision',
     title: '要不要回家',
     ages: [35, 64],
-    weight: 0.8,
+    weight: (s, h) => 0.8 + (h.childrenApart().length || h.coupleApart() ? 0.6 : 0) + (h.has('m_promise_return') ? 0.8 : 0),
     tags: ['migration', 'return', 'chain'],
     cond: (s, h) => h.isMigrant() && !h.has('m_returned') && !h.has('m_return_decided') && !h.has('m_refugee'),
     text: (s, h) => `你在${h.countryName()}已經待了這麼多年，這裡有工作、朋友，也有了習慣的日子。但某個傍晚，你聞到街角的某種氣味，忽然很想念家鄉的天空。你問自己：我是在等什麼時候回家，還是已經在家了？`,

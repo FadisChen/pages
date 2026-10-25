@@ -1,8 +1,9 @@
 // Statistical simulation tests: whole lives are played with automatic choices and compared with the
 // country statistics they were drawn from.
 //
-// Env: LL_SIM_N overrides the number of lives per country (default 2000, as in PLAN section 7).
-// Run with: node --test lifelottery/tests/
+// Env: LL_SIM_N overrides the number of lives per country (default 2000, as in PLAN section 7; `npm run test:quick` uses 1000 lives in four countries).
+// The lives are played on worker threads (tests/lib/sim-pool.mjs, sim-worker.mjs): the same lives and the same asserts as a serial run,
+// only spread over the cores. Run with: node --test lifelottery/tests/
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,9 +13,12 @@ import { createLife, advanceYear } from '../js/engine/life.js';
 import { BY_CODE } from '../js/data/countries.js';
 import { eraView, presentYear } from '../js/data/eras.js';
 import { EFFECT_KEYS } from '../js/engine/events.js';
+import { runTasks } from './lib/sim-pool.mjs';
+import { scaled, QUICK } from './lib/scale.mjs';
 
-const TARGETS = ['TWN', 'JPN', 'USA', 'NGA', 'IND', 'BRA', 'CHN', 'DEU'];
-const N = Number(process.env.LL_SIM_N) || 2000;
+// a quick run covers half of the countries (one of each regime); the complete run all eight
+const TARGETS = QUICK ? ['TWN', 'USA', 'NGA', 'IND'] : ['TWN', 'JPN', 'USA', 'NGA', 'IND', 'BRA', 'CHN', 'DEU'];
+const N = Number(process.env.LL_SIM_N) || scaled(2000, 1000, 500);
 
 /** The choices-per-life target (15-45) only applies once the content set is complete. */
 const CONTENT_THRESHOLD = 300;
@@ -24,38 +28,15 @@ const CHOICES_RANGE = [15, 45];
 const year = presentYear();
 const results = {};
 
-function playLife(code, i) {
-  const s = createLife({ era: 'present' }, `sim-${code}-${i}`, { countryCode: code });
-  let guard = 0;
-  while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
-  return s;
-}
-
-test(`simulation: ${N} lives per country (${TARGETS.join(', ')}) run without errors`, () => {
+test(`simulation: ${N} lives per country (${TARGETS.join(', ')}) run without errors`, async () => {
   const t0 = Date.now();
-  for (const code of TARGETS) {
-    const stats = { n: 0, ageSum: 0, ageF: 0, nF: 0, ageM: 0, nM: 0, choices: 0, errors: 0, kidsSum: 0, kidsN: 0, ever: 0, evMax: 0, minChoices: 1e9, maxChoices: 0 };
-    for (let i = 0; i < N; i++) {
-      try {
-        const s = playLife(code, i);
-        assert.equal(s.alive, false, 'life must end');
-        for (const k of EFFECT_KEYS) assert.ok(Number.isFinite(s.stats[k]), `${k} not finite`);
-        const age = s.death.age + 0.5; // deaths are spread uniformly over the year of age
-        stats.n++; stats.ageSum += age;
-        if (s.gender === 'F') { stats.ageF += age; stats.nF++; } else { stats.ageM += age; stats.nM++; }
-        const c = s.log.reduce((n, e) => n + (e.kind === 'choice' ? 1 : 0), 0);
-        stats.choices += c;
-        stats.minChoices = Math.min(stats.minChoices, c); stats.maxChoices = Math.max(stats.maxChoices, c);
-        if (s.gender === 'F' && s.death.age >= 50) { stats.kidsSum += s.children.length; stats.kidsN++; }
-        if (s.flags._married) stats.ever++;
-      } catch (e) {
-        stats.errors++;
-        if (stats.errors <= 3) console.error(`life ${code}-${i} threw:`, e);
-      }
-    }
+  const all = await runTasks(TARGETS.map((code) => ({ task: 'country', args: { code, n: N } })));
+  TARGETS.forEach((code, k) => {
+    const stats = all[k];
     results[code] = stats;
+    for (const m of stats.messages) console.error(m);
     assert.equal(stats.errors, 0, `${code}: ${stats.errors} lives threw`);
-  }
+  });
   console.log(`  simulated ${N * TARGETS.length} lives in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 });
 
@@ -75,24 +56,21 @@ test('simulation: mean age at death within +-2.5 years of life expectancy', () =
   console.log('  ' + rows.join('\n  '));
 });
 
-test('simulation: infant deaths within +-25% of the infant mortality rate', () => {
+test('simulation: infant deaths within +-25% of the infant mortality rate', async () => {
   const rows = [];
-  for (const code of TARGETS) {
+  // Rich countries need many more lives for a stable count: aim for ~200 expected deaths.
+  const Ms = TARGETS.map((code) => Math.min(60000, Math.max(N, Math.ceil(200 / (eraView(BY_CODE[code], year).imr / 1000)))));
+  const res = await runTasks(TARGETS.map((code, k) => ({ task: 'imr', args: { code, M: Ms[k] } })));
+  TARGETS.forEach((code, k) => {
     const v = eraView(BY_CODE[code], year);
     const p = v.imr / 1000;
-    // Rich countries need many more lives for a stable count: aim for ~200 expected deaths.
-    const M = Math.min(60000, Math.max(N, Math.ceil(200 / p)));
-    let deaths = 0;
-    for (let i = 0; i < M; i++) {
-      const s = createLife({ era: 'present' }, `imr-${code}-${i}`, { countryCode: code });
-      if (advanceYear(s, { auto: true }).died) deaths++;
-    }
+    const { deaths, M } = res[k];
     const rate = deaths / M;
     // Observed rate is a mix of sexes (x1.12 / x0.88); the mix is ~1.003 so compare with imr directly.
     const sd = Math.sqrt((p * (1 - p)) / M) / p;
     rows.push(`${code}: infant deaths ${(rate * 1000).toFixed(2)}‰ vs imr ${v.imr}‰ (n=${M}, sd ${(sd * 100).toFixed(1)}%)`);
     assert.ok(Math.abs(rate - p) / p <= 0.25, `${code}: infant mortality ${(rate * 1000).toFixed(2)}‰ vs ${v.imr}‰`);
-  }
+  });
   console.log('  ' + rows.join('\n  '));
 });
 
@@ -110,45 +88,34 @@ test('simulation: demographics are plausible (children per woman, marriage)', ()
   console.log('  ' + rows.join('\n  '));
 });
 
-test('simulation: children per woman track the TFR within 15% in low- and high-fertility countries', () => {
+test('simulation: children per woman track the TFR within 15% in low- and high-fertility countries', async () => {
   // Women who live to 50+, whole simulated lives. Covers the ultra-low (KOR, HKG), low (ITA, UKR, FRA), middle (BRA, IND)
   // and high (PAK, COD, NER) fertility regimes on top of the TARGETS above.
-  const EXTRA = ['KOR', 'HKG', 'ITA', 'UKR', 'FRA', 'BRA', 'IND', 'PAK', 'COD', 'NER'];
-  const n = Math.max(600, Math.floor(N / 2));
+  const EXTRA = QUICK ? ['KOR', 'ITA', 'BRA', 'PAK', 'NER'] : ['KOR', 'HKG', 'ITA', 'UKR', 'FRA', 'BRA', 'IND', 'PAK', 'COD', 'NER'];
+  const n = Math.max(scaled(600, 300, 300), Math.floor(N / 2));
   const rows = [];
-  for (const code of EXTRA) {
-    let kids = 0, women = 0;
-    for (let i = 0; i < n; i++) {
-      const s = createLife({ era: 'present' }, `fert-${code}-${i}`, { countryCode: code, gender: 'F' });
-      let guard = 0;
-      while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
-      if (s.death.age >= 50) { kids += s.children.length; women++; }
-    }
+  const res = await runTasks(EXTRA.map((code) => ({ task: 'fert', args: { code, n } })));
+  EXTRA.forEach((code, k) => {
     const v = eraView(BY_CODE[code], year);
-    const mean = kids / women;
+    const mean = res[k].kids / res[k].women;
     rows.push(`${code}: ${mean.toFixed(2)} children per woman vs tfr ${v.tfr} (${((mean / v.tfr - 1) * 100).toFixed(0)}%)`);
     assert.ok(Math.abs(mean / v.tfr - 1) <= 0.15, `${code}: ${mean.toFixed(2)} children per woman vs tfr ${v.tfr}`);
-  }
+  });
   console.log('  ' + rows.join('\n  '));
 });
 
-test('simulation: past and future lives also track the TFR of their reproductive years (+-15%)', () => {
+test('simulation: past and future lives also track the TFR of their reproductive years (+-15%)', async () => {
   const rows = [];
-  const n = Math.max(500, Math.floor(N / 3));
-  for (const era of ['past', 'future']) {
-    for (const code of ['USA', 'NGA', 'CHN', 'IND', 'KOR', 'DEU']) {
-      let kids = 0, women = 0, tfrSum = 0;
-      for (let i = 0; i < n; i++) {
-        const s = createLife({ era }, `fert-${era}-${code}-${i}`, { countryCode: code, gender: 'F' });
-        let guard = 0;
-        while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
-        if (s.death.age >= 50) { kids += s.children.length; women++; tfrSum += eraView(BY_CODE[code], s.birthYear + 27).tfr; }
-      }
-      const ratio = kids / tfrSum;
-      rows.push(`${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)} at age 27 (${((ratio - 1) * 100).toFixed(0)}%)`);
-      assert.ok(Math.abs(ratio - 1) <= 0.15, `${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)}`);
-    }
-  }
+  const n = Math.max(scaled(500, 300, 300), Math.floor(N / 3));
+  const jobs = [];
+  for (const era of ['past', 'future']) for (const code of QUICK ? ['USA', 'NGA', 'KOR'] : ['USA', 'NGA', 'CHN', 'IND', 'KOR', 'DEU']) jobs.push({ era, code });
+  const res = await runTasks(jobs.map(({ era, code }) => ({ task: 'fert', args: { code, n, era, tfrAt27: true } })));
+  jobs.forEach(({ era, code }, k) => {
+    const { kids, women, tfrSum } = res[k];
+    const ratio = kids / tfrSum;
+    rows.push(`${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)} at age 27 (${((ratio - 1) * 100).toFixed(0)}%)`);
+    assert.ok(Math.abs(ratio - 1) <= 0.15, `${era} ${code}: ${(kids / women).toFixed(2)} children per woman vs tfr ${(tfrSum / women).toFixed(2)}`);
+  });
   console.log('  ' + rows.join('\n  '));
 });
 
@@ -186,30 +153,19 @@ test(`simulation: choices per life (target ${CHOICES_RANGE.join('-')} once there
   for (const code of TARGETS) assert.ok(results[code].choices / results[code].n >= 4, `${code}: almost no choices are being offered`);
 });
 
-test('simulation: every country in every era plays out cleanly and stays calibrated on average', () => {
+test('simulation: every country in every era plays out cleanly and stays calibrated on average', async () => {
   const eras = [['past', 1970], ['present', year], ['future', 2050]];
   const perCountry = Number(process.env.LL_SMOKE_N) || 5;
   const codes = Object.keys(BY_CODE);
   const rows = [];
-  for (const [era, y] of eras) {
-    let gap = 0, n = 0, errors = 0;
-    for (const code of codes) {
-      for (let i = 0; i < perCountry; i++) {
-        try {
-          const s = createLife({ era }, `smoke-${era}-${code}-${i}`, { countryCode: code });
-          let guard = 0;
-          while (s.alive && guard++ < 130) advanceYear(s, { auto: true });
-          assert.equal(s.alive, false);
-          for (const k of EFFECT_KEYS) assert.ok(Number.isFinite(s.stats[k]) && s.stats[k] >= 0 && s.stats[k] <= 100);
-          const v = eraView(BY_CODE[code], s.birthYear);
-          gap += s.death.age + 0.5 - v.le[s.gender];
-          n++;
-        } catch (e) {
-          errors++;
-          if (errors <= 3) console.error(`smoke ${era} ${code} threw:`, e);
-        }
-      }
-    }
+  // each era in four slices of the country list
+  const jobs = [];
+  for (const [era] of eras) for (let k = 0; k < 4; k++) jobs.push({ era, codes: codes.filter((c, i) => i % 4 === k), perCountry });
+  const res = await runTasks(jobs.map((j) => ({ task: 'smoke', args: j })));
+  for (const [era] of eras) {
+    const mine = res.filter((r, k) => jobs[k].era === era);
+    const gap = mine.reduce((a, r) => a + r.gap, 0), n = mine.reduce((a, r) => a + r.n, 0), errors = mine.reduce((a, r) => a + r.errors, 0);
+    for (const r of mine) for (const m of r.messages) console.error(m);
     rows.push(`${era}: mean (death age - le) = ${(gap / n).toFixed(2)} over ${n} lives`);
     assert.equal(errors, 0, `${era}: ${errors} lives threw`);
     assert.ok(Math.abs(gap / n) < 2, `${era}: lives deviate from life expectancy by ${(gap / n).toFixed(2)} years on average`);

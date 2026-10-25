@@ -14,6 +14,7 @@ import { FOCUS_PROMPT_AGES, FOCUS_EVENT_MULT, FOCUS_EVENT_CLAMP, focusEventMult,
 import { getSummary } from '../js/engine/summary.js';
 import { annualIncome } from '../js/engine/systems.js';
 import ALL_EVENTS from '../js/data/events/index.js';
+import { scaled, QUICK } from './lib/scale.mjs';
 
 const IDS = ['balance', 'study', 'work', 'family', 'health', 'self'];
 const at = (age, seed = 'f') => { const s = createLife({ era: 'present' }, seed, { countryCode: 'TWN' }); s.age = age; return s; };
@@ -189,7 +190,7 @@ test('effect sizes stay modest: system multipliers within +/-25 %, yearly nudges
 // Direction of the effects on whole lives: the same lives (same seeds), forced to one focus for every year it is open
 // ---------------------------------------------------------------------------------------------
 
-const N = Math.max(600, Number(process.env.LL_FOCUS_N) || 2000);
+const N = Math.max(600, Number(process.env.LL_FOCUS_N) || scaled(2000, 800, 600));
 const cache = new Map();
 
 function simulate(focus, n) {
@@ -244,7 +245,8 @@ test(`focus effects on lives: family -> more children and a fuller social life, 
   assert.ok(hea.health40 > bal.health40 + 3, `health stat at 40: ${hea.health40.toFixed(1)} vs ${bal.health40.toFixed(1)}`);
   // PLAN 4.2: the health focus buys at most 1-2 extra years of life, not a miracle
   const gain = hea.death - bal.death;
-  assert.ok(gain > 0.5 && gain < 3.2, `health focus lifespan gain ${gain.toFixed(2)} years`);
+  // a quick run samples too few lives for a difference of a year or two (the standard error of a mean death age is about two years at this size)
+  if (!QUICK) assert.ok(gain > 0.5 && gain < 3.2, `health focus lifespan gain ${gain.toFixed(2)} years`);
   assert.ok(self.happy40 > bal.happy40 + 2.5, `self: happier ${self.happy40.toFixed(1)} vs ${bal.happy40.toFixed(1)}`);
   assert.ok(self.wealth40 < bal.wealth40, 'self lives are a little poorer');
   assert.ok(work.death < hea.death, 'overwork does not extend life');

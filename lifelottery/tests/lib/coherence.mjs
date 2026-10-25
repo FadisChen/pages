@@ -10,6 +10,16 @@
 //   * every log entry is tagged with { id (event id, `yearly:N`, `sys:title`), snap }.
 //   * RULES inspect (snap, text) and return hits. A hit is a flag unless an ALLOW entry matches it.
 //
+// Phase 5D (family continuity) added:
+//   * state-aware rules for every family member: parents_dead (one or both dead, indirect wording such as 兩家人 / 雙方長輩 / 家長 /
+//     回老家, a single parent left but "爸媽" written), couple_gone ("爸媽，你們…" / "你們夫妻" without a partner), partner_gone by name,
+//     kids_dead, kids_count, kid_gender, siblings_count, adult_childish (零用錢 / 放學 / 被家人罵 for adults), young_elder (退休 / 孫子
+//     for the young), parent_pronoun ("媽媽 … 他");
+//   * window-based exemptions (famCtx): a memory, a grief word or a hypothesis only counts when it sits in the clauses AROUND the
+//     keyword, so "母親說，這是為了他們以後可以選擇" is no longer excused by the 以後 in the next clause;
+//   * applyStress() / stressFor(): lives in which the family is taken apart at a chosen age (silently), and lifeConfigs({ stress, novelty })
+//     so that the deep scans also visit orphans, widowed and divorced people, lost children, and every phrasing of every event.
+//
 // Nothing here changes the game; the wrappers only record.
 
 import ALL_EVENTS from '../../js/data/events/index.js';
@@ -18,6 +28,8 @@ import { createLife, advanceYear } from '../../js/engine/life.js';
 import { BY_CODE } from '../../js/data/countries.js';
 import { incomeGroupAt } from '../../js/data/eras.js';
 import * as HELP from '../../js/engine/helpers.js';
+import { RULE as AGENCY_RULE } from './rules-agency.mjs'; // Phase 6A
+import { RULE as HOUSEHOLD_RULE, householdSnap, migrantStressFor, applyMigrantStress } from './rules-household.mjs'; // Phase 6B
 
 // ---------------------------------------------------------------------------------------------
 // Snapshots
@@ -47,6 +59,10 @@ export function snapshot(s) {
     partner: pt ? pt.status : null, partnerGender: pt ? pt.gender : null,
     everPartner: !!T.everPartner, everMarried: !!T.everMarried,
     kids: s.children.length, kidsAlive: aliveKidAges.length,
+    sons: s.children.filter((c) => c.alive && c.gender === 'M').length, daughters: s.children.filter((c) => c.alive && c.gender === 'F').length,
+    sonsEver: s.children.filter((c) => c.gender === 'M').length, daughtersEver: s.children.filter((c) => c.gender === 'F').length,
+    deadKidNames: s.children.filter((c) => !c.alive && c.name && c.name.length >= 2).map((c) => c.name),
+    selfName: s.name.full, partnerName: pt ? pt.name : null, motherName: s.family.mother.name, fatherName: s.family.father.name,
     eldestKid: kidAges.length ? Math.max(...kidAges) : -1,
     youngestKid: kidAges.length ? Math.min(...kidAges) : -1,
     youngestAliveKid: aliveKidAges.length ? Math.min(...aliveKidAges) : -1,
@@ -57,6 +73,7 @@ export function snapshot(s) {
     flags: Object.keys(f).filter((k) => !k.startsWith('_') && f[k]).join(','),
     religion: s.religion, festivalKey: HELP.makeHelpers(s).festivalKey(), homeRegion: BY_CODE[s.homeCountryCode].region,
     coast: HELP.makeHelpers(s).coastal(), climate: HELP.makeHelpers(s).climate(), drinks: HELP.makeHelpers(s).drinks(),
+    hh: householdSnap(s), // Phase 6B (rules-household.mjs)
   };
 }
 
@@ -78,6 +95,7 @@ export function install() {
   for (const ev of ALL_EVENTS) {
     const text = ev.text;
     ev.text = (s, h) => { const t = typeof text === 'function' ? text(s, h) : text; record(s, t, ev.id); return t; };
+    if (ev.variants) ev.variants = ev.variants.map((v) => (s, h) => { const t = typeof v === 'function' ? v(s, h) : v; record(s, t, ev.id); return t; }); // Phase 5C phrasings are audited like the main text
     if (typeof ev.effects === 'function') {
       const fx = ev.effects;
       ev.effects = (s, h) => { CTX.current = ev.id; return fx(s, h); };
@@ -96,6 +114,7 @@ export function install() {
   YEARLY.forEach((y, i) => {
     const text = y.text;
     y.text = (s, h) => { const t = text(s, h); record(s, t, `yearly:${i}`); return t; };
+    if (y.variants) y.variants = y.variants.map((v) => (s, h) => { const t = typeof v === 'function' ? v(s, h) : v; record(s, t, `yearly:${i}`); return t; });
   });
 }
 
@@ -112,24 +131,46 @@ function tag(s, entry) {
   }
 }
 
+/**
+ * Family stress scenarios (Phase 5D). A natural life reaches "both parents dead, partner dead, a child lost" only rarely and late,
+ * so the deep scans also play lives in which the family is taken apart at a chosen age, silently (no log line), to exercise
+ * every event in those states:  { mother?: age, father?: age, partner?: [age, 'widowed' | 'divorced'], kid?: age (the first child dies that year or later) }.
+ */
+export function applyStress(s, st) {
+  if (st.migrant) applyMigrantStress(s, st.migrant); // Phase 6B: `--migrant`
+  if (st.mother !== undefined && s.age >= st.mother) s.family.mother.alive = false;
+  if (st.father !== undefined && s.age >= st.father) s.family.father.alive = false;
+  if (st.partner && s.age >= st.partner[0] && s.partner && (s.partner.status === 'married' || s.partner.status === 'dating')) s.partner.status = st.partner[1];
+  if (st.kid !== undefined && s.age >= st.kid) { const c = s.children.find((k) => k.alive); if (c && !st.kidDone) { c.alive = false; st.kidDone = true; } }
+}
+
 /** Play a whole life with auto choices; returns { s, rows: [{ entry, id, snap }] }. */
 export function playAudited(settings, seed, opts = {}) {
   install();
   CTX.texts.clear();
   CTX.current = null;
-  const s = createLife(settings, seed, opts);
+  const { stress, ...lifeOpts } = opts;
+  const s = createLife(settings, seed, lifeOpts);
   const push = Array.prototype.push;
   s.log.push = function (...es) { for (const e of es) tag(s, e); return push.apply(this, es); };
   tag(s, s.log[0]);
   let guard = 0;
+  const mems = []; // Phase 6C: every memory the moment it was made, with the state before and after that year
+  const known = new Map();
   while (s.alive && guard++ < 130) {
     CTX.current = null;
+    if (stress) applyStress(s, stress);
     CTX.yearStart = snapshot(s);
     advanceYear(s, { auto: true });
+    for (const m of s.memories || []) {
+      if (known.get(m.k) === m.p) continue;
+      known.set(m.k, m.p);
+      mems.push({ key: m.k, phrase: m.p, age: s.age, year: s.year, pre: CTX.yearStart, post: snapshot(s) });
+    }
   }
   delete s.log.push; // restore the prototype method (keeps the state serialisable and comparable)
   const rows = s.log.map((entry) => ({ entry, ...(META.get(entry) || { id: `sys:${entry.title}`, pre: null, post: null }) }));
-  return { s, rows };
+  return { s, rows, mems };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -170,6 +211,107 @@ const GRIEF = /留下|過世|離世|去世|離開了|走了|葬禮|遺物|遺照
 const HYPO = /將來|以後|未來|想當|想像|夢想|希望|打算|如果|要是|等你長大|長大後|將會|總有一天|想著|盼|期待|也許|或許|可能|萬一|準備|考慮|假如|要不要|會不會|是否|能不能|想要|想過|不知道|說不定|好奇|羨慕|相信|害怕|擔心|怕/;
 
 // ---------------------------------------------------------------------------------------------
+// Family continuity (Phase 5D): window-based exemptions
+//
+// The generic MEMORY / GRIEF / HYPO tests above look at the whole sentence (and the previous one), which is far too generous
+// for a text like "…放牧遷徙…母親說，這是為了他們以後可以選擇": the 以後 belongs to somebody else's clause, yet it exempted the
+// dead mother speaking in the present tense. The family rules look only at the clauses AROUND the keyword.
+// ---------------------------------------------------------------------------------------------
+
+/** Clauses of a sentence (split at 、，；：) with their start index. */
+function clausesOf(sentence) {
+  const out = [];
+  const re = /[^，；：、]+[，；：、]?/g;
+  let m;
+  while ((m = re.exec(sentence))) out.push({ t: m[0], start: m.index });
+  return out;
+}
+
+/** The text of the clauses from `before` clauses ahead of the keyword's clause up to `after` clauses behind it. */
+function windowAround(sentence, idx, before = 1, after = 1) {
+  const cl = clausesOf(sentence);
+  let k = cl.findIndex((c, i) => idx >= c.start && (i === cl.length - 1 || idx < cl[i + 1].start));
+  if (k < 0) k = 0;
+  return cl.slice(Math.max(0, k - before), k + after + 1).map((c) => c.t).join('');
+}
+
+/** The sentence from the start of the clause `back` clauses before the keyword up to the keyword itself. */
+function textBefore(sentence, idx, back = 2) {
+  const cl = clausesOf(sentence);
+  let k = cl.findIndex((c, i) => idx >= c.start && (i === cl.length - 1 || idx < cl[i + 1].start));
+  if (k < 0) k = 0;
+  return sentence.slice(cl[Math.max(0, k - back)].start, idx);
+}
+
+// real memories: a strong past marker (the broad MEMORY list above also holds 終於／後來／從此／直到／曾 …, which say nothing about the keyword's own clause)
+const MEM_STRONG = /想起|回想|回憶|記得|當年|那時|以前|從前|曾經|小時候|年輕時|多年前|當時|那年|懷念|夢見|夢到|年前|多年以前|還記得|想念|思念|記憶|相簿|老照片|舊照片|生前|當初|早年|年少|幼時|兒時|往日|昔日|舊日|教你的|教過|教的|說過|傳給你|傳下|學來的|從小|過去(的|那|幾|十|二|三)|不曾|沒能|來不及|曾(經|在|有|是|說)/;
+const GRIEF_STRONG = /過世|離世|去世|逝世|葬禮|遺物|遺照|遺像|悼|忌日|墳|墓|空位|不在場|無法到場|沒能到場|相片|掃墓|祭|喪|往生|已經不在|不在了|不在身邊|生前|病逝|辭世|追思|紀念|守靈|火化|骨灰|牌位|靈位|已故|亡父|亡母|早逝|走後|離開人世|離開了你|離開這個世界|少了|缺席|空著|留給你|留下的|留下了|祖先|先人|天上|思念|想念|懷念|不在了/;
+const HYPO_STRONG = /如果|要是|假如|萬一|也許|或許|可能|會不會|是否|要不要|能不能|不知道|想像|希望|打算|考慮|說不定|好奇|盼望|期待|將來|等你長大|總有一天|夢想|想當|若是|假設|多希望|要是|倘若/;
+
+/**
+ * Window-based context for the family rules. `c` is the scan context; returns { mem, grief, hypo } for the clauses around the
+ * keyword (memory: two clauses before and one after, plus the tail of the previous sentence; hypothesis: the clause itself and the one before).
+ */
+function famCtx(c, prev = '') {
+  const idx = c.prefix.length;
+  const memWin = windowAround(c.sentence, idx, 2, 1) + prev.slice(-18);
+  return {
+    mem: MEM_STRONG.test(memWin),
+    grief: GRIEF_STRONG.test(windowAround(c.sentence, idx, 2, 2)) || GRIEF_STRONG.test(prev.slice(-24)),
+    // a wish or a condition has to come BEFORE the keyword ("如果母親還在…", "你希望父親…"); "兩家人對婚禮的期待截然不同" is a plain statement
+    hypo: HYPO_STRONG.test(textBefore(c.sentence, idx, 2)) || /^(如果|要是|假如|萬一|若是|倘若)/.test(c.sentence),
+  };
+}
+
+/** Like scan(), but each hit also carries `fam` (see famCtx) and `self2`, a possessive-free "is this about you" test. */
+function famScan(text, wordRe, snap, check) {
+  const hits = [];
+  const re = new RegExp(wordRe.source, wordRe.flags.includes('g') ? wordRe.flags : wordRe.flags + 'g');
+  for (const sen of sentencesOf(text)) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(sen.s))) {
+      if (m[0] === '') { re.lastIndex++; continue; }
+      const prefix = sen.s.slice(0, m.index);
+      const c = {
+        word: m[0], sentence: sen.s.trim(), prefix, after: sen.s.slice(m.index + m[0].length),
+        self: selfContext(sen.s, m.index, snap.names),
+        self2: selfContext2(sen.s, m.index, snap.names.filter((n) => n !== snap.motherName && n !== snap.fatherName), THIRD_FAMILY),
+        quoted: (prefix.match(/[「『]/g) || []).length > (prefix.match(/[」』]/g) || []).length,
+        text,
+      };
+      // words YOU say ("你說「我媽在等我」") are about your own family, unlike the quoted words of a child or a neighbour
+      if (c.quoted && /(^|[，；。：、])你[^，；。「」『』問]{0,6}(說|回|答|喊|嘆|開口|低聲|輕聲|喃喃|解釋|補一句|補充)[^，；。「」『』]{0,4}[：:]?[「『][^」』]*$/.test(prefix)) c.quoted = false;
+      c.fam = famCtx(c, sen.prev);
+      const why = check(c, snap);
+      if (why) hits.push({ word: c.word, sentence: c.sentence, why: why === true ? '' : String(why) });
+    }
+  }
+  return hits;
+}
+
+/** selfContext without the "X的 = somebody's possession" shortcut ("省下兩個月的零用錢" is yours, "鄰居的兒子" is not: third-party words decide). */
+function selfContext2(sentence, idx, names = [], third = THIRD) {
+  // "你和曾子怡的婚禮上，兩家人…": the people joined to 你 by 和／跟／與 are part of "you", not a third party
+  const prefix = sentence.slice(0, idx).replace(/你(們)?(和|跟|與|及)[^，；：、。]{1,14}?(?=的|[，；：、]|$)/g, '你');
+  const lastYou = prefix.lastIndexOf('你');
+  let lastThird = -1, m;
+  third.lastIndex = 0;
+  while ((m = third.exec(prefix))) lastThird = m.index + m[0].length - 1;
+  for (const n of names) { const i = prefix.lastIndexOf(n); if (i >= 0) lastThird = Math.max(lastThird, i + n.length - 1); }
+  return !(lastThird > lastYou);
+}
+
+// third parties who are NOT your own family: for the parent rules, "家人把屋子打掃了三遍，爸爸假裝在看報紙" is still about YOUR father
+const THIRD_FAMILY = /孩子|兒子|女兒|小孩|寶寶|伴侶|丈夫|妻子|老公|老婆|鄰居|朋友|(?<![其他])他|她|別人|公公|婆婆|岳|同事|工人|村民|同伴|孫|同學|對方|病人|客人|老師|醫師|店員|對面/g;
+
+// a life told as a whole (the eulogy, the card): names of a partner or a child who is gone are part of the story, not a scene of the present
+const RETRO = /相伴|分開|盡頭|天人永隔|成家|各自走開|走開|婚姻|離世|養育|養大|拉拔|育有|陪著|付出了|長大成人|牽掛|放不下|送走|先走|離開|沒能陪|比自己更早|攜手|一起把日子/;
+
+const CN_NUM = { 一: 1, 兩: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+const numOf = (w) => (/^\d+$/.test(w) ? +w : CN_NUM[w] ?? NaN);
+
+// ---------------------------------------------------------------------------------------------
 // Rules
 // ---------------------------------------------------------------------------------------------
 
@@ -208,6 +350,7 @@ function scan(text, wordRe, snap, check) {
   return hits;
 }
 
+const PARENT_OTHER = /父親節|母親節|母語|母校|母親河|祖父|祖母|養父|養母|繼父|繼母|岳父|岳母|公公|婆婆|公婆|親家|乾爸|乾媽|教父|教母|孩子的爸|孩子的媽|孩子們的爸|孩子們的媽|爸爸媽媽們|對方(的)?(父母|爸媽|家人|長輩|家長|爸|媽)|伴侶的(父母|爸|媽|家人|長輩)|另一半的(父母|爸|媽|家人)|(他|她)的(父母|爸|媽|爸媽|母親|父親|家人)|新娘的|新郎的|丈夫的(父母|爸|媽)|妻子的(父母|爸|媽)/;
 const WORK_RE = /辦公室|同事|老闆|上班|加班|薪水|客戶|下班|薪資|年終獎金|打卡|上司/;
 const SELF_JOBS = new Set(['farmer', 'fisher', 'street_vendor', 'shopkeeper', 'artisan']);
 const SELF_WORK_RE = /同事|下班|上班|主管|薪水|薪資|加班|辦公室|公司|年終獎金|打卡|上司/;
@@ -218,7 +361,7 @@ const JOB_END = /道別|收拾|資遣|離職|辭職|被裁|裁員|離開(了)?(�
 const WORK_PREMISE = /家裡小店|家裡的小店|家裡開的|家裡經營|家裡的生意|暑假的工|暑假你在|打工|兼職|兼差|工讀|學徒|幫工|做工|暑期工|實習|零工|當童工|幫忙(看店|顧店|家裡的店|家裡的攤)|家裡的店|家裡的攤|家裡的工廠|家裡的田|送報|送貨/;
 const PLACE_SCHOOL = /^(學校|操場|教室|書包|課本|班上|上課|校服|校長|校門)$/;
 const SCHOOL_CORE = /老師(?!傅)|同學|教室|考試|作業|下課/;
-const SCHOOL_EXT = /上課|學校|課本|書包|班導|導師|段考|校服|操場|校長|班上|上學|放學|功課|開學|校門/;
+const SCHOOL_EXT = /上課|(?<!離開)學校|課本|書包|班導|導師|段考|校服|操場|校長|班上|上學|放學|功課|(?<!離)開學|校門/;
 const SCHOOL_RE = new RegExp(SCHOOL_CORE.source + '|' + SCHOOL_EXT.source);
 const ADULT_ED = /夜校|夜間部|進修|課程|補校|職訓|訓練班|語言班|語言課|學程|成人教育|大學|線上課|函授|技職|證照班|補習班/;
 const PARTNER_RE = /伴侶|另一半|丈夫|妻子|老公|老婆|配偶|(?<!老)太太|先生(?!們)|婚|新娘|新郎|枕邊人|愛人|情人|男友|女友|男朋友|女朋友/;
@@ -355,12 +498,24 @@ export const RULES = [
     id: 'partner_gone', desc: '離婚／喪偶後仍以現在式提到對方',
     check(snap, text) {
       if (snap.partner !== 'divorced' && snap.partner !== 'widowed') return [];
-      return scan(text, /丈夫|妻子|老公|老婆|另一半|伴侶|枕邊人|配偶|(?<!老)太太|先生(?!們)/, snap, (c) => {
+      const hits = [];
+      // the partner's own name, spoken of in the present tense, after the marriage ended or the partner died
+      if (snap.partnerName && snap.partnerName.length >= 2) {
+        // a child or parent whose full name contains the partner's name ("Ani" / "Ani Hartono") is not the partner
+        let masked = text;
+        for (const o of [snap.selfName, ...snap.names].filter((n) => n && n !== snap.partnerName && n.includes(snap.partnerName)).sort((a, b) => b.length - a.length)) masked = masked.split(o).join('〓');
+        hits.push(...famScan(masked, new RegExp(snap.partnerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), snap, (c) => {
+          if (c.fam.hypo || c.fam.mem || c.fam.grief || c.quoted) return false;
+          if (/前夫|前妻|前任|離婚|離異|已故|亡夫|亡妻|遺孀|寡|喪偶|鰥|失去|走後|不在了|過世|去世|再婚|新的|重新|另一個|下一段|新伴侶|再找|結婚了|婚禮|出生|介紹|認識|遇見|心動/.test(c.sentence) || RETRO.test(c.sentence)) return false;
+          return `${snap.partner}（名字）`;
+        }));
+      }
+      return hits.concat(scan(text, /丈夫|妻子|老公|老婆|另一半|伴侶|枕邊人|配偶|(?<!老)太太|先生(?!們)/, snap, (c) => {
         if (!c.self || c.hypo || c.memory || c.grief) return false;
         if (/前夫|前妻|前任|離婚|離異|已故|亡夫|亡妻|遺孀|寡|喪偶|鰥|失去|走後|不在了|過世|去世|獨自|一個人|孤單|沒有|再婚|新的|重新|另一個|下一段|新伴侶|再找/.test(c.sentence)) return false;
         if (c.word === '先生' && /醫生|老先生|某位|這位|那位|(王|李|張|陳|林|黃|劉|吳|趙|周)先生/.test(c.sentence)) return false;
         return `${snap.partner}`;
-      });
+      }));
     },
   },
   {
@@ -399,20 +554,175 @@ export const RULES = [
     },
   },
   {
-    id: 'parents_dead', desc: '雙親（或單方）已過世，卻以現在式提到',
+    id: 'parents_dead', desc: '雙親（或單方）已過世，卻以現在式提到：爸爸／媽媽／父母，以及間接說法（兩家人、雙方長輩／家長、家長、回老家／娘家）',
+    check(snap, text) {
+      if (snap.mother && snap.father) return [];
+      const hits = [];
+      const exempt = (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.fam.grief || c.quoted) return true;
+        if (/成為了?父母|當了?父母|為人父母|身為父母|做父母|你們當父母|父母的角色/.test(c.sentence)) return true;
+        if (/[「：]\s*$/.test(c.prefix)) return true;
+        if (PARENT_OTHER.test(c.sentence) || /(各自|彼此|大家|他們|她們|同學|朋友|鄰居|別人|其他人|每個人|每家|各家)的$/.test(c.prefix.slice(-5))) return true;
+        if (snap.partnerName && c.prefix.includes(snap.partnerName + '的') && new RegExp(snap.partnerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '的[^，；：。、]{0,2}$').test(c.prefix)) return true; // the partner's parents ("李安的爸媽"), not "你和李安的婚禮上，…"
+        return false;
+      };
+      const one = (re, who) => famScan(text, re, snap, (c) => (exempt(c) ? false : `${who} 已過世`));
+      if (!snap.father) hits.push(...one(/爸爸|爸(?!媽)|父親|老爸|阿爸/, '父親'));
+      if (!snap.mother) hits.push(...one(/媽媽|媽(?!爸)|母親|老媽|阿母/, '母親'));
+      if (!snap.father && !snap.mother) {
+        hits.push(...one(/父母|爸媽|雙親|爹娘|爸爸媽媽|二老|兩老/, '雙親'));
+        hits.push(...famScan(text, /兩家人|兩家(的)?(長輩|父母|家長)|兩邊(的)?(長輩|父母|家長|家人)|雙方(的)?(長輩|家長|父母|家人|親人)|家長/, snap, (c) => {
+          if (exempt(c)) return false;
+          if (c.word === '家長' && (snap.kidsAlive > 0 && snap.age >= 24 || /家長會|家長們?[，。]?(都|接送)|其他家長|別的家長|學生家長|接送的家長|老師.{0,6}家長/.test(c.sentence) && snap.age >= 24)) return false; // you are the "家長" of the child's school
+          if (c.word === '家長' && /替.*簽名|簽名|聯絡簿|監護人/.test(c.sentence) && snap.age < 18) return '家長（簽名）而雙親已歿';
+          return `雙親已歿：${c.word}`;
+        }));
+        hits.push(...famScan(text, /回老家|回娘家|回父母家|回爸媽家|回爸媽那|老家的(飯桌|灶|廚房|院子|門)|爸媽的老家|父母的老家/, snap, (c) => {
+          if (exempt(c)) return false;
+          if (/手足|兄弟|姊妹|哥哥|姊姊|弟弟|妹妹|親戚|叔|伯|姑|舅|姨|堂|表|祖|掃墓|上墳|祭|老屋|空屋|賣掉|整理|拆|租|重建|修/.test(c.sentence)) return false; // going back to the village / relatives / the empty house
+          return `雙親已歿：${c.word}`;
+        }));
+      } else {
+        // exactly one of them is alive: "爸媽／父母" together is wrong
+        hits.push(...famScan(text, /父母|爸媽|雙親|爹娘|爸爸媽媽|二老|兩老/, snap, (c) => (exempt(c) ? false : `只剩${snap.mother ? '母親' : '父親'}：${c.word}`)));
+        hits.push(...famScan(text, /兩家人|雙方(的)?(長輩|家長|父母)/, snap, () => false)); // one parent still makes "兩家人" true
+      }
+      return hits;
+    },
+  },
+  {
+    id: 'couple_gone', desc: '伴侶已不在（無伴侶、離婚、喪偶）卻以「你們」「爸媽」稱呼主角與伴侶這一組（孩子說「爸媽，你們…」、「你們夫妻」、「孩子的爸／媽」）',
+    check(snap, text) {
+      if (snap.partner === 'married' || snap.partner === 'dating') return [];
+      return famScan(text, /[「『]爸媽|爸媽，?你們|爸、媽|爸[，,]媽|你們(夫妻|夫婦|倆|兩個(?!月)|兩人|兩位|兩老|二老)|孩子(他|們的|的)(爸|媽)|孩子們的(爸|媽)|兩老|老伴/, snap, (c) => {
+        if (c.fam.hypo || c.fam.mem || c.fam.grief) return false;
+        if (/老伴/.test(c.word) && /[你我]的老伴|阿公|阿嬤|爺爺|奶奶|鄰居|隔壁|老人/.test(c.sentence)) return false;
+        if (c.word === '兩老' && (!c.self2 || /爸媽|父母|岳|公婆|雙親|他們|她們|親家/.test(c.sentence))) return false; // somebody else's old couple
+        if (/孩子(他|們的|的)(爸|媽)/.test(c.word) && snap.age < 30) return false;
+        return `${snap.partner || '無伴侶'}：${c.word}`;
+      });
+    },
+  },
+  {
+    id: 'parent_pronoun', desc: '寫到媽媽／母親（或爸爸／父親）的那一句或下一句，代名詞的性別錯了（「媽媽在國外工作。…看見他的臉」）',
     check(snap, text) {
       const hits = [];
-      const oneDead = (re, who) => scan(text, re, snap, (c) => {
-        if (!c.self || c.hypo || c.memory || c.grief || c.quoted) return false;
-        if (/成為了?父母|當了?父母|為人父母|身為父母|做父母|你們當父母|父母的角色/.test(c.sentence)) return false;
-        if (/[「：]$/.test(c.prefix.slice(-2)) || /[「：]\s*$/.test(c.prefix)) return false; // quoted speech of a child / partner addressing "you"
-        if (/父親節|母親節|母語|母校|母親河|祖父|祖母|養父|養母|繼父|繼母|岳父|岳母|公公|婆婆|乾爸|乾媽|教父|教母|孩子的爸|孩子的媽|孩子們的爸|孩子們的媽|爸爸媽媽們/.test(c.sentence)) return false;
-        return `${who} 已過世`;
-      });
-      if (!snap.father) hits.push(...oneDead(/爸爸|爸(?!媽)|父親|老爸|阿爸/, '父親'));
-      if (!snap.mother) hits.push(...oneDead(/媽媽|媽(?!爸)|母親|老媽|阿母/, '母親'));
-      if (!snap.father && !snap.mother) hits.push(...oneDead(/父母|爸媽|雙親|爹娘|爸爸媽媽|家長/, '雙親'));
+      const OTHER_ANY = /孩子|伴侶|對方|同事|老師|朋友|鄰居|老闆|醫|護|長輩|大人|師傅|你們|他們|她們|[A-Z]/;
+      const MALE = /爸|父|兒子|丈夫|老公|先生|哥|弟|男|叔|伯|舅|公|師傅/, FEMALE = /媽|母|女兒|妻子|老婆|太太|姊|姐|妹|女|婆|嬤|奶|阿姨|姑|姨/;
+      let prev = null; // 'm' | 'f' | null: the only parent the previous sentence talked about
+      for (const sen of sentencesOf(text)) {
+        const s0 = sen.s;
+        const mother = /媽媽|母親/.test(s0), father = /爸爸|父親/.test(s0);
+        const here = mother && !father && !MALE.test(s0.replace(/媽媽|母親/g, '')) && !OTHER_ANY.test(s0) ? 'm' : father && !mother && !FEMALE.test(s0.replace(/爸爸|父親/g, '')) && !OTHER_ANY.test(s0) ? 'f' : null;
+        const who = here || (!MALE.test(s0) && !FEMALE.test(s0) && !OTHER_ANY.test(s0) ? prev : null);
+        if (who === 'm' && /(?<![其他])他(?![們人鄉方處])/.test(s0)) hits.push({ word: '他', sentence: s0.trim(), why: '母親用「他」' });
+        if (who === 'f' && /她(?!們)/.test(s0)) hits.push({ word: '她', sentence: s0.trim(), why: '父親用「她」' });
+        prev = here && /^(你的)?(媽媽|母親|爸爸|父親)/.test(s0.trim()) ? here : null; // only a parent who is the subject of the sentence carries over to the next one
+      }
       return hits;
+    },
+  },
+  {
+    id: 'kids_dead', desc: '孩子都已過世（或某個孩子已過世）卻以現在式提到「你的孩子／兒子／女兒」或孩子的名字',
+    check(snap, text) {
+      const hits = [];
+      if (snap.kids > 0 && snap.kidsAlive === 0) {
+        hits.push(...famScan(text, KIDS_RE, snap, (c) => {
+          if (!c.self2 || c.fam.hypo || c.fam.mem || c.fam.grief || c.quoted) return false;
+          if (/想要孩子|生孩子|懷孕|將來的|未來的|沒有孩子|無子|沒有兒女|沒有子女|膝下無|沒孩子|領養|收養|養孩子|帶孩子|有孩子|有了孩子|生兒子|生女兒|兒子或女兒|女兒或兒子|頭胎|傳宗接代|重男輕女|多生|少生|不生|沒生|想生|要生|再生|催生|添丁|抱孫/.test(c.sentence)) return false;
+          return '孩子都已過世';
+        }));
+      }
+      // the name of a dead child, unless it is only part of somebody else's full name (a patronymic "Ratna Firmansyah", the partner, a parent)
+      let named = text;
+      for (const o of [snap.selfName, snap.partnerName, snap.motherName, snap.fatherName]) if (o && o.length >= 2) named = named.split(o).join('〓');
+      for (const n of snap.deadKidNames) {
+        hits.push(...famScan(named, new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), snap, (c) => {
+          if (c.fam.hypo || c.fam.mem || c.fam.grief || c.quoted) return false;
+          if (/出生|誕生|取名|取了名|名字/.test(c.sentence) || RETRO.test(c.sentence)) return false;
+          return `${n} 已過世`;
+        }));
+      }
+      return hits;
+    },
+  },
+  {
+    id: 'kids_count', desc: '孩子（兒子、女兒、孫輩）的數量與實際不符，例如有三個孩子卻寫「兩個孩子」',
+    check(snap, text) {
+      return famScan(text, /(一|兩|二|三|四|五|六|七|八|九|十|\d+)(個|名|位)(孩子|小孩|兒女|子女|兒子|女兒|孫子|孫女|孫輩)/, snap, (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.quoted) return false;
+        if (!/你(們)?(的|家的?|有|和|跟|與|帶著|牽著|抱著)[^，。]{0,2}$/.test(c.prefix)) return false; // only "your" children are counted
+        if (/還有|其餘|其他|另外|剩下|其中|最小|最大|多了|再生|再添|添了|第.個|多一|少一|增加|懷|生下|想要|想生|要生|已經有|共有.*人/.test(c.sentence + c.prefix.slice(-4)) && !/你有/.test(c.sentence)) return false;
+        const m = c.word.match(/^(.+?)(個|名|位)(.+)$/);
+        const n = numOf(m[1]), kind = m[3];
+        if (!(n >= 1)) return false;
+        let ok;
+        if (/兒子/.test(kind)) ok = n === snap.sons || n === snap.sonsEver;
+        else if (/女兒/.test(kind)) ok = n === snap.daughters || n === snap.daughtersEver;
+        else if (/孫/.test(kind)) ok = n <= Math.max(snap.grand, 1);
+        else ok = n === snap.kids || n === snap.kidsAlive;
+        return ok ? false : `n=${n} ${kind}，實際 ${snap.kids}（活著 ${snap.kidsAlive}；子 ${snap.sons} 女 ${snap.daughters}）`;
+      });
+    },
+  },
+  {
+    id: 'kid_gender', desc: '沒有（活著的）兒子卻提到「你的兒子」，或沒有女兒卻提到「你的女兒」',
+    check(snap, text) {
+      if (snap.kidsAlive === 0) return []; // kids / kids_dead cover it
+      const hits = [];
+      const chk = (re, have, name) => { if (!have) hits.push(...famScan(text, re, snap, (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.fam.grief || c.quoted) return false;
+        if (!/你(家|的|那|們的)|^[^，。]{0,3}$/.test(c.prefix.slice(-3) + c.word) && c.prefix.length) return false;
+        if (/(個|名|位|對)$/.test(c.prefix) || /想要|想生|重男輕女|生兒子|生女兒|傳宗接代|期待|盼/.test(c.sentence)) return false;
+        return `沒有${name}`;
+      })); };
+      chk(/兒子/, snap.sons + 0, '活著的兒子');
+      chk(/女兒/, snap.daughters + 0, '活著的女兒');
+      return hits;
+    },
+  },
+  {
+    id: 'siblings_count', desc: '手足數量與實際不符（「兩個哥哥」但只有一個手足，單一手足卻用「手足們」）',
+    check(snap, text) {
+      if (snap.siblings <= 0) return [];
+      const hits = famScan(text, /(一|兩|二|三|四|五|六|七|八|九|十|\d+)(個|位)(哥哥|姊姊|姐姐|弟弟|妹妹|手足|兄弟|姊妹|兄姊|弟妹|兄弟姊妹)/, snap, (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.quoted) return false;
+        if (!/你(們)?(的|家的?|有|和|跟|與)[^，。]{0,2}$/.test(c.prefix)) return false;
+        if (/[表堂鄰隔壁]/.test(c.prefix.slice(-2)) || /還有|其餘|其他|另外|剩下|其中|最小|最大|比你|同學|朋友|鄰居|班上|室友/.test(c.sentence)) return false;
+        const m = c.word.match(/^(.+?)(個|位)(.+)$/);
+        const n = numOf(m[1]);
+        return n > snap.siblings ? `n=${n} 但手足 ${snap.siblings}` : false;
+      });
+      if (snap.siblings === 1) {
+        hits.push(...famScan(text, /你的(手足們|兄弟姊妹們?|哥哥姊姊們|弟弟妹妹們|兄姊們|弟妹們)|(手足|兄弟姊妹)們/, snap, (c) => (c.fam.hypo || c.fam.mem || !c.self2 ? false : '只有一個手足')));
+      }
+      return hits;
+    },
+  },
+  {
+    id: 'adult_childish', desc: '成年人出現小孩的場景：零用錢、放學、寫功課、被家人罵、書包（給孩子的除外）',
+    check(snap, text) {
+      if (snap.age < 18 || (snap.inSchool && snap.age < 20)) return [];
+      return famScan(text, /零用錢|放學|寫功課|做功課|被(爸媽|爸爸|媽媽|父母|母親|父親|家人|大人)(罵|念|唸|打)|挨(爸媽|爸爸|媽媽|父母|母親|父親|家人)(罵|打)|(爸媽|爸爸|媽媽|父母|母親|父親|家人)罵(了)?你|被叫家長|叫家長/, snap, (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.quoted) return false;
+        if (/給(了)?(孩子|兒子|女兒|孫|姪|外甥|弟妹|弟弟|妹妹|小孩|他|她)|孩子們?|孫|兒子|女兒|姪|外甥|小孩|學生|弟妹|弟弟|妹妹|校門口的/.test(c.sentence) && snap.age >= 24) return false;
+        if (snap.inSchool && /^(放學|寫功課|做功課)$/.test(c.word)) return false; // adult education / university: "下課" is the right word, but the audit leaves it to the school rules
+        if (c.word === '零用錢' && snap.age < 20 && !snap.employed && snap.partner !== 'married') return false;
+        if (c.word === '零用錢' && snap.kidsAlive > 0 && /收|給|發|扣|停|訂|加|減|限|管|談|多給|少給/.test(c.sentence)) return false; // a parent setting the pocket money
+        if (c.word === '放學' && snap.kidsAlive > 0 && /校門|接送|接|等|家長|孩子/.test(c.sentence)) return false; // a parent at the school gate
+        return `age ${snap.age} ${snap.status}：${c.word}`;
+      });
+    },
+  },
+  {
+    id: 'young_elder', desc: '年輕人出現老年情境：退休、孫子、含飴弄孫、養老（自己的）',
+    check(snap, text) {
+      if (snap.age >= 40) return [];
+      return famScan(text, /退休(?!金|制度|年金)|孫子|孫女|孫兒|孫輩|含飴弄孫|安享晚年|養老|頤養/, snap, (c) => {
+        if (!c.self2 || c.fam.hypo || c.fam.mem || c.quoted) return false;
+        if (/爸|媽|父|母|爺|奶|祖|公|嬤|婆|長輩|師傅|老師|老闆|同事|鄰居|老人|老先生|老太太|新聞|政府|制度|年金|規劃|存|準備|計畫|計劃|保險|基金/.test(c.sentence)) return false;
+        return `age ${snap.age}：${c.word}`;
+      });
     },
   },
   {
@@ -645,6 +955,9 @@ export const RULES = [
   },
 ];
 
+RULES.push(AGENCY_RULE); // Phase 6A: no adult-only decisions for people under 15 (tests/lib/rules-agency.mjs)
+RULES.push(HOUSEHOLD_RULE); // Phase 6B: no same-place scenes with family who do not live with the person (tests/lib/rules-household.mjs)
+
 // ---------------------------------------------------------------------------------------------
 // Allowlist: strict, per rule + event (+ optional word / state condition), always with a reason.
 // An entry that never matches in a full run is reported as stale (see runAudit().staleAllow).
@@ -656,7 +969,6 @@ export const ALLOW = [
   { rule: 'school', event: 'childhood_teacher_persuades', rare: true, word: '老師', reason: 'follow-up of the choice "ask the teacher to talk to the family"; the visit happens in the gap between primary and secondary school' },
   { rule: 'toddler', event: 'childhood_new_baby', word: '搖籃', reason: 'the cradle is the new baby sibling\'s, not the player\'s' },
   { rule: 'school', event: 'migration_after_graduation', word: '同學', reason: 'follow-up that narrates the graduation of the studies abroad' },
-  { rule: 'climate', event: 'world_hurricane_mitch_1998', word: '颶風', reason: 'the title names the storm; its rains flooded all of Central America, inland as well, and the text describes mudslides and rivers' },
   { rule: 'school', event: 'world_china_after_cr', reason: 'news-level description of schools reopening nationwide, not the player\'s own class' },
 ];
 
@@ -731,16 +1043,36 @@ export function lifeChecks(s, rows) {
 const ERAS = ['past', 'present', 'future'];
 
 /** Deterministic life configurations: eras x draw modes x (every k-th life forced to a country for coverage). */
-export function lifeConfigs(n, { prefix = 'coh', countries = null, offset = 0 } = {}) {
+export function lifeConfigs(n, { prefix = 'coh', countries = null, offset = 0, stress = false, novelty = false, migrant = false } = {}) {
   const out = [];
+  const ids = novelty ? ALL_EVENTS.filter((e) => e.variants).map((e) => e.id).concat(YEARLY.map((y, i) => (y.variants ? `yearly:${i}` : null)).filter(Boolean)) : null;
   for (let i = 0; i < n; i++) {
     const j = i + offset;
     const settings = { era: ERAS[j % 3], drawMode: (j >> 1) % 2 === 0 ? 'births' : 'population' };
     const opts = {};
     if (countries && j % 4 === 3) opts.countryCode = countries[Math.floor(j / 4) % countries.length];
+    if (stress) { const st = stressFor(j); if (st) opts.stress = st; }
+    if (migrant) { const m = migrantStressFor(j); if (m) opts.stress = { ...(opts.stress || {}), migrant: m }; } // Phase 6B
+    if (ids && j % 4) opts.novelty = Object.fromEntries(ids.map((id) => [id, j % 4])); // counts 1..3 rotate every phrasing
     out.push({ settings, seed: `${prefix}-${j}`, opts });
   }
   return out;
+}
+
+/** The family-stress scenario of life number j (deterministic): 7 in 8 lives lose somebody early; the rest stay natural. */
+export function stressFor(j) {
+  const h = (k) => { let x = (j * 2654435761 + k * 40503) >>> 0; x ^= x >>> 13; x = Math.imul(x, 0x5bd1e995) >>> 0; return (x ^ (x >>> 15)) >>> 0; };
+  const age = (k, lo, hi) => lo + (h(k) % (hi - lo + 1));
+  switch (j % 8) {
+    case 0: return null;
+    case 1: return { mother: age(1, 4, 40), father: age(2, 4, 40) }; // orphaned at some age
+    case 2: return { mother: age(3, 8, 60) };
+    case 3: return { father: age(4, 8, 60) };
+    case 4: return { mother: age(5, 20, 45), father: age(6, 20, 45), partner: [age(7, 40, 70), 'widowed'] };
+    case 5: return { mother: age(8, 30, 55), father: age(9, 30, 55), kid: age(10, 25, 60) };
+    case 6: return { mother: age(11, 22, 50), partner: [age(12, 28, 55), 'divorced'] };
+    default: return { mother: age(13, 4, 22), father: age(14, 4, 22) }; // orphaned in childhood or youth
+  }
 }
 
 /**
@@ -752,15 +1084,19 @@ export function runAudit(configs, { allow = ALLOW, rules = RULES, checkLife = tr
   const raw = [];
   const stats = { lives: 0, years: 0, years4: 0, entries: 0, choices: [], adultChoices: [], maxPerYear: 0, eventsSeen: new Set(), perRule: {} };
   for (const cfg of configs) {
-    const { s, rows } = playAudited(cfg.settings, cfg.seed, cfg.opts);
+    const { s, rows, mems } = playAudited(cfg.settings, cfg.seed, cfg.opts);
     stats.lives++;
     stats.entries += rows.length;
     const ch = rows.filter((r) => r.entry.kind === 'choice').length;
     stats.choices.push(ch);
     if (s.age >= 18) stats.adultChoices.push(ch);
     for (const r of rows) if (!r.id.startsWith('sys:') && !r.id.startsWith('yearly:')) stats.eventsSeen.add(r.id);
+    // Phase 6C: a remembered moment is a fact about the past. It is checked once, when it is made (below), against the state of that year;
+    // the lines that speak it again (an entry's `echo`, a reflection in an ordinary year) are not checked against today's state.
+    const phrases = mems.map((m) => m.phrase);
     for (const { entry, id, pre, post } of rows) {
       if (!post) continue;
+      if (entry.kind === 'year' && phrases.some((p) => entry.text.includes(p))) continue; // a reflection
       const text = `${entry.title && entry.kind !== 'year' && !/^\d+ 歲$/.test(entry.title) ? entry.title + '。' : ''}${entry.text}`;
       for (const rule of rules) {
         // A text is only a contradiction when it does not fit the state before NOR after the event's effects
@@ -771,6 +1107,18 @@ export function runAudit(configs, { allow = ALLOW, rules = RULES, checkLife = tr
         for (const hit of hitsPost) {
           if (!keys.has(hit.word + '|' + hit.sentence)) continue;
           raw.push({ rule: rule.id, id, word: hit.word, sentence: hit.sentence, why: hit.why, snap: post, seed: cfg.seed, settings: cfg.settings, age: entry.age, year: entry.year, kind: entry.kind, title: entry.title });
+        }
+      }
+    }
+    for (const m of mems) {
+      const text = `${m.phrase.replace(/「[^」]*」/g, '')}。`; // the label of a past choice is not a statement about the state
+      for (const rule of rules) {
+        const hitsPost = rule.check(m.post, text);
+        if (!hitsPost.length) continue;
+        const keys = new Set(rule.check(m.pre, text).map((h) => h.word + '|' + h.sentence));
+        for (const hit of hitsPost) {
+          if (!keys.has(hit.word + '|' + hit.sentence)) continue;
+          raw.push({ rule: rule.id, id: `memory:${m.key}`, word: hit.word, sentence: hit.sentence, why: hit.why, snap: m.post, seed: cfg.seed, settings: cfg.settings, age: m.age, year: m.year, kind: 'memory', title: m.key });
         }
       }
     }

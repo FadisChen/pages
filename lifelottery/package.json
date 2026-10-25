@@ -2,11 +2,17 @@
   "name": "lifelottery",
   "private": true,
   "version": "1.0.0",
-  "description": "人生籤 Life Lottery - static browser game. This package.json exists only for Node tooling (tests, data build); nothing is installed.",
+  "description": "人生籤 Life Lottery - static browser game. This package.json exists only for Node tooling (tests, data build); nothing is installed (the optional a11y audit uses axe-core: npm install --no-save axe-core).",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "build:preload": "node tools/build-preload.mjs",
+    "build:og": "node tools/build-og-image.mjs",
+    "test:a11y": "node tests/a11y.mjs",
     "build:data": "node tools/fetch-raw.mjs && node tools/build-data.mjs",
-    "calibrate": "node tools/calibrate-risk.mjs"
+    "calibrate": "node tools/calibrate-risk.mjs",
+    "test:quick": "node tools/run-tests.mjs --quick",
+    "test:consequence": "node --test tests/consequence.test.mjs",
+    "scan:consequence": "node tools/consequence-scan.mjs"
   }
 }

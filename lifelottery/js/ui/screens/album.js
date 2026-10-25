@@ -13,7 +13,7 @@ function recordCard(rec, onDelete) {
   const gender = s.gender === 'M' ? '男性' : '女性';
   const pct = Math.min(100, (s.age / 100) * 100);
   return el('li', { class: 'album-card', 'data-id': rec.id },
-    el('a', { class: 'album-link', href: `#/album/${encodeURIComponent(rec.id)}`, 'aria-label': A.openLabel(s.name) },
+    el('a', { class: 'album-link', href: `#/album/${encodeURIComponent(rec.id)}` }, // the card's own text is the link's name (a label would have to repeat all of it)
       el('div', { class: 'album-top' },
         el('h3', { class: 'album-name' }, s.name),
         el('span', { class: 'album-age' }, el('b', null, s.age), el('small', null, ` ${S.summary.years}`))),
@@ -22,7 +22,8 @@ function recordCard(rec, onDelete) {
       el('span', { class: 'album-bar', 'aria-hidden': 'true' }, el('i', { style: { '--w': `${pct}%` } })),
       el('p', { class: 'album-foot' },
         s.cause ? el('span', { class: 'tag tag-cause' }, A.cardCause(s.cause.label)) : null,
-        rec.message ? el('span', { class: 'tag tag-note' }, A.hasMessage) : null),
+        rec.message ? el('span', { class: 'tag tag-note' }, A.hasMessage) : null,
+        rec.meta && rec.meta.replay ? el('span', { class: 'tag tag-replay' }, S.replay.badge) : null),
       rec.message ? el('p', { class: 'album-note' }, `「${rec.message}」`) : null,
     ),
     el('button', { class: 'icon-btn album-delete', type: 'button', 'aria-label': A.deleteAria(s.name), title: A.delete, onclick: () => onDelete(rec) }, icon('trash')),

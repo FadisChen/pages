@@ -12,6 +12,12 @@
 //   health_depression_signs / health_postpartum_low / health_burnout -> health_support_pays_off
 
 const lowAccess = (h) => h.income() === 'L' || h.income() === 'LM';
+
+// Phase 6A (decision agency): `decider: 'family'` events are decided by the family while the person is under 12 (the choices listed for
+// `notTeen` are the family's options, each with a `familyResult` told from the child's side); 12-17 get their own `teenOnly` choices,
+// written for a young person (ask, tell, help; `who: 'child'`); adults see the original choices.
+const notTeen = (s, h) => h.agency() !== 'teen';
+const teenOnly = (s, h) => h.agency() === 'teen';
 const PHYSICAL_JOBS = ['farmer', 'fisher', 'laborer', 'miner', 'factory', 'construction', 'driver', 'cook', 'domestic', 'caregiver'];
 const roadWeight = (h) => Math.max(0.2, Math.min(2.5, (h.stats().road || 10) / 12));
 const clinicName = (h) => h.byIncome({ L: '衛生所', LM: '診所', UM: '醫院', H: '診所' });
@@ -32,7 +38,7 @@ export default [
     weight: 0.5,
     tags: ['health', 'illness'],
     text: (s, h) => h.byIncome({
-      L: '雨季過後，家裡一個傳一個地咳嗽。你燒了兩天，靠熱湯和睡覺撐過去，沒有人想花錢跑一趟診所，大人們都說「睡一覺就好了」，也果真每次都好了。',
+      L: `雨季過後，${h.livesAlone() ? '附近的人' : '家裡'}一個傳一個地咳嗽。你燒了兩天，靠熱湯和睡覺撐過去，沒有人想花錢跑一趟診所，大人們都說「睡一覺就好了」，也果真每次都好了。`,
       LM: '換季時流感在街坊間傳開。你在家發燒兩天，藥房老闆很有耐心地教你，哪一種退燒藥該配多少水，順便還推薦了一種維他命，說吃了保證有精神。',
       UM: '流感季來了，身邊的人一個接一個倒下，最後輪到了你。你燒了三天，躺著把積欠已久的連續劇全部補完，嘴裡嚷著再也不要生病，卻覺得這一點休息也算是一種收穫。',
       H: '流感季，診所的候診室擠滿了戴口罩的人。你領了藥回家睡了整整三天，醒來時第一次覺得空氣這麼好聞，連自己的枕頭都顯得格外可愛。',
@@ -131,27 +137,63 @@ export default [
     cooldown: 6,
     weight: 0.8,
     tags: ['health', 'access', 'illness'],
+    decider: 'family', // a feverish child does not decide how to get to the clinic (Phase 6A)
     cond: (s, h) => !h.urban() && !h.incomeAtLeast('H'),
-    text: (s, h) => '半夜裡你燒得滿臉通紅，家人摸著你滾燙的額頭。最近的診所要翻過一座山，天色還很黑，路上沒有半盞燈，連雞都還沒有醒，你不知道該不該現在就出發。',
+    text: (s, h) => (h.isKid()
+      ? '半夜裡你燒得滿臉通紅，家人摸著你滾燙的額頭。最近的診所要翻過一座山，天色還很黑，路上沒有半盞燈，連雞都還沒有醒，大人們壓低聲音商量著，要不要現在就出發。'
+      : `${h.livesAlone() ? '半夜裡你一個人燒得滿臉通紅，摸著自己滾燙的額頭。' : '半夜裡你燒得滿臉通紅，家人摸著你滾燙的額頭。'}最近的診所要翻過一座山，天色還很黑，路上沒有半盞燈，連雞都還沒有醒，你不知道該不該現在就出發。`),
     choices: [
       {
         label: '立刻動身，借車送去',
+        memory: (s, h) => `是${h.whoDecides()}敲開鄰居的門借了摩托車，把你裹在毯子裡送去診所`,
+        cond: notTeen,
+        cost: 2,
+        reach: 1,
         effects: { wealth: -2, health: +1 },
         result: '鄰居把摩托車借了出來。天亮前趕到診所，醫護人員說再晚一點就麻煩了，你的燒在點滴裡慢慢退下去。',
+        familyResult: (s, h) => `${h.whoDecides('fever')}二話不說，去敲了鄰居的門，借來摩托車。你被裹進毯子，緊緊貼在大人懷裡，一路顛簸。天亮前趕到診所，醫護人員說再晚一點就麻煩了，你的燒在點滴裡慢慢退下去。`,
         ai: 2,
       },
       {
         label: '請社區衛生員或助產士過來',
-        cond: (s, h) => lowAccess(h),
+        memory: (s, h) => `${h.whoDecides()}去敲了衛生員的門，衛生員拎著藥箱走了半個鐘頭的路趕來看你`,
+        cond: (s, h) => lowAccess(h) && notTeen(s, h),
+        cost: 1,
+        reach: 0,
         effects: { health: -1, social: +1 },
         result: '衛生員拎著藥箱走了半個鐘頭的路趕來。她量了體溫、餵你吃藥，說明天一早還會再來看你。',
+        familyResult: (s, h) => `${h.whoDecides('fever')}跑去敲衛生員的門。衛生員拎著藥箱走了半個鐘頭的路趕來，量了你的體溫、餵你吃藥，說明天一早還會再來看你。你迷迷糊糊地看著她的藥箱，心裡莫名安定。`,
         ai: 1.5,
       },
       {
         label: '先用土法退燒，等天亮再走',
+        memory: (s, h) => `那個夜晚沒有車可以借，${h.whoDecides()}用濕毛巾替你擦了一整夜的身體`,
+        cost: 0,
         effects: (s, h) => { h.change('health', -3); h.addRisk(1.25, 1); },
         result: '你用濕毛巾一遍遍擦身體，一夜沒睡。天亮時燒退了一點，可是整個人虛得像剛打完一場仗。',
+        familyResult: (s, h) => {
+          const who = h.whoDecides('fever');
+          return h.means() === 'thin'
+            ? `家裡借不到車，也沒有人敢摸黑翻過那座山。${who}用濕毛巾一遍遍替你擦身體，整夜沒睡。天亮時你的燒退了一點，可是整個人虛得像剛打完一場仗。`
+            : `${who}決定先等天亮，用濕毛巾一遍遍替你擦身體，整夜沒睡。天亮時你的燒退了一點，可是整個人虛得像剛打完一場仗。`;
+        },
         ai: 1,
+      },
+      {
+        label: '叫醒家人，請他們趕快想辦法送你去診所',
+        who: 'child',
+        cond: teenOnly,
+        effects: { wealth: -2, health: +1 },
+        result: '你推醒家人，說你燒得很厲害。大人沒有多問，立刻去敲了鄰居的門借來摩托車。天亮前趕到診所，醫護人員說再晚一點就麻煩了，你的燒在點滴裡慢慢退下去。',
+        ai: 2,
+      },
+      {
+        label: '請家人去找社區衛生員或助產士過來',
+        who: 'child',
+        cond: (s, h) => lowAccess(h) && teenOnly(s, h),
+        effects: { health: -1, social: +1 },
+        result: '家人跑去敲衛生員的門。衛生員拎著藥箱走了半個鐘頭的路趕來，量了體溫、餵你吃藥，說明天一早還會再來看你。',
+        ai: 1.5,
       },
     ],
   },
@@ -172,6 +214,7 @@ export default [
     choices: [
       {
         label: '馬上手術',
+        unset: ['h_surgery_waited'],
         effects: (s, h) => { h.change('wealth', h.byIncome({ L: -8, LM: -6, UM: -3, H: -1 })); h.change('health', +3); },
         result: (s, h) => h.byIncome({
           L: '你賣掉了家裡的牲口，又向親戚借了一點。手術很順利，但你在病床上一直想著這筆債要還幾年。',
@@ -184,6 +227,7 @@ export default [
       },
       {
         label: '排公立醫院，等候安排',
+        set: ['h_surgery_waited'],
         cond: (s, h) => h.incomeAtLeast('LM'),
         effects: (s, h) => { h.change('wealth', -2); h.change('health', -2); h.addRisk(1.15, 1); },
         result: '你在候補名單上等了兩個月，每次疼起來就吃止痛藥撐著。終於輪到那天，主刀醫師說「剛好趕上」。',
@@ -204,7 +248,7 @@ export default [
     ages: [15, 95],
     weight: 0,
     tags: ['health', 'followup', 'wellness'],
-    text: (s, h) => '術後第二個禮拜，你第一次自己走到窗邊，看見樓下的小孩在追一隻貓，陽光落在你的手背上，暖暖的。那一刻你覺得，活著原來可以這麼輕。',
+    text: (s, h) => `${h.has('h_surgery_waited') ? '等了兩個月的刀終於開完，術後第二個禮拜' : '術後第二個禮拜'}，你第一次自己走到窗邊，看見樓下的小孩在追一隻貓，陽光落在你的手背上，暖暖的。那一刻你覺得，活著原來可以這麼輕。`,
     effects: { health: +4, happiness: +3, social: +1 },
   },
   {
@@ -335,10 +379,11 @@ export default [
     weight: 0.3,
     tags: ['health', 'mental', 'pregnancy'],
     cond: (s, h) => h.female() && h.youngestChildAge() >= 0 && h.youngestChildAge() <= 1,
-    text: (s, h) => `${h.lastChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
+    text: (s, h) => `${h.youngestChildName()}終於睡了，家裡安靜下來，你卻在半夜突然哭了起來，說不出為什麼。大家都說該高興才對，可是你只覺得累，而且很孤單，連自己都不敢承認這件事。`,
     choices: [
       {
         label: '把心裡的話告訴身邊的人',
+        unset: ['h_support_clinic', 'h_support_self'],
         effects: { happiness: +3, social: +3 },
         result: (s, h) => `你終於開口。${h.hasPartner() ? h.partnerName() : '家人'}沒有急著講道理，只是靜靜聽完，然後說「這幾個晚上換我來」。`,
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
@@ -346,6 +391,7 @@ export default [
       },
       {
         label: '去找醫師、護理師或助產士談談',
+        set: ['h_support_clinic'], unset: ['h_support_self'],
         cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
         effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +3); h.change('health', +1); if (h.hasCondition('depression') && h.chance(0.3)) h.removeCondition('depression'); },
         result: '醫護人員說這很常見，也是可以幫忙的。她給了你一份簡單的問卷、一個回診時間，還有一個可以隨時打的電話。',
@@ -374,7 +420,9 @@ export default [
       {
         label: '和伴侶一起面對、一起難過',
         effects: { happiness: -3, social: +3 },
-        result: (s, h) => `${h.partnerName()}握著你的手，兩個人都沒說話。那個晚上，你們一起為那個還沒見面的孩子取了一個小名。`,
+        result: (s, h) => (h.livesWith('partner')
+          ? `${h.partnerName()}握著你的手，兩個人都沒說話。那個晚上，你們一起為那個還沒見面的孩子取了一個小名。`
+          : `${h.partnerName()}在電話那頭沉默了很久，只說了一句「我在」。那個晚上，你們隔著線路一起為那個還沒見面的孩子取了一個小名。`),
         ai: 2,
       },
       {
@@ -408,6 +456,7 @@ export default [
     choices: [
       {
         label: '找信任的人談談',
+        unset: ['h_support_clinic', 'h_support_self'],
         effects: (s, h) => { h.change('happiness', +2); h.change('social', +3); if (h.hasCondition('depression') && h.chance(0.2)) h.removeCondition('depression'); },
         result: '你傳了一則很長的訊息，或在廚房裡坐下開了口。對方沒有急著給建議，只是說：「我在這裡，慢慢說。」',
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
@@ -415,7 +464,8 @@ export default [
       },
       {
         label: '去看醫師或心理師，或撥打支持專線',
-        cond: (s, h) => h.incomeAtLeast('LM') || h.urban(),
+        set: ['h_support_clinic'], unset: ['h_support_self'],
+        cond: (s, h) => (h.incomeAtLeast('LM') || h.urban()) && h.agency() === 'adult',
         effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +3); h.change('health', +1); if (h.hasCondition('depression') && h.chance(0.3)) h.removeCondition('depression'); },
         result: (s, h) => `${s.countryCode === 'TWN' ? '你鼓起勇氣撥了安心專線 1925，電話那頭的人認真地聽完，並替你找了可以預約的門診。' : '你預約了門診，把這幾個月的狀況一件一件說給對方聽。對方說：「這是一種病，不是你不夠努力。」'}`,
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
@@ -423,10 +473,22 @@ export default [
       },
       {
         label: '靠作息、運動與社區活動慢慢撐起來',
+        set: ['h_support_self'], unset: ['h_support_clinic'],
         effects: { health: +2, happiness: +1, social: +2 },
         result: '你把每天要做的事縮到最小：起床、散步、吃一頓飯。朋友邀你去市集或球場，你這次沒有拒絕。',
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
         ai: 1.2,
+      },
+      {
+        // a teenager asks for help rather than booking it
+        label: '請家人帶你去看醫師或心理師，或撥打支持專線',
+        set: ['h_support_clinic'], unset: ['h_support_self'],
+        who: 'child',
+        cond: (s, h) => (h.incomeAtLeast('LM') || h.urban()) && h.agency() === 'teen',
+        effects: (s, h) => { h.change('wealth', -1); h.change('happiness', +3); h.change('health', +1); if (h.hasCondition('depression') && h.chance(0.3)) h.removeCondition('depression'); },
+        result: (s, h) => `${s.countryCode === 'TWN' ? '你鼓起勇氣撥了安心專線 1925，電話那頭的人認真地聽完，並替你找了可以預約的門診。' : '你把這幾個月的狀況一件一件告訴家人，他們帶你預約了門診。醫師聽完，說：「這是一種病，不是你不夠努力。」'}`,
+        schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
+        ai: 2.5,
       },
     ],
   },
@@ -436,7 +498,8 @@ export default [
     ages: [13, 90],
     weight: 0,
     tags: ['health', 'mental', 'followup'],
-    text: (s, h) => '某個早晨你醒來，發現自己竟然想吃早餐。窗外的光比前陣子亮了一點，鳥叫聲也變得清楚。你想起那個伸手拉住你的人，心裡暖暖的，打算今天要說聲謝謝。',
+    // who or what pulled you out (Phase 6C): the clinic, your own small routines, or the person you told
+    text: (s, h) => `某個早晨你醒來，發現自己竟然想吃早餐。窗外的光比前陣子亮了一點，鳥叫聲也變得清楚。${h.has('h_support_clinic') ? '你想起診間裡那份問卷和那個可以隨時打的電話，打算下次回診時，把這個早晨也告訴他們。' : h.has('h_support_self') ? '你想起這幾個月縮到最小的那些事：起床、散步、吃一頓飯。沒有人替你做，是它們一點一點把你拉了回來，今天你打算多走一站路。' : '你想起那個伸手拉住你的人，心裡暖暖的，打算今天要說聲謝謝。'}`,
     effects: (s, h) => {
       h.change('happiness', +4);
       h.change('health', +1);
@@ -463,6 +526,7 @@ export default [
       },
       {
         label: '找諮商或同事聊聊',
+        unset: ['h_support_clinic', 'h_support_self'],
         effects: { happiness: +3, social: +2, wealth: -1 },
         result: '你和一位值得信任的前輩吃了頓午飯，才發現原來不是只有你這樣。你們決定輪流替對方扛一些事。',
         schedule: [{ id: 'health_support_pays_off', inYears: [1, 2] }],
@@ -598,7 +662,9 @@ export default [
     cooldown: 10,
     weight: (s, h) => (h.hasCondition('alcohol') ? 3 : h.male() ? 0.15 : 0.08),
     tags: ['health', 'addiction'],
-    text: (s, h) => '家人在你的床邊發現第三個空酒瓶，也發現你最近總是遲到、忘記約好的事。他們不敢罵你，只是站在門口，輕輕地問：「你還好嗎？」',
+    text: (s, h) => (h.livesAlone()
+      ? '你在自己的床邊數到第三個空酒瓶，也想起最近總是遲到、忘記約好的事。朋友沒有罵你，只是在電話裡停了一下，輕輕地問：「你還好嗎？」'
+      : '家人在你的床邊發現第三個空酒瓶，也發現你最近總是遲到、忘記約好的事。他們不敢罵你，只是站在門口，輕輕地問：「你還好嗎？」'),
     choices: [
       {
         label: '參加互助團體或戒酒治療',
@@ -608,9 +674,11 @@ export default [
         ai: 2.5,
       },
       {
-        label: '自己設限，請家人陪伴監督',
+        label: '自己設限，請信任的人陪伴監督',
         effects: (s, h) => { h.change('social', +2); h.change('happiness', +1); if (h.hasCondition('alcohol') && h.chance(0.2)) h.removeCondition('alcohol'); },
-        result: '你把家裡的酒清了出去，還讓家人偶爾突擊檢查。有時成功，有時失敗，但至少沒有人再假裝沒看見。',
+        result: (s, h) => (h.livesAlone()
+          ? '你把家裡的酒清了出去，每週固定打電話向信任的人報備，還請朋友偶爾來突擊檢查。有時成功，有時失敗，但至少沒有人再假裝沒看見。'
+          : '你把家裡的酒清了出去，還讓家人偶爾突擊檢查。有時成功，有時失敗，但至少沒有人再假裝沒看見。'),
         ai: 1.5,
       },
       {
@@ -823,7 +891,7 @@ export default [
       {
         label: '以舒緩與生活品質為重',
         effects: { happiness: +3, social: +3, health: -2 },
-        result: '你和家人好好談了談，決定把剩下的力氣用在重要的事上：陪孫子畫畫、回老家吃一碗麵、把想說的話都說完。',
+        result: (s, h) => `你和家人好好談了談，決定把剩下的力氣用在重要的事上：${h.hasGrandchildren() ? '陪孫子畫畫、' : '陪身邊的人多坐一會兒、'}回家鄉吃一碗麵、把想說的話都說完。`,
         ai: (s, h) => (h.age() >= 70 ? 1.5 : 0.5),
       },
     ],
@@ -836,25 +904,53 @@ export default [
     cooldown: 6,
     weight: (s, h) => (h.urban() ? 0.5 : 0.1) + (h.hasCondition('asthma') ? 0.8 : 0) + (h.isRegion('SAS', 'EAS', 'MENA') ? 0.3 : 0),
     tags: ['health', 'environment'],
+    decider: 'family',
     cond: (s, h) => h.urban() && (h.isRegion('SAS', 'EAS', 'MENA', 'SEA', 'SSA') || h.hasCondition('asthma')),
     text: (s, h) => '冬天的早晨，城市被一層灰色的霧罩住，太陽只剩下一個淡淡的白點。新聞說今天空氣品質不良，你的喉嚨已先發出抗議，出門前你在口罩和圍巾之間猶豫了很久。',
     choices: [
       {
         label: '戴口罩、少出門、有條件就買濾淨機',
+        memory: (s, h) => `${h.whoDecides()}替你戴好口罩，把窗關得緊緊的`,
+        cond: notTeen,
+        cost: 1,
         effects: (s, h) => { h.change('health', +1); h.change('wealth', h.isRich() ? 0 : -1); },
         result: '你把口罩放進包包，把窗關緊。出門時像戴上一層安全的殼，雖然有點悶，但夜裡咳嗽少了。',
+        familyResult: (s, h) => `${h.whoDecides('air')}替你戴好口罩，叮嚀你今天少出門，又把窗關得緊緊的。${h.means() === 'good' ? '家裡還添了一台濾淨機，小小的燈整夜亮著。' : ''}出門時像戴上一層安全的殼，雖然有點悶，但夜裡你咳嗽少了。`,
         ai: 2,
       },
       {
         label: '照常生活，習慣了',
+        memory: (s, h) => `${h.whoDecides()}說都吸了這麼多年了，照常送你出門`,
+        cost: 0,
         effects: { health: -2 },
         result: '你說都吸了這麼多年了。那天晚上，你的咳嗽卻比平常久了一點點。',
+        familyResult: (s, h) => `${h.whoDecides('air')}說都吸了這麼多年了，照常送你出門。那天晚上，你的咳嗽卻比平常久了一點點。`,
         ai: 1.5,
       },
       {
         label: '週末帶家人去郊外透透氣',
+        memory: (s, h) => `那個週末，${h.whoDecides()}帶全家去了郊外，天空忽然變成了藍色`,
+        cond: notTeen,
+        cost: 1,
         effects: { health: +1, happiness: +2, social: +2, wealth: -1 },
         result: '走出城市一小時，天空忽然變成藍色。孩子們在草地上奔跑，你站在原地深呼吸，吸得很深很深。',
+        familyResult: (s, h) => `週末，${h.whoDecides('air')}帶著全家去了郊外。走出城市一小時，天空忽然變成藍色。你和其他孩子在草地上奔跑，大人站在原地，深呼吸，吸得很深很深。`,
+        ai: 1,
+      },
+      {
+        label: '提醒家人戴口罩，自己出門也戴好',
+        who: 'child',
+        cond: teenOnly,
+        effects: (s, h) => { h.change('health', +1); h.change('wealth', h.isRich() ? 0 : -1); },
+        result: '你把口罩分給家人，一個一個叮嚀他們把窗關緊。出門時像戴上一層安全的殼，雖然有點悶，但夜裡咳嗽少了。',
+        ai: 2,
+      },
+      {
+        label: '提議週末一起去郊外走走，透透氣',
+        who: 'child',
+        cond: teenOnly,
+        effects: { health: +1, happiness: +2, social: +2, wealth: -1 },
+        result: '你開了口，大家真的出發了。走出城市一小時，天空忽然變成藍色。你在草地上奔跑，一轉頭，看見大人也站在原地，深呼吸，吸得很深很深。',
         ai: 1,
       },
     ],
@@ -986,26 +1082,55 @@ export default [
     cooldown: 10,
     weight: (s, h) => (h.hasCondition('disability') ? 2 : 0),
     tags: ['health', 'disability'],
+    decider: 'family',
     cond: (s, h) => h.hasCondition('disability'),
     text: (s, h) => '一些對別人理所當然的事，對你來說需要重新規劃：階梯、門檻、擁擠的公車。你不想要同情，只想要有一條走得通的路，和一個不需要開口求人的清晨。',
     choices: [
       {
         label: '申請輔具與環境改善',
-        cond: (s, h) => h.incomeAtLeast('LM'),
+        memory: (s, h) => `${h.whoDecides()}跑了好幾趟申請輔具，家門口裝上了扶手和斜坡`,
+        cond: (s, h) => h.incomeAtLeast('LM') && notTeen(s, h),
+        cost: 1,
         effects: { health: +1, happiness: +3, wealth: -1 },
         result: '專員來家裡丈量了門寬和浴室。幾週後安裝好扶手和斜坡，你第一次自己從家門口出去、又自己回家。',
+        familyResult: (s, h) => `${h.whoDecides('aids')}帶著證明文件跑了好幾趟。專員來家裡丈量了門寬和浴室，幾週後安裝好扶手和斜坡。那天你第一次自己從家門口出去、又自己回家，回頭看見大人站在門邊，偷偷抹了一下眼角。`,
         ai: 2,
       },
       {
         label: '加入同病友或身障者的互助團體',
+        memory: (s, h) => `${h.whoDecides()}帶你去了互助聚會，你第一次知道這條路不是只有你一個人在走`,
+        cost: 0,
         effects: { social: +4, happiness: +3 },
         result: '聚會裡的人都很會自嘲，也很會互相教竅門。你學到的第一件事是：這條路不是只有你一個人在走。',
+        familyResult: (s, h) => `${h.whoDecides('aids')}打聽到了一個互助聚會，帶你去了。聚會裡的人都很會自嘲，也很會互相教竅門。你學到的第一件事是：這條路不是只有你一個人在走。`,
         ai: 2,
       },
       {
-        label: '調整工作與生活節奏，靠家人與自己',
+        label: '調整工作與生活節奏，靠身邊的人與自己',
+        memory: (s, h) => `${h.whoDecides()}把家務與接送重新排過，大家變得更懂得開口請求`,
+        cond: notTeen,
+        cost: 0,
         effects: { happiness: +1, social: +1, health: -1 },
-        result: '你和家人一起重新排了家務與工作。慢一點，卻很穩。每個人都比以前更懂得開口請求、也更懂得開口幫忙。',
+        result: (s, h) => (h.livesAlone()
+          ? '你把家務與工作重新排過，連每天走的動線都量了一遍。慢一點，卻很穩。你比以前更懂得開口請求，也更懂得開口幫忙。'
+          : '你和家人一起重新排了家務與工作。慢一點，卻很穩。每個人都比以前更懂得開口請求、也更懂得開口幫忙。'),
+        familyResult: (s, h) => `${h.whoDecides('aids')}把家務與接送重新排過。慢一點，卻很穩。每個人都比以前更懂得開口請求，也更懂得開口幫忙。`,
+        ai: 1.2,
+      },
+      {
+        label: '請家人一起去申請輔具，並說出你最需要改的地方',
+        who: 'child',
+        cond: (s, h) => h.incomeAtLeast('LM') && teenOnly(s, h),
+        effects: { health: +1, happiness: +3, wealth: -1 },
+        result: '你向專員一項一項說出哪裡最難走、哪裡最需要扶手，家人在旁邊補充。幾週後安裝好扶手和斜坡，你第一次自己從家門口出去、又自己回家。',
+        ai: 2,
+      },
+      {
+        label: '和家人一起重新排家務與接送的時間',
+        who: 'child',
+        cond: teenOnly,
+        effects: { happiness: +1, social: +1, health: -1 },
+        result: '你和家人坐下來，把家務與接送的時間重新排過。慢一點，卻很穩。每個人都比以前更懂得開口請求、也更懂得開口幫忙。',
         ai: 1.2,
       },
     ],

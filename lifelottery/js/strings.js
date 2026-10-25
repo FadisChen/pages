@@ -16,7 +16,7 @@ export const S = {
     homeLabel: '人生籤，回到首頁',
     album: '前世記錄',
     about: '關於',
-    theme: { system: '主題：跟隨系統', light: '主題：淺色', dark: '主題：深色' },
+    theme: { system: '主題：自動（跟隨系統）', light: '主題：淺色', dark: '主題：深色' },
     themeShort: { system: '自動', light: '淺色', dark: '深色' },
     themeHint: '切換主題',
     back: '返回',
@@ -71,7 +71,8 @@ export const S = {
       legend: '人生長度',
       short: ['短', '約 10 分鐘'],
       standard: ['標準', '約 30 分鐘'],
-      long: ['長', '約 60 分鐘'],
+      long: ['長', '約 60 分鐘・節奏較慢'],
+      longHint: '60 分鐘的節奏比較慢，適合喜歡慢慢讀、慢慢想的人。想快一點的時候，可以隨時切換 2×／4× 倍速，或在畫面上按住（電腦：按住 Shift）暫時加速。',
       note: '依該國的預期壽命換算，每一年的時間會不同；暫停或做選擇的時間不計。',
     },
     auto: {
@@ -184,6 +185,14 @@ export const S = {
       ageOf: (n) => `${n} 歲`,
       smoker: '有吸菸習慣',
       noPartner: '目前沒有伴侶',
+      // where a family member lives (getStatus().household, Phase 6C)
+      where: {
+        with_you: '同住', apart: '分開住', home_country: '在家鄉', abroad: '在國外', with_partner: '跟著伴侶',
+        with_other_parent: '跟著另一位家長', with_grandparents: '跟著祖父母', independent: '自己住',
+      },
+      memoriesTitle: '回憶',
+      noMemories: '還沒有特別想記住的事',
+      memoryAge: (n) => `${n} 歲`,
       noChildren: '目前沒有子女',
       girl: '女兒',
       boy: '兒子',
@@ -197,6 +206,18 @@ export const S = {
     eduStudying: '就學中',
   },
 
+  // Phase 5A: pacing of the life screen (hold to accelerate)
+  pacing: {
+    boostChip: '快轉中',
+    holdHint: '按住畫面（電腦：按住 Shift）可以暫時加速，放開就恢復。',
+    shortcutHold: ['按住 Shift', '暫時加速，放開即恢復（手機：按住畫面）'],
+  },
+  // Phase 5B: the 生平 (a few sentences about the finished life; engine/eulogy.js writes them)
+  eulogy: {
+    title: '生平',
+    aria: (name) => `${name}的生平`,
+    note: '依這一生留下的紀錄寫成，同一段人生永遠是同一段話。',
+  },
   focus: {
     chipLabel: '人生重心',
     chip: (label) => `重心：${label}`,
@@ -323,6 +344,9 @@ export const S = {
     shareHint: '圖卡不含你的任何個人資料，只有這段虛構人生的摘要。',
     shareDownload: '下載圖片',
     shareShare: '分享',
+    shareCopy: '複製分享文字',
+    shareCopied: '已複製分享文字（含網址）',
+    shareCopyFail: '無法複製，請手動選取文字。',
     shareReady: '圖卡已產生',
     shareFail: '圖卡產生失敗，請重新整理後再試。',
     shareDone: '已開啟分享選單',
@@ -372,7 +396,6 @@ export const S = {
     longest: '最長壽',
     longestUnit: '歲',
     open: '查看',
-    openLabel: (name) => `查看${name}的人生回顧`,
     back: '回到前世記錄',
     deleteAria: (name) => `刪除${name}`,
     delete: '刪除',
@@ -589,7 +612,40 @@ export const S = {
       ten_countries: ['十個故鄉', '出生過十個不同的國家。'],
       twentyfive_countries: ['二十五個故鄉', '出生過二十五個不同的國家。'],
       long_career: ['一輩子的工作', '一段人生工作了 40 年以上。'],
+      same_start_3: ['同一起點活過三次', '用同一個起點（同樣的出生地、性別、家境與家人）活過三次。'],
     },
+  },
+
+  // 同一起點，再活一次 (Phase 5E)
+  replay: {
+    button: '同一起點，再活一次',
+    title: '想再試一次嗎？',
+    hint: '沿用這一世的出生地、性別、家境、名字與家人；之後會發生什麼，交給新的運氣。',
+    partialHint: '這是比較早的記錄，沒有保存名字與家人。會沿用出生地、性別、家境與出生年，其餘重新抽。',
+    badge: '重活',
+    badgeAria: (n) => `重活，同一起點的第 ${n} 世`,
+    nth: (n) => `同一起點的第 ${n} 世`,
+    prevLink: (name) => `上一世：${name}`,
+    prevGone: '上一世的記錄已經刪除',
+    lotteryNote: (n, partial) => (partial
+      ? `${S.replay.nth(n)}：出生地、性別、家境與出生年和上一世相同，其餘重新抽。`
+      : `${S.replay.nth(n)}：出生地、性別、家境、名字與家人都和上一世一樣，之後會發生什麼，重新抽。`),
+    compareTitle: '和上一世比較',
+    compareLead: '同樣的起點，不同的運氣。',
+    colItem: '項目',
+    colPrev: '上一世',
+    colNow: '這一世',
+    rows: { lifespan: '享年', education: '學歷', children: '子女', focus: '主要重心', odds: '這樣一生的機率', opening: '生平開頭' },
+    age: (n) => (n < 1 ? '不滿一歲' : `${n} 歲`),
+    kids: (n) => (n === 0 ? '沒有子女' : `${n} 位`),
+    noFocus: '—',
+    diffMore: (n) => `比上一世多活 ${n} 年`,
+    diffLess: (n) => `比上一世少活 ${n} 年`,
+    diffSame: '和上一世一樣長',
+    confirmTitle: '要放棄目前的人生嗎？',
+    confirmBody: (name, age) => `目前還有一段未完成的人生（${name}，${age} 歲）。重活會捨棄它。`,
+    confirmOk: '捨棄並重活',
+    failed: '無法用這個起點開始新的人生。',
   },
 
   errors: {

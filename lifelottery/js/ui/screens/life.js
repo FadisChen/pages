@@ -1,6 +1,9 @@
 // 人生畫面: header with five stat bars, yearly timeline, controls, choice cards, family drawer.
 //
-// Timing: one simulated year lasts `secondsPerYear(state)` real seconds at 1x (see ../pacing.js).
+// Timing (see ../pacing.js): each year's text stays on screen for a time that follows its reading load (a quiet
+// one-liner is brisk, an event gets a comfortable read, the outcome of a choice is paced like an event), adding up to the
+// 10 / 30 / 60 minutes the player chose. The speed buttons multiply the clock, "next year" skips ahead, and holding the
+// timeline (or Shift) speeds it up for as long as it is held. ?debug=scale=N divides every time by N for tests.
 // The clock only runs while nothing blocks it: not paused, no pending choice, no open drawer, tab visible.
 // The game autosaves after every year and every choice, so a reload resumes exactly here.
 
@@ -9,12 +12,13 @@ import { CONDITIONS } from '../../data/conditions.js';
 import { advanceYear, choose, autoChoose, getStatus, getPendingChoice, setFocus, autoFocus } from '../../engine/life.js';
 import { EDU_LABELS } from '../../engine/summary.js';
 import { el, icon, announce, reducedMotion, FAST, toast } from '../dom.js';
-import { secondsPerYear, AUTO_CHOICE_SECONDS, AUTO_CHOICE_SECONDS_FAST } from '../pacing.js';
+import { createPacer, expectedYearsOf, loadOf, DEBUG, scaled, PACING, FAST_SECONDS_PER_YEAR, AUTO_CHOICE_SECONDS, AUTO_CHOICE_SECONDS_FAST } from '../pacing.js';
 import { loadSettings, saveSettings, storageUnavailable } from '../../storage.js';
 import { focusPicker, stageName, focusLabel } from '../focusview.js';
 
 const T = S.life;
 const F = S.focus;
+const P5 = S.pacing;
 const STATS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 const MINUS = '−';
 
@@ -29,7 +33,13 @@ export default function mount(ctx, root) {
   let speed = loadSettings().speed;
   let auto = !!s.settings.autoChoice;
   let elapsed = 0;
-  let yearMs = secondsPerYear(s) * 1000;
+  const quick = FAST || DEBUG.fast;        // ?debug=fast: every year lasts a blink
+  const expectedYears = expectedYearsOf(s);
+  const pacer = createPacer({ pace: s.settings.pace, expectedYears, age: s.age });
+  let planCount = 0;                        // bumps with every plan (read by tests/e2e-pacing.mjs)
+  let yearMs = 0;                           // how long the year now on screen stays (real ms at 1x, after ?debug=scale)
+  let holdOn = false;                       // pointer held on the timeline
+  let shiftOn = false;                      // Shift held (keyboard equivalent)
   let choiceActive = false;
   let focusActive = false;   // the life-stage focus card is open (time stops, like a choice card)
   let focusUI = null;
@@ -48,7 +58,8 @@ export default function mount(ctx, root) {
   const ageEl = el('span', { class: 'life-age' });
   const metaEl = el('p', { class: 'life-meta' });
   const pausedChip = el('span', { class: 'paused-chip', hidden: true }, T.paused);
-  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'family' }, icon('family'), el('span', { class: 'family-label' }, T.family));
+  const boostChip = el('span', { class: 'boost-chip', hidden: true, 'data-role': 'boost-chip', 'aria-hidden': 'true' }, icon('next'), ' ', P5.boostChip);
+  const familyBtn = el('button', { class: 'btn btn-quiet btn-sm family-btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-label': T.family, 'data-action': 'family' }, icon('family'), el('span', { class: 'family-label' }, T.family));
   const focusChipText = el('span', { class: 'focus-chip-text' });
   const focusChip = el('button', { class: 'focus-chip', type: 'button', 'aria-haspopup': 'dialog', 'data-action': 'focus-chip' }, icon('target'), focusChipText);
   const statEls = {};
@@ -65,14 +76,16 @@ export default function mount(ctx, root) {
     }));
   const yearBar = el('div', { class: 'year-bar', 'aria-hidden': 'true' }, el('i'));
   const header = el('header', { class: 'life-head' },
-    el('div', { class: 'life-id' }, el('div', { class: 'life-title' }, nameEl, ageEl), el('div', { class: 'life-meta-row' }, metaEl, pausedChip)),
+    el('div', { class: 'life-id' }, el('div', { class: 'life-title' }, nameEl, ageEl), el('div', { class: 'life-meta-row' }, metaEl, pausedChip, boostChip)),
     el('div', { class: 'life-side' }, focusChip, familyBtn),
     statsRow,
     yearBar,
   );
 
   // ---- timeline ----
-  const timeline = el('ol', { class: 'timeline', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', 'aria-label': T.timelineLabel });
+  // the live region is a wrapper: an <ol> may not take role="log" (it would stop being a list)
+  const timeline = el('ol', { class: 'timeline' });
+  const timelineLog = el('div', { class: 'timeline-log', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions', 'aria-label': T.timelineLabel }, timeline);
   const choiceHost = el('div', { class: 'choice-host' });
 
   // ---- controls ----
@@ -85,10 +98,14 @@ export default function mount(ctx, root) {
 
   const help = el('details', { class: 'shortcuts' },
     el('summary', null, T.shortcutsTitle),
-    el('dl', null, T.shortcuts.map(([k, v]) => el('div', null, el('dt', null, el('kbd', null, k)), el('dd', null, v)))),
+    el('dl', null, [...T.shortcuts, P5.shortcutHold].map(([k, v]) => el('div', null, el('dt', null, el('kbd', null, k)), el('dd', null, v)))),
   );
 
-  root.append(el('div', { class: 'screen screen-life' }, header, el('div', { class: 'life-body' }, timeline, choiceHost, help), controls));
+  const holdHint = el('p', { class: 'fine hold-hint' }, P5.holdHint);
+  const screen = el('div', { class: 'screen screen-life' }, header, el('div', { class: 'life-body' }, timelineLog, choiceHost, holdHint, help), controls);
+  root.append(screen);
+  screen.dataset.expectedYears = String(expectedYears);   // read by tests/e2e-pacing.mjs
+  screen.dataset.pace = s.settings.pace;
 
   // ---------------------------------------------------------------------------------------------
   // Rendering helpers
@@ -134,11 +151,15 @@ export default function mount(ctx, root) {
     const chips = Object.entries(delta).filter(([k, v]) => STATS.includes(k) && v).map(([k, v]) => {
       const rounded = Math.round(v);
       if (!rounded) return null;
-      return el('span', { class: `chip ${rounded > 0 ? 'up' : 'down'}`, 'aria-label': `${T.statLabels[k]}${rounded > 0 ? T.deltaUp : T.deltaDown} ${Math.abs(rounded)}` },
-        el('span', { 'aria-hidden': 'true' }, `${T.statLabels[k]} ${signed(rounded)}`));
+      return el('span', { class: `chip ${rounded > 0 ? 'up' : 'down'}` },
+        el('span', { 'aria-hidden': 'true' }, `${T.statLabels[k]} ${signed(rounded)}`),
+        el('span', { class: 'sr-only' }, `${T.statLabels[k]}${rounded > 0 ? T.deltaUp : T.deltaDown} ${Math.abs(rounded)}`));
     }).filter(Boolean);
     return chips.length ? el('div', { class: 'deltas' }, chips) : null;
   }
+
+  /** A memory the story calls back (engine/memory.js): a quiet line under the entry. */
+  const echoNode = (text) => el('p', { class: 'entry-echo' }, el('span', { class: 'echo-mark', 'aria-hidden': 'true' }, '↺ '), text);
 
   function entryNode(e, { autoPicked = false } = {}) {
     const isNewAge = e.age !== lastAge;
@@ -148,13 +169,15 @@ export default function mount(ctx, root) {
     if (kind === 'choice') {
       body.append(el('p', { class: 'entry-chose' }, T.youChose, el('b', null, ` ${e.title}`), autoPicked ? el('span', { class: 'tag' }, T.autoShort) : null));
       body.append(el('p', { class: 'entry-text' }, e.text));
+      if (e.echo) body.append(echoNode(e.echo));
     } else if (kind === 'year') {
       body.append(el('p', { class: 'entry-text' }, e.text));
     } else if (kind === 'focus') {
       body.append(el('p', { class: 'entry-text' }, icon('target', 'icon icon-inline'), ' ', el('b', null, e.title), '：', e.text));
     } else {
-      if (e.title) body.append(el('h3', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
+      if (e.title) body.append(el('h2', { class: 'entry-title' }, kind === 'milestone' ? el('span', { class: 'star', 'aria-hidden': 'true' }, '✦ ') : null, e.title));
       body.append(el('p', { class: 'entry-text' }, e.text));
+      if (e.echo) body.append(echoNode(e.echo));
     }
     const chips = chipsFor(e.delta);
     if (chips) body.append(chips);
@@ -221,8 +244,31 @@ export default function mount(ctx, root) {
     autoBtn.setAttribute('aria-label', auto ? T.autoOn : T.autoOff);
     pausedChip.hidden = !(userPaused && !choiceActive && !dying);
     root.firstElementChild.classList.toggle('is-paused', !running());
+    updateBoostUI();
     root.firstElementChild.classList.toggle('is-choosing', choiceActive || focusActive);
     focusChip.disabled = dying;
+  }
+
+  /** Hold-to-accelerate is only "on" while time is actually running. */
+  const boosting = () => (holdOn || shiftOn) && running();
+
+  function updateBoostUI() {
+    const on = boosting();
+    boostChip.hidden = !on;
+    screen.classList.toggle('is-boosting', on);
+  }
+
+  /** How long the entries now on screen stay, in real ms at 1x (planned by reading load; see ../pacing.js). */
+  function planDwell(entries, { intro = false } = {}) {
+    const load = loadOf(entries);
+    const sec = pacer.plan(load, s.age, intro ? { cap: PACING.INTRO_MAX } : undefined);
+    yearMs = (quick ? FAST_SECONDS_PER_YEAR : scaled(sec)) * 1000;
+    elapsed = 0;
+    screen.dataset.load = load.empty ? 'none' : load.quiet ? 'quiet' : 'event';
+    screen.dataset.dwellMs = String(Math.round(yearMs));
+    screen.dataset.plan = String(++planCount);
+    yearBar.firstElementChild.style.setProperty('--p', '0');
+    timeline.style.setProperty('--yp', '0');
   }
 
   function setPaused(v) {
@@ -256,7 +302,7 @@ export default function mount(ctx, root) {
   let countdownEls = null;
 
   function startCountdown() {
-    autoTotal = (FAST ? AUTO_CHOICE_SECONDS_FAST : AUTO_CHOICE_SECONDS) * 1000;
+    autoTotal = (quick ? AUTO_CHOICE_SECONDS_FAST : Math.max(AUTO_CHOICE_SECONDS_FAST, scaled(AUTO_CHOICE_SECONDS))) * 1000;
     autoLeft = autoTotal;
     if (!countdownEls) return;
     countdownEls.wrap.hidden = false;
@@ -323,6 +369,8 @@ export default function mount(ctx, root) {
     const held = pendingEntries;
     pendingEntries = [];
     appendEntries([...held, ...r.entries], { autoPicked, instant: false });
+    // the card itself was read while time stood still; what follows is paced by the outcome's text
+    if (!r.died) planDwell(r.entries);
     afterAction(r, before);
   }
 
@@ -469,6 +517,7 @@ export default function mount(ctx, root) {
       if (isPendingEvent(e, pc)) pendingEntries.push(e); else shown.push(e);
     }
     appendEntries(shown);
+    if (!r.died && !pc) planDwell(shown);   // a pending choice stops time instead; its outcome is paced after the pick
     afterAction(r, before);
     const lastText = shown.filter((e) => e.kind !== 'death').map((e) => e.text).pop();
     if (lastText && !dying) announce(T.announceYear(T.ageOf(s.age), lastText));
@@ -481,7 +530,7 @@ export default function mount(ctx, root) {
     root.firstElementChild.classList.add('is-dying');
     announce(T.dying);
     ctx.session.finish();
-    later(() => ctx.go('/death'), FAST ? 60 : 1800);
+    later(() => ctx.go('/death'), quick ? 60 : Math.max(60, scaled(1800)));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -502,11 +551,19 @@ export default function mount(ctx, root) {
       return;
     }
     if (userPaused) return;
-    elapsed += FAST ? dt : dt * speed;
-    yearBar.firstElementChild.style.setProperty('--p', String(Math.min(1, elapsed / yearMs)));
-    if (elapsed >= yearMs) step();
+    elapsed += quick ? dt : dt * speed * (boosting() ? PACING.HOLD_BOOST : 1);
+    const p = yearMs > 0 ? Math.min(1, elapsed / yearMs) : 1;
+    yearBar.firstElementChild.style.setProperty('--p', String(p));
+    timeline.style.setProperty('--yp', p.toFixed(3));
+    if (elapsed >= yearMs) {
+      // Keep the sliver the tick overshot by, so the clock does not add about half a tick to every year: a 90-year life
+      // would run long, and a quiet year of 2 s at ?debug=scale=25 by 10-15%. A skip or a card resets it as before.
+      const over = Math.min(elapsed - yearMs, 50);
+      step();
+      if (!choiceActive && !focusActive && !dying && over > 0) elapsed = Math.min(over, yearMs * 0.25);
+    }
   }
-  const clock = setInterval(frame, FAST ? 8 : 100);
+  const clock = setInterval(frame, quick ? 8 : DEBUG.scale > 1 ? 16 : 50);
 
   // ---------------------------------------------------------------------------------------------
   // Family drawer
@@ -515,11 +572,14 @@ export default function mount(ctx, root) {
   function openFamily() {
     const st = getStatus(s);
     const P = T.people;
-    const person = (label, name, detail, dead) => el('li', { class: `person${dead ? ' is-dead' : ''}` },
+    const hv = st.household || {};
+    const whereNode = (key) => (key && P.where[key] ? el('span', { class: 'person-where', 'data-where': key }, P.where[key]) : null);
+    const person = (label, name, detail, dead, where) => el('li', { class: `person${dead ? ' is-dead' : ''}` },
       el('span', { class: 'person-role' }, label),
       el('span', { class: 'person-name' }, name),
-      el('span', { class: 'person-detail' }, detail));
-    const parent = (label, p) => person(label, p.name, p.alive ? `${P.alive}・${P.ageOf(p.age)}` : P.deceased, !p.alive);
+      el('span', { class: 'person-detail' }, detail),
+      whereNode(where));
+    const parent = (label, p, where) => person(label, p.name, p.alive ? `${P.alive}・${P.ageOf(p.age)}` : P.deceased, !p.alive, where);
     const section = (title, ...items) => el('section', { class: 'drawer-sec' }, el('h3', null, title), ...items);
 
     const job = st.jobName ? `${T.workStatus[st.workStatus] || ''}・${st.jobName}` : (T.workStatus[st.workStatus] || '');
@@ -533,19 +593,23 @@ export default function mount(ctx, root) {
         el('div', null, el('dt', null, P.work), el('dd', null, job || P.none)),
         el('div', null, el('dt', null, P.health), el('dd', null, conds.length ? conds.join('、') : P.noConditions, st.smoker ? `・${P.smoker}` : '')),
       ));
-    const parents = section(`${P.mother}／${P.father}`, el('ul', { class: 'people' }, parent(P.mother, st.mother), parent(P.father, st.father)),
+    const parents = section(`${P.mother}／${P.father}`, el('ul', { class: 'people' }, parent(P.mother, st.mother, hv.mother), parent(P.father, st.father, hv.father)),
       el('p', { class: 'fine' }, P.siblingCount(st.siblings)));
     const partner = section(P.partner, st.partner
-      ? el('ul', { class: 'people' }, person(T.partnerStatus[st.partner.status] || '', st.partner.name, P.ageOf(st.partner.age), false))
+      ? el('ul', { class: 'people' }, person(T.partnerStatus[st.partner.status] || '', st.partner.name, P.ageOf(st.partner.age), false, hv.partner))
       : el('p', { class: 'fine' }, P.noPartner));
     const kids = section(P.children, st.children.length
-      ? el('ul', { class: 'people' }, st.children.map((c) => person(P.girlOrBoy[c.gender] || '', c.name, c.alive ? `${P.alive}・${P.ageOf(c.age)}` : P.deceased, !c.alive)))
+      ? el('ul', { class: 'people' }, st.children.map((c, i) => person(P.girlOrBoy[c.gender] || '', c.name, c.alive ? `${P.alive}・${P.ageOf(c.age)}` : P.deceased, !c.alive, hv.children && hv.children[i])))
       : el('p', { class: 'fine' }, P.noChildren));
+    // the last few moments the story keeps (engine/memory.js): the newest first
+    const mems = section(P.memoriesTitle, st.memories && st.memories.length
+      ? el('ul', { class: 'memories', 'data-role': 'memories' }, st.memories.map((m) => el('li', null, el('span', { class: 'mem-age' }, P.memoryAge(m.age)), el('span', { class: 'mem-text' }, `${m.phrase}。`))))
+      : el('p', { class: 'fine' }, P.noMemories));
 
     const closeBtn = el('button', { class: 'icon-btn drawer-close', type: 'button', 'aria-label': T.close }, icon('close'));
     const dlg = el('dialog', { class: 'drawer', 'aria-labelledby': 'drawer-title' },
       el('div', { class: 'drawer-head' }, el('h2', { id: 'drawer-title' }, T.familyTitle), closeBtn),
-      el('div', { class: 'drawer-body' }, you, parents, partner, kids));
+      el('div', { class: 'drawer-body' }, you, parents, partner, kids, mems));
     const close = () => dlg.close();
     closeBtn.addEventListener('click', close);
     dlg.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
@@ -567,7 +631,63 @@ export default function mount(ctx, root) {
   familyBtn.addEventListener('click', openFamily);
   focusChip.addEventListener('click', openFocusSelector);
 
+  // ---- hold to accelerate: press and hold the timeline area (not a button, card or link), or hold Shift ----
+  const INTERACTIVE = 'header, .controls, button, a, summary, details, input, select, textarea, label, dialog, .choice-card';
+  let holdTimer = null;
+  let holdFrom = null;
+  let holdPointerId = null;
+
+  function setHold(v) {
+    if (holdOn === v) return;
+    holdOn = v;
+    updateBoostUI();
+  }
+  function cancelHold() {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    holdFrom = null;
+    holdPointerId = null;
+    setHold(false);
+  }
+  function onPointerDown(ev) {
+    if (ev.button > 0 || !ev.isPrimary || modalOpen || dying) return;
+    if (ev.target.closest && ev.target.closest(INTERACTIVE)) return;
+    cancelHold();
+    holdFrom = { x: ev.clientX, y: ev.clientY };
+    holdPointerId = ev.pointerId;
+    holdTimer = setTimeout(() => { holdTimer = null; setHold(true); }, PACING.HOLD_DELAY_MS);
+  }
+  function onPointerMove(ev) {
+    if (!holdFrom || ev.pointerId !== holdPointerId || holdOn) return;
+    // moving before the hold counts means scrolling or selecting text: not a hold
+    if (Math.hypot(ev.clientX - holdFrom.x, ev.clientY - holdFrom.y) > PACING.HOLD_SLOP_PX) cancelHold();
+  }
+  function onPointerEnd(ev) {
+    if (holdPointerId !== null && ev.pointerId === holdPointerId) cancelHold();
+  }
+  // a long press must not open the context menu / start a text selection while it is a "hold"
+  function onContextMenu(ev) { if (holdOn || holdTimer) ev.preventDefault(); }
+  screen.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+  window.addEventListener('pointerup', onPointerEnd);
+  window.addEventListener('pointercancel', onPointerEnd);
+  screen.addEventListener('contextmenu', onContextMenu);
+  const onBlur = () => { cancelHold(); if (shiftOn) { shiftOn = false; updateBoostUI(); } };
+  window.addEventListener('blur', onBlur);
+
+  function onKeyUp(ev) {
+    if (ev.key === 'Shift' && shiftOn) { shiftOn = false; updateBoostUI(); }
+  }
+  document.addEventListener('keyup', onKeyUp);
+
   function onKey(ev) {
+    if (ev.key === 'Tab' && shiftOn) { shiftOn = false; updateBoostUI(); } // Shift+Tab is navigation, not a hold
+    if (ev.key === 'Shift' && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !modalOpen) {
+      const tg = ev.target;
+      const typingNow = tg && (tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT' || tg.isContentEditable || (tg.tagName === 'INPUT' && tg.type !== 'radio'));
+      if (!typingNow && !shiftOn) { shiftOn = true; updateBoostUI(); }
+      return;
+    }
     if (ev.ctrlKey || ev.metaKey || ev.altKey || modalOpen) return;
     const t = ev.target;
     const tag = t && t.tagName;
@@ -601,6 +721,7 @@ export default function mount(ctx, root) {
 
   function onVisibility() {
     last = performance.now();
+    if (document.hidden) onBlur();
     refreshControls();
   }
   document.addEventListener('visibilitychange', onVisibility);
@@ -613,6 +734,8 @@ export default function mount(ctx, root) {
     else initial.push(e);
   }
   appendEntries(initial, { instant: true });
+  // the entries of the current age stay for their reading time (a resumed life starts that year's wait again)
+  planDwell(initial.filter((e) => e.age === s.age), { intro: s.age === 0 });
   renderHeader();
   refreshControls();
   // A reload during a stage prompt asks again (flags._focusPrompt is saved); a choice that was waiting behind it follows.
@@ -630,7 +753,13 @@ export default function mount(ctx, root) {
     document.documentElement.style.removeProperty('--ctl-h');
     timers.forEach(clearTimeout);
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('keyup', onKeyUp);
     document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerEnd);
+    window.removeEventListener('pointercancel', onPointerEnd);
+    window.removeEventListener('blur', onBlur);
+    clearTimeout(holdTimer);
     document.querySelectorAll('dialog.drawer').forEach((d) => d.remove());
   };
 }

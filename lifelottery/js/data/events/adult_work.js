@@ -143,7 +143,7 @@ export default [
       {
         label: '放下手邊的事，全力備考',
         effects: (s, h) => { h.set('w_exam_done'); h.set(h.chance(0.28) ? 'w_exam_pass' : 'w_exam_fail'); h.change('knowledge', +5); h.change('wealth', -5); h.change('happiness', -3); },
-        result: '你在圖書館或租屋處一待就是一整年，每天的進度表貼滿牆。家人從不問成績，只是偷偷多放一顆蛋在你碗裡。',
+        result: (s, h) => `你在圖書館或租屋處一待就是一整年，每天的進度表貼滿牆。${h.livesAlone() ? '家人在電話裡從不問成績，只說「多吃一點」。' : '家人從不問成績，只是偷偷多放一顆蛋在你碗裡。'}`,
         schedule: [{ id: 'work_exam_result', inYears: [1, 3] }],
         ai: (s, h) => (h.employed() ? 0.5 : 1.5),
       },
@@ -362,7 +362,7 @@ export default [
       {
         label: '請長假，好好休息',
         effects: { health: +6, happiness: +3, wealth: -4, social: +1 },
-        result: '你在老家的巷子和附近的小公園慢慢走路，睡到自然醒。第三週，你才發現自己已經很久沒有真正笑過。',
+        result: (s, h) => `你在${h.isMigrant() ? '宿舍附近' : '老家的巷子和附近'}的小公園慢慢走路，睡到自然醒。第三週，你才發現自己已經很久沒有真正笑過。`,
         unset: ['w_overworked'],
         ai: (s, h) => (h.stat('health') < 50 ? 2.5 : 1.2),
       },
@@ -370,7 +370,7 @@ export default [
         label: '換一份步調慢一點的工作',
         cond: (s, h) => working(h),
         effects: (s, h) => { newJob(h); h.change('happiness', +4); h.change('wealth', -2); h.change('health', +3); },
-        result: '薪水少了一些，但你終於能在天黑前回家。晚飯桌上，家人說你的臉比較有血色了。',
+        result: (s, h) => `薪水少了一些，但你終於能在天黑前回家。${h.livesAlone() ? '電話那頭，家人說你的聲音聽起來比較有精神了。' : '晚飯桌上，家人說你的臉比較有血色了。'}`,
         unset: ['w_overworked'],
         ai: 1.3,
       },
@@ -604,7 +604,7 @@ export default [
           else { h.unset('w_arrears_ok'); h.change('wealth', -1); h.change('happiness', -3); }
         },
         result: (s, h) => (h.has('w_arrears_ok')
-          ? '調解那天，老闆的態度變得很客氣。拿回那筆錢時，你先去買了一大袋米，和家人煮了一鍋飯。'
+          ? `調解那天，老闆的態度變得很客氣。拿回那筆錢時，你先去買了一大袋米，和${h.livesAlone() ? '同住的人' : '家人'}煮了一鍋飯。`
           : '勞工單位受理了，但流程拖得很長。你不確定那筆錢還會不會回來，只知道自己至少試過。'),
         unset: ['w_arrears_ok'],
         ai: 2,
@@ -745,7 +745,9 @@ export default [
     tags: ['work', 'hardship'],
     cond: (s, h) => h.unemployed(),
     text: (s, h) => h.byIncome({
-      L: '你每天一早到路口等人來叫零工，有時一天有活，有時一整週都沒有。回家時你不太想看家人的眼睛。晚飯時，家人把最大的一塊留給你，你卻吃不下。',
+      L: h.livesAlone()
+        ? '你每天一早到路口等人來叫零工，有時一天有活，有時一整週都沒有。電話那頭的家人問起，你只說「還好」。晚上你煮了一碗最簡單的麵，吃了兩口就放下了。'
+        : '你每天一早到路口等人來叫零工，有時一天有活，有時一整週都沒有。回家時你不太想看家人的眼睛。晚飯時，家人把最大的一塊留給你，你卻吃不下。',
       LM: '你輪流向各個親戚問有沒有缺人的地方。每次對方都答應「幫你留意」，然後再也沒有消息。你漸漸學會不要把這句話當成承諾，只當成一種禮貌。',
       UM: '早上起來沒有地方要去，你把家裡打掃了一遍，又翻開求才廣告，每一個職缺後面，都有幾百個人在競爭。你默默把履歷又改了一次。',
       H: '失業補助夠你付房租，卻不夠讓你安心。你每週去就業服務站報到，櫃台的人很客氣，這反而讓你更難受。你開始覺得自己像一份被退回的文件。',
@@ -922,7 +924,9 @@ export default [
     cond: (s, h) => h.isJob('farmer', 'fisher') && h.yearsSince('work_poor_harvest') >= 2,
     text: (s, h) => (h.isJob('fisher')
       ? '這一季海況好，網網都滿，海面像一整片閃著光的鐵皮。碼頭上的魚價雖然不高，但你的船艙塞得緊緊的，你回家時，連空氣都是笑聲，一路哼著不成調的歌。'
-      : '今年雨水剛剛好，作物長得整整齊齊，比往年都好看。收成那天，全家老小都下了田，晚上飯桌上破天荒多了一道肉菜，連最小的孩子都吃到了。'),
+      : h.livesAlone()
+        ? '今年雨水剛剛好，作物長得整整齊齊，比往年都好看。收成那天，你和一起幹活的人收工後坐在田埂上，晚上多加了一道肉菜，你把滿田的照片傳回家。'
+        : '今年雨水剛剛好，作物長得整整齊齊，比往年都好看。收成那天，全家老小都下了田，晚上飯桌上破天荒多了一道肉菜，連最小的孩子都吃到了。'),
     effects: { wealth: +3, happiness: +3, social: +1 },
   },
   {
@@ -1106,7 +1110,7 @@ export default [
     tags: ['work', 'followup'],
     text: (s, h) => (h.has('w_loan_bad')
       ? '客人比預期的少，貸款的利息卻準時報到。你每個月匯款時，都想把月曆翻快一點。你學會了少睡一點、看帳本多一點，也告訴自己：這只是慢一點，不是結束。'
-      : '新的店面漸漸上了軌道，營業額比前一年多了三成。你在帳本上把最後一筆貸款劃掉時，嘴角忍不住往上。那天晚上你請全家吃了一頓像樣的飯。'),
+      : `新的店面漸漸上了軌道，營業額比前一年多了三成。你在帳本上把最後一筆貸款劃掉時，嘴角忍不住往上。那天晚上你請${h.livesAlone() ? '幾位老朋友' : '全家'}吃了一頓像樣的飯。`),
     effects: (s, h) => {
       if (h.has('w_loan_bad')) { h.change('wealth', -4); h.change('happiness', -3); h.change('health', -1); }
       else { h.change('wealth', +5); h.change('happiness', +4); h.change('social', +1); }
@@ -1361,7 +1365,9 @@ export default [
         label: '先花在家人與自己身上',
         effects: { happiness: +4, wealth: -3, social: +2 },
         set: ['w_saved_once'],
-        result: '你修了屋頂、帶全家出遊，還替家裡添了一台新電視。花錢時你很開心，只是月底看帳戶，笑容淡了一點。',
+        result: (s, h) => (h.livesAlone()
+          ? '你匯了一筆錢回去修屋頂，替家人添了一台新電視，還訂了回去探望的機票。花錢時你很開心，只是月底看帳戶，笑容淡了一點。'
+          : '你修了屋頂、帶全家出遊，還替家裡添了一台新電視。花錢時你很開心，只是月底看帳戶，笑容淡了一點。'),
         ai: 1,
       },
     ],
@@ -1432,7 +1438,7 @@ export default [
     tags: ['work', 'followup', 'housing'],
     text: (s, h) => h.byIncome({
       L: '建材又漲了，貸款的利息也累積了一圈。蓋到一半的牆就這樣立在院子裡，雨季快到了，你得在屋頂與還款之間，做一個很難的決定。',
-      LM: '貸款的利息調高了，每個月還款額多了一截。你把家庭預算表攤開，每一筆支出都被重新審視，連孩子的零食都被列進了討論，氣氛因此安靜了好一陣子。',
+      LM: `貸款的利息調高了，每個月還款額多了一截。你把家庭預算表攤開，每一筆支出都被重新審視，連${h.livesWith('children') ? '孩子的零食' : '寄回家的那筆錢'}都被列進了討論，氣氛因此安靜了好一陣子。`,
       UM: '利率上調後，房貸像一條突然收緊的皮帶。你開始算：少出去吃幾次、少旅行幾次，剛好湊出這一截。帳算出來了，心卻沒有因此輕鬆。',
       H: '央行升息，房貸每個月多出一筆。你對著表格重新排預算，連每天的那杯咖啡都被列進了待檢討事項，你笑得有點苦，心裡盤算著還有什麼可以省。',
     }),
@@ -1521,7 +1527,7 @@ export default [
     ages: [26, 52],
     weight: 0.6,
     tags: ['work', 'family', 'chain'],
-    cond: (s, h) => h.parentsAlive() > 0 && h.siblings() > 0 && !selfEmployed(h) && !h.has('w_family_biz') && !h.isMigrant() && (!h.urban() || h.familyBusiness()),
+    cond: (s, h) => h.parentsAlive() > 0 && h.parentsNear() && h.siblings() > 0 && !selfEmployed(h) && !h.has('w_family_biz') && !h.isMigrant() && (!h.urban() || h.familyBusiness()),
     text: (s, h) => (h.urban() ? '家裡的小店' : '家裡的田地') + '撐了好幾十年，長輩的身體不如從前。飯桌上，大家都沒開口，但目光一個接一個落在你身上，你的筷子停在半空中。',
     choices: [
       {
@@ -1555,7 +1561,7 @@ export default [
     ages: [27, 52],
     weight: 0.9,
     tags: ['work', 'family', 'children'],
-    cond: (s, h) => (h.workStatus() === 'homemaker' || (h.unemployed() && h.hasChildren())) && h.youngestChildAge() >= 2 && h.youngestChildAge() <= 14 && !h.has('w_return_decided'),
+    cond: (s, h) => (h.workStatus() === 'homemaker' || (h.unemployed() && h.livesWith('children'))) && h.minorsWithYou().some((c) => s.year - c.birthYear >= 2 && s.year - c.birthYear <= 14) && !h.has('w_return_decided'),
     text: (s, h) => h.byIncome({
       L: '孩子大了一點，鄰居問你要不要一起去鎮上的作坊做工。家裡多一份收入，孩子就多一頓飽飯，只是誰來照顧最小的那個？你在灶邊想了一整個晚上。',
       LM: '孩子上學了，白天家裡突然變得很安靜。朋友說附近的工廠在找人，薪水不高，但每個月有固定的錢。你站在鏡子前，不太確定自己還記不記得怎麼面試。',
@@ -1730,7 +1736,7 @@ export default [
     weight: 0.6,
     tags: ['work', 'domestic'],
     cond: (s, h) => h.isJob('domestic'),
-    text: (s, h) => '你熟悉雇主家每一個抽屜，卻沒有任何一個是自己的。某天，主人家的老太太悄悄塞給你一包糖，說：「帶回去給孩子。」你把它放進口袋，一路都捨不得走快。',
+    text: (s, h) => `你熟悉雇主家每一個抽屜，卻沒有任何一個是自己的。某天，主人家的老太太悄悄塞給你一包糖，說：「帶回去給孩子。」你把它放進口袋，一路都捨不得走快，${h.childrenApart().length ? '想著下次匯款時，要把孩子愛吃的那一種也一起寄回去。' : '想著孩子拆開糖紙時的表情。'}`,
     effects: { happiness: +1, social: +2, wealth: +1 },
   },
   {
@@ -1811,7 +1817,7 @@ export default [
     weight: 0.6,
     tags: ['work', 'shift'],
     cond: (s, h) => h.isJob('guard', 'nurse', 'caregiver', 'driver', 'factory', 'cook'),
-    text: (s, h) => '輪到夜班的那週，你和日夜顛倒的家人在門口擦身而過。凌晨四點的街，路燈亮得很孤單，但你發現早班車第一班開出時，天空是粉紅色的。',
+    text: (s, h) => `輪到夜班的那週，你和日夜顛倒的${h.livesAlone() ? '室友' : '家人'}在門口擦身而過。凌晨四點的街，路燈亮得很孤單，但你發現早班車第一班開出時，天空是粉紅色的。`,
     effects: { health: -3, happiness: -1, knowledge: +1 },
   },
   // ---- Phase 4A: 工作之外的自己 ----

@@ -27,7 +27,7 @@ export default [
 
   // ---- 青少年 13-19 ----
   { ages: [13, 17], cond: (s, h) => h.inSchool(), text: (s, h) => '考試、作業、同儕的眼光，這一年你的世界突然變得很大，也很擁擠。' },
-  { ages: [13, 19], text: (s, h) => '你和家人吵了幾次架，又和好了幾次。你覺得誰都不懂你，但夜裡聽見他們的腳步聲，還是安心。' },
+  { ages: [13, 19], cond: (s, h) => !h.livesAlone(), text: (s, h) => '你和家人吵了幾次架，又和好了幾次。你覺得誰都不懂你，但夜裡聽見他們的腳步聲，還是安心。' },
   { ages: [13, 19], text: (s, h) => '你迷上了一首歌，一遍又一遍地聽。很多年後，你仍然記得它的旋律。' },
   { ages: [14, 19], cond: (s, h) => !h.inSchool() && h.wageEarner(), text: (s, h) => `你每天做著${h.jobName()}的工作，下班後累得只想睡。但領薪水的那天，你覺得自己長大了。` },
   { ages: [15, 19], cond: (s, h) => h.inSchool() && h.incomeAtLeast('UM'), text: (s, h) => '放學後你和朋友在速食店坐了很久，聊著未來要做什麼，又聊到什麼都沒決定。' },
@@ -38,18 +38,20 @@ export default [
   { ages: [20, 34], cond: (s, h) => h.employed() && h.stat('happiness') >= 60, text: (s, h) => '工作順利，生活也有了節奏。你偶爾會停下來想：這大概就是日子吧。' },
   { ages: [20, 34], cond: (s, h) => h.unemployed(), text: (s, h) => '你四處投履歷、問人脈，等回音的日子特別漫長。你學會了不讓焦慮寫在臉上。' },
   { ages: [20, 34], cond: (s, h) => !s.partner && !h.hasChildren(), text: (s, h) => '你一個人過了平靜的一年，偶爾孤單，但也享受只屬於自己的時間。' },
-  { ages: [20, 40], cond: (s, h) => h.married() && !h.hasChildren(), text: (s, h) => `你和${h.partnerName()}的日子平平淡淡，偶爾拌嘴，更多時候只是安靜地待在同一個房間。` },
+  { ages: [20, 40], cond: (s, h) => h.married() && h.livesWith('partner') && !h.hasChildren(), text: (s, h) => `你和${h.partnerName()}的日子平平淡淡，偶爾拌嘴，更多時候只是安靜地待在同一個房間。` },
 
   // ---- 壯年 / 中年 35-59 ----
   { ages: [30, 59], cond: (s, h) => h.hasChildren() && h.youngestChildAge() <= 12, text: (s, h) => `${h.childName(0)}又長高了一截，你還沒反應過來，舊衣服已經穿不下了。` },
   { ages: [30, 59], cond: (s, h) => h.hasChildren() && h.youngestChildAge() > 12, text: (s, h) => `孩子們有了自己的世界，你開始學著少問一點，多等一點。` },
-  { ages: [35, 59], cond: (s, h) => h.employed(), text: (s, h) => '工作越來越熟練，也越來越像例行公事。你偶爾會想起年輕時的那些夢，然後繼續去上班。' },
+  { ages: [35, 59], cond: (s, h) => h.employed(), text: (s, h) => '工作越來越熟練，也越來越像例行公事。你偶爾會想起年輕時的那些夢，然後繼續去上班。',
+    variants: ['這一年的工作你閉著眼睛都能做完。你偶爾在通勤的路上想起年輕時說過的話，笑了一下，然後繼續往前走。', '每天的事情都很熟，熟到沒有什麼驚喜，也沒有什麼意外。你有時會想，生活是不是就這樣安穩地過去了，然後把杯裡的茶喝完。'] },
   { ages: [35, 59], cond: (s, h) => h.isPoor(), text: (s, h) => '日子還是緊巴巴的。你每個月都要精打細算，但總有辦法撐過去。' },
-  { ages: [40, 59], text: (s, h) => '鏡子裡的你多了幾根白髮。你開始在意健康檢查的報告，也開始懂得父母當年的嘮叨。' },
+  { ages: [40, 59], text: (s, h) => '鏡子裡的你多了幾根白髮。你開始在意健康檢查的報告，也開始懂得父母當年的嘮叨。',
+    variants: ['這一年你在梳頭時拔下了第一根白髮，端詳了很久。你不再把體檢報告隨手一放，也終於聽懂了父母當年那些重複的叮嚀。', '你發現自己上下樓梯時會下意識扶一下欄杆，早餐也開始挑清淡的。你笑自己愈來愈像上一輩的人，卻不覺得這樣有什麼不好。'] },
 
   // ---- 晚年 60+ ----
   { ages: [60, 85], cond: (s, h) => h.retired(), text: (s, h) => '退休後的日子，早上不再需要鬧鐘。你花很長的時間吃早餐，看窗外的人來人去。' },
-  { ages: [60, 90], cond: (s, h) => h.married(), text: (s, h) => `你和${h.partnerName()}一起散步、一起吃飯，話不多，但很安心。` },
+  { ages: [60, 90], cond: (s, h) => h.married() && h.livesWith('partner'), text: (s, h) => `你和${h.partnerName()}一起散步、一起吃飯，話不多，但很安心。` },
   { ages: [60, 90], cond: (s, h) => h.hasChildren(), text: (s, h) => `逢年過節，${h.childName(0)}回來看你。屋子裡難得熱鬧，你煮了好多菜。` },
   { ages: [65, 100], cond: (s, h) => !h.hasPartner() && h.stat('social') < 40, text: (s, h) => '這一年很安靜。你常常望著電話，希望它響起，卻不知道該先打給誰。' },
   { ages: [70, 100], text: (s, h) => '你的膝蓋提醒你天氣要變了。你慢慢地走，慢慢地看，覺得慢一點也沒什麼不好。' },
@@ -91,16 +93,17 @@ export default [
   { ages: [24, 34], cond: (s, h) => h.employed() && h.income() === 'H', text: (s, h) => '你的行事曆排滿會議，連午餐都在線上度過。你有點想念一頓真正慢慢吃的飯。' },
   { ages: [22, 34], cond: (s, h) => h.hasPartner() && !h.married(), text: (s, h) => `你和${h.partnerName()}談到了未來，卻沒談出結論，只是並肩走了一條很長的路。` },
   { ages: [20, 40], cond: (s, h) => h.isMigrant(), text: (s, h) => '你在異鄉的日子漸漸習慣了，但每當聽到熟悉的口音，還是會忍不住回頭。' },
-  { ages: [22, 40], cond: (s, h) => h.married() && h.hasChildren() && h.youngestChildAge() <= 3, text: (s, h) => '孩子占據了你所有的時間，夢想暫時被收進抽屜，可是你的笑容比以前多了。' },
+  { ages: [22, 40], cond: (s, h) => h.married() && h.livesWith('partner') && h.minorsWithYou().some((c) => s.year - c.birthYear <= 3), text: (s, h) => '孩子占據了你所有的時間，夢想暫時被收進抽屜，可是你的笑容比以前多了。' },
   { ages: [20, 55], cond: (s, h) => h.workStatus() === 'homemaker', text: (s, h) => '你在家照顧家務與家人，沒有人看見的那些事，其實撐起了整個家。' },
   { ages: [20, 34], cond: (s, h) => h.yearIn(2020, 2022), text: (s, h) => '疫情打亂了你的計畫，聚會與旅行一再延期。你學會了對著螢幕吹熄生日蠟燭。' },
-  { ages: [25, 34], text: (s, h) => '朋友們一個個結婚、生子，你參加過的婚禮，比自己的生日派對還多。' },
+  { ages: [25, 34], text: (s, h) => '朋友們一個個結婚、生子，你參加過的婚禮，比自己的生日派對還多。',
+    variants: ['這兩年收到的紅色喜帖愈來愈多，你的週末被一場場喜宴排滿。你在人群裡鼓掌、拍照，回家的路上，心裡有點空，也有點高興。', '朋友的人生像翻頁一樣往前走，喜宴、滿月酒一場接一場。你笑著送上祝福，也在某個夜裡問自己，你的下一頁會是什麼。'] },
   { ages: [20, 34], cond: (s, h) => !h.urban() && !h.incomeAtLeast('UM'), text: (s, h) => `農忙結束的夜晚，年輕人聚在村口，一瓶汽水和${h.techReady(1995) ? '一支手機' : '一台收音機'}，分享著整個世界。` },
 
   // ---- 壯年 / 中年 35-59（續） ----
   { ages: [35, 60], cond: (s, h) => h.isJob('farmer') || (h.isJob('fisher') && h.coastal()), text: (s, h) => `天一亮你就${h.isJob('fisher') ? '出海' : '下田'}，風吹日曬讓你的臉有了刻痕，但傍晚的晚霞總讓你心安。` },
-  { ages: [38, 59], cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 13, text: (s, h) => '孩子的功課你已經幫不上忙了，但你還是會在他的門口放一杯熱牛奶。' },
-  { ages: [35, 70], cond: (s, h) => h.married() && h.stat('happiness') >= 60, text: (s, h) => `你和${h.partnerName()}有種默契：不用開口，也知道對方想喝茶還是咖啡。` },
+  { ages: [38, 59], cond: (s, h) => h.minorsWithYou().some((c) => s.year - c.birthYear >= 13), text: (s, h) => '孩子的功課你已經幫不上忙了，但你還是會在他的門口放一杯熱牛奶。' },
+  { ages: [35, 70], cond: (s, h) => h.married() && h.livesWith('partner') && h.stat('happiness') >= 60, text: (s, h) => `你和${h.partnerName()}有種默契：不用開口，也知道對方想喝茶還是咖啡。` },
   { ages: [38, 59], cond: (s, h) => h.parentsAlive() > 0, text: (s, h) => `週末你回去看望老家的${h.parentsLabel()}，白頭髮又比上次多了幾根。` },
   { ages: [38, 59], cond: (s, h) => h.isRich(), text: (s, h) => '財務上的壓力輕了，你開始認真問自己：除了賺錢，我還想做什麼？' },
   { ages: [38, 59], cond: (s, h) => h.wageEarner() && h.incomeAtLeast('UM') && !h.isPoor(), text: (s, h) => '年度考核、升遷、轉職，同齡人都在忙這些。你真正喜歡的，是下班後回到家的那一小時。' },
@@ -118,7 +121,7 @@ export default [
   { ages: [68, 100], cond: (s, h) => h.yearIn(2012, 2200) && h.techReady(2010) && h.incomeAtLeast('LM'), text: (s, h) => '你學會了用手機傳貼圖，雖然老是傳錯，家人們還是回得很熱烈。' },
   { ages: [75, 105], text: (s, h) => '你的故事一遍又一遍地被說起，聽的人每次都假裝第一次聽到。你知道，那是愛。' },
   { ages: [80, 110], text: (s, h) => '又一個春天，你坐在窗邊曬太陽，不急著去哪裡，只是靜靜看著光慢慢移動。' },
-  { ages: [60, 90], cond: (s, h) => h.married(), text: (s, h) => '你和老伴的對話變成了短短幾個字：「吃了嗎」「去哪」「早點睡」，卻一句比一句親。' },
+  { ages: [60, 90], cond: (s, h) => h.married() && h.livesWith('partner'), text: (s, h) => '你和老伴的對話變成了短短幾個字：「吃了嗎」「去哪」「早點睡」，卻一句比一句親。' },
   { ages: [62, 100], cond: (s, h) => !h.urban(), text: (s, h) => '你在院子裡看著四季輪流，雞啼一聲，你就想起一位老朋友。' },
 
   // ---- 依年代、地區與處境 ----
@@ -130,7 +133,7 @@ export default [
   { ages: [10, 70], cond: (s, h) => h.isRegion('LAC'), text: (s, h) => '週末市集的音樂從早響到晚，連賣水果的阿姨也跟著節奏微微搖晃。' },
   { ages: [20, 70], cond: (s, h) => h.isRegion('OCE') && h.income() === 'H', text: (s, h) => '週末你去海邊，看孩子們在浪花裡尖叫，覺得這就是自己想要的生活。' },
   { ages: [20, 70], cond: (s, h) => h.isRegion('SAS', 'SEA') && h.urban(), text: (s, h) => '街上永遠有喇叭聲和叫賣聲，你早就把它當成背景音樂，安靜了反而睡不著。' },
-  { ages: [20, 70], cond: (s, h) => h.isRegion('MENA', 'CAS'), text: (s, h) => `傍晚，家人和鄰居坐在一起喝茶，聊聊${!h.urban() && h.isJob('farmer') ? '今天的收成' : '今天的生意與街坊的消息'}${h.hasChildren() ? '與孩子們的功課' : ''}。` },
+  { ages: [20, 70], cond: (s, h) => h.isRegion('MENA', 'CAS') && !h.livesAlone(), text: (s, h) => `傍晚，家人和鄰居坐在一起喝茶，聊聊${!h.urban() && h.isJob('farmer') ? '今天的收成' : '今天的生意與街坊的消息'}${h.livesWith('children') ? '與孩子們的功課' : ''}。` },
   { ages: [12, 70], cond: (s, h) => h.isRegion('EAS') && h.income() === 'H' && h.techReady(2008), text: (s, h) => '捷運上每個人都低頭看手機，你也是。抬頭的瞬間，剛好看見窗外一棵開花的樹。' },
   { ages: [25, 65], cond: (s, h) => h.has('in_debt'), text: (s, h) => '你把還債的日期圈在日曆上，每圈掉一個，就多了一點力氣。' },
   { ages: [20, 80], cond: (s, h) => h.hasCondition('hypertension') || h.hasCondition('diabetes'), text: (s, h) => '你每天準時吃藥、量數字，慢慢把它當成生活中的一件普通小事。' },
@@ -173,24 +176,28 @@ export default [
   { ages: [20, 34], cond: (s, h) => !s.partner, text: (s, h) => '朋友替你介紹了幾個對象，你認真見了每一位，回家的路上卻都在想，自己到底想要什麼。' },
   { ages: [22, 34], cond: (s, h) => h.employed(), text: (s, h) => '你的存款終於破了一個自己訂下的數字，你在心裡默默慶祝，沒有告訴任何人。' },
   { ages: [20, 40], cond: (s, h) => h.isMigrant(), text: (s, h) => '你學會了在異鄉買菜、搭車、跟鄰居打招呼，生活的細節一點一點重新長出來。' },
-  { ages: [24, 40], cond: (s, h) => h.hasChildren() && h.youngestChildAge() <= 5, text: (s, h) => '孩子半夜發燒，你守了一整夜，天亮時靠在床邊睡著了，手裡還握著那條濕毛巾。' },
+  { ages: [24, 40], cond: (s, h) => h.minorsWithYou().some((c) => s.year - c.birthYear <= 5), text: (s, h) => '孩子半夜發燒，你守了一整夜，天亮時靠在床邊睡著了，手裡還握著那條濕毛巾。' },
 
   // ---- 35-59 ----
   { ages: [35, 59], cond: (s, h) => h.wageEarner(), text: (s, h) => '你開始被叫「前輩」，有人拿問題來問你。你一邊回答，一邊想起當年自己也這樣問過別人。' },
-  { ages: [36, 59], cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 10, text: (s, h) => '孩子開始有自己的主意，你發現「為你好」這三個字，越來越難說出口。' },
-  { ages: [40, 59], text: (s, h) => '你戴上了老花眼鏡，把菜單拿遠又拿近，終於承認有些事不得不服老。' },
+  { ages: [36, 59], cond: (s, h) => h.minorsWithYou().some((c) => s.year - c.birthYear >= 10), text: (s, h) => '孩子開始有自己的主意，你發現「為你好」這三個字，越來越難說出口。' },
+  { ages: [40, 59], text: (s, h) => '你戴上了老花眼鏡，把菜單拿遠又拿近，終於承認有些事不得不服老。',
+    variants: ['你把報紙舉到手臂那麼遠才看得清，家人在一旁偷笑。最後你終於配了一副老花眼鏡，戴上的那一刻，字又變回了字。', '這一年你開始需要眼鏡才看得清小字。你嘴上說只是暫時的，卻默默把它放進了每個包包。'] },
   { ages: [40, 70], cond: (s, h) => h.parentsAlive() === 0, text: (s, h) => '你發現自己在某個瞬間，說話的口氣和已經離開的長輩一模一樣，愣了一下，笑著，又有點想哭。' },
-  { ages: [36, 59], text: (s, h) => '你整理櫃子，翻出一件很久沒穿的外套，口袋裡還有一張舊車票。你站在原地，想起它屬於哪一年。' },
+  { ages: [36, 59], text: (s, h) => '你整理櫃子，翻出一件很久沒穿的外套，口袋裡還有一張舊車票。你站在原地，想起它屬於哪一年。',
+    variants: ['你清出一個塵封已久的抽屜，裡面有幾張泛黃的紙條和一枚舊鈕扣。你坐在地板上翻了一個下午，每一樣都在提醒你某一年的某個人。', '你在大掃除時翻到一件舊衣，口袋裡掉出一張皺巴巴的收據。上面的日期讓你愣了一下，原來那已經是這麼久以前的事。'] },
   { ages: [35, 59], cond: (s, h) => h.isPoor() && h.employed(), text: (s, h) => '月底多出來的那一點工錢成了你的盼頭，你在心裡分配了好幾次，才決定先買什麼。' },
   { ages: [38, 59], cond: (s, h) => !h.urban(), text: (s, h) => '家裡的屋頂修了一次，院子裡的樹又長高了一些。你發現日子就是這樣一點一點累積起來的。' },
-  { ages: [45, 64], cond: (s, h) => h.married(), text: (s, h) => `你和${h.partnerName()}為了一件小事吵了一架，晚上卻還是把對方愛吃的菜端上了桌。` },
+  { ages: [45, 64], cond: (s, h) => h.married() && h.livesWith('partner'), text: (s, h) => `你和${h.partnerName()}為了一件小事吵了一架，晚上卻還是把對方愛吃的菜端上了桌。` },
 
   // ---- 60-75 ----
   { ages: [60, 80], cond: (s, h) => h.retired(), text: (s, h) => '你報名了一個每週一次的課，坐在一群比你小很多的人旁邊，覺得自己像個認真的新生。' },
   { ages: [60, 85], cond: (s, h) => h.hasChildren(), text: (s, h) => `${h.childName(0)}打電話來，問你吃了沒、睡得好不好。你把那通電話的內容，在腦中又重播了一遍。` },
-  { ages: [62, 85], text: (s, h) => '你去了一趟很久沒去的老地方，一切都變了樣，只有路口那棵樹還認得你。' },
+  { ages: [62, 85], text: (s, h) => '你去了一趟很久沒去的老地方，一切都變了樣，只有路口那棵樹還認得你。',
+    variants: ['你回到從前常去的那條街，招牌全換了，店裡的人也不認得你。你站在街角看了一會兒，只有轉角的石階，還和記憶裡一樣。', '你搭車去了一個許久沒有踏足的地方，路變寬了，房子變高了。你慢慢走著，在一處轉角停下來，那裡的風還是你熟悉的味道。'] },
   { ages: [60, 80], cond: (s, h) => h.stat('health') >= 60, text: (s, h) => '你的腳步還算穩，每天清晨繞著附近走一大圈，順便和遇到的人打招呼。' },
-  { ages: [65, 85], text: (s, h) => '你把家裡的食譜一頁頁抄寫下來，怕有一天這些味道，只剩你一個人記得。' },
+  { ages: [65, 85], text: (s, h) => '你把家裡的食譜一頁頁抄寫下來，怕有一天這些味道，只剩你一個人記得。',
+    variants: ['你拿出一本空白的筆記，把平常憑感覺做的菜一道道寫下來：幾匙鹽、煮多久、什麼火候。寫著寫著，你彷彿又聽見了教你的人的聲音。', '你坐在廚房的桌前，把那些口耳相傳的做法一一記下，旁邊放著一杯涼了的茶。你想，有一天會有人照著這些字，煮出你的味道。'] },
 
   // ---- 76-110 ----
   { ages: [76, 100], text: (s, h) => '你一天裡最喜歡的時刻，是早上泡好茶、還沒有人來打擾的那十分鐘。' },
@@ -207,10 +214,10 @@ export default [
   { ages: [95, 120], text: (s, h) => '你現在每天都是賺到的。你這樣想著，把今天的陽光當成一份禮物，慢慢拆開。' },
 
   // ---- 依年代與處境 ----
-  { ages: [6, 40], cond: (s, h) => h.yearIn(1955, 1985) && !h.urban() && !h.incomeAtLeast('H') && h.incomeAt() !== 'UM', text: (s, h) => '晚上沒有電燈，你和家人圍著一盞煤油燈，影子在牆上被拉得很長很長。' },
+  { ages: [6, 40], cond: (s, h) => (h.yearIn(1955, 1985) && !h.urban() && !h.incomeAtLeast('H') && h.incomeAt() !== 'UM') && !h.livesAlone(), text: (s, h) => '晚上沒有電燈，你和家人圍著一盞煤油燈，影子在牆上被拉得很長很長。' },
   { ages: [10, 60], cond: (s, h) => h.yearIn(1996, 2008) && h.techReady(1997), text: (s, h) => '朋友們開始互相留電子信箱的位址，約好要「在網路上見」。你還不太確定那是什麼，但覺得很新鮮。' },
   { ages: [30, 80], cond: (s, h) => h.era() === 'future', text: (s, h) => '今年的夏天比去年更熱，鄰居們不約而同換了作息：早起、午睡、傍晚才出門。' },
-  { ages: [8, 40], cond: (s, h) => h.yearIn(1955, 1989) && h.incomeAtLeast('UM') && h.urban(), text: (s, h) => '晚飯後，家人圍著收音機聽廣播劇，你趴在地上，一邊寫字一邊偷聽。' },
+  { ages: [8, 40], cond: (s, h) => (h.yearIn(1955, 1989) && h.incomeAtLeast('UM') && h.urban()) && !h.livesAlone(), text: (s, h) => '晚飯後，家人圍著收音機聽廣播劇，你趴在地上，一邊寫字一邊偷聽。' },
 
   // ---- 百歲上下 ----
   { ages: [96, 120], text: (s, h) => '早晨你醒來，先聽了一會兒屋子裡的聲音：有人在走動，有水燒開，那是你最愛的背景音。' },
@@ -226,18 +233,20 @@ export default [
 
   // ---- 成年各階段補充 ----
   { ages: [26, 45], cond: (s, h) => h.wageEarner(), text: (s, h) => '午休時你一個人去附近走了一圈，發現自己很久沒有只是走路、什麼也不為了。' },
-  { ages: [30, 55], cond: (s, h) => h.hasChildren() && h.youngestChildAge() <= 14, text: (s, h) => '全家擠在一張桌子吃飯，吵吵鬧鬧，你一邊嫌吵，一邊把自己的碗往中間靠了靠。' },
+  { ages: [30, 55], cond: (s, h) => h.minorsWithYou().some((c) => s.year - c.birthYear <= 14), text: (s, h) => '全家擠在一張桌子吃飯，吵吵鬧鬧，你一邊嫌吵，一邊把自己的碗往中間靠了靠。' },
   { ages: [28, 60], cond: (s, h) => h.urban() && h.employed(), text: (s, h) => '通勤的路上，你每天遇見同樣的人站在同樣的位置，你們從沒說過話，卻彼此認得。' },
   { ages: [26, 65], cond: (s, h) => !h.urban(), text: (s, h) => '雨後的泥土味從窗縫鑽進來，你停下手邊的事，閉上眼睛聞了一會兒。' },
   { ages: [30, 65], cond: (s, h) => h.isMigrant(), text: (s, h) => `${h.festival()}這天你特別想念家鄉的味道，於是自己動手煮了一鍋，煮得不太對，卻足夠讓你想起很多事。` },
-  { ages: [30, 59], cond: (s, h) => h.married() && !h.hasChildren(), text: (s, h) => `你和${h.partnerName()}養成了每個週末去市場的習慣，買的東西不多，聊的話很多。` },
-  { ages: [33, 60], cond: (s, h) => h.stat('health') >= 70, text: (s, h) => '你規律運動了一整年，爬樓梯不再喘，這件小事讓你好幾次在無人的時候偷偷得意。' },
+  { ages: [30, 59], cond: (s, h) => h.married() && h.livesWith('partner') && !h.hasChildren(), text: (s, h) => `你和${h.partnerName()}養成了每個週末去市場的習慣，買的東西不多，聊的話很多。` },
+  { ages: [33, 60], cond: (s, h) => h.stat('health') >= 70, text: (s, h) => '你規律運動了一整年，爬樓梯不再喘，這件小事讓你好幾次在無人的時候偷偷得意。',
+    variants: ['這一年你幾乎天天出門走動，體力一點一點回來了。有一天你一口氣爬上五樓，才發現自己居然沒有停下來喘氣，忍不住笑出聲。', '你把運動變成了每天的小儀式，風雨無阻。年底回頭看，身體輕了、睡得沉了，連心情也跟著穩了下來。'] },
   { ages: [30, 60], cond: (s, h) => h.stat('happiness') < 40, text: (s, h) => '這一年你笑得比較少，不是因為發生了什麼大事，而是累積了很多小事。你知道，該對自己好一點了。' },
   { ages: [25, 60], cond: (s, h) => h.has('student_loan'), text: (s, h) => '每個月繳助學貸款的日子，是你最準時的日子。數字一點一點變小，你也一點一點變輕。' },
   { ages: [22, 60], cond: (s, h) => !h.hasPartner() && h.stat('social') >= 60, text: (s, h) => '週末的聚會又開了，你是最後一個離開的。回家的路上你想，朋友也是一種家。' },
   { ages: [35, 70], cond: (s, h) => h.parentsAlive() > 0 && h.urban(), text: (s, h) => '你把老家的長輩接來住了一個星期，才發現自己家的冰箱，少了他們習慣的那幾樣東西。' },
   { ages: [30, 65], cond: (s, h) => h.isRich(), text: (s, h) => '你開始固定捐一筆錢給一個你親眼看過的小地方，不多，卻讓你每個月有一個踏實的理由。' },
-  { ages: [40, 70], text: (s, h) => '你開始在意季節：第一場雨、第一朵花、第一口新米，每一個都是以前被你匆匆跳過的小節日。' },
+  { ages: [40, 70], text: (s, h) => '你開始在意季節：第一場雨、第一朵花、第一口新米，每一個都是以前被你匆匆跳過的小節日。',
+    variants: ['這一年你學會了抬頭看天色：什麼時候該收衣服，哪天適合出門。以前匆匆跳過的季節更替，現在一個一個都被你記進心裡。', '你注意到巷口的樹換了顏色，市場裡出現了當季的水果。那些以前路過就忘的小事，如今成了你一年裡最期待的節日。'] },
   { ages: [45, 75], cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 20, text: (s, h) => `${h.childName(0)}回來吃飯時，你悄悄多煮了一道${h.childHe(0)}小時候愛吃的菜，你沒說，對方也沒問。` },
   // ===================================================================================
   // 第四批（Phase 4A）：條件較窄的人生（喪偶的異鄉人、難民、慢性病、失業的中年人、單親、照顧者、鄉下長者、
@@ -268,14 +277,14 @@ export default [
   { ages: [45, 64], cond: (s, h) => h.unemployed(), text: (s, h) => '你投出去的履歷，被退回的方式越來越禮貌。你開始考慮把經驗換成另一種形式：教別人、接零工，或者開一個小攤。' },
   { ages: [50, 70], cond: (s, h) => h.unemployed(), text: (s, h) => '你每天早上仍然定時起床、穿好衣服，因為你怕一旦鬆懈，整個日子就會跟著鬆掉。' },
   { ages: [18, 29], cond: (s, h) => h.unemployed(), text: (s, h) => '你用大把時間比對各種機會與條件，日子像一張擦了又寫、寫了又擦的紙。你不想被別人的「慢慢來」安慰。' },
-  { ages: [25, 55], cond: (s, h) => !h.hasPartner() && h.hasChildren() && h.youngestChildAge() <= 15 && h.employed(), text: (s, h) => '你一個人撐起兩個人的份：早上做早餐，傍晚接送，夜裡還要算帳。有人問你累不累，你笑著說習慣了，其實是沒有時間累。' },
-  { ages: [28, 55], cond: (s, h) => !h.hasPartner() && h.hasChildren() && h.youngestChildAge() >= 6 && h.youngestChildAge() <= 16, text: (s, h) => `${h.childName(0)}的家長會，你又是一個人坐在那排椅子上。你對自己說：今天，我已經把兩個人的份都做了。` },
-  { ages: [25, 50], cond: (s, h) => h.partnerStatus() === 'widowed' && h.hasChildren() && h.youngestChildAge() <= 17, text: (s, h) => `你一個人把孩子帶大。每當${h.childName(0)}問起離開的那位，你就把最好的故事一點一點拿出來。` },
+  { ages: [25, 55], cond: (s, h) => !h.hasPartner() && h.minorsWithYou().some((c) => s.year - c.birthYear <= 15) && h.employed(), text: (s, h) => '你一個人撐起兩個人的份：早上做早餐，傍晚接送，夜裡還要算帳。有人問你累不累，你笑著說習慣了，其實是沒有時間累。' },
+  { ages: [28, 55], cond: (s, h) => !h.hasPartner() && h.minorsWithYou().some((c) => s.year - c.birthYear >= 6 && s.year - c.birthYear <= 16), text: (s, h) => `${h.minorsWithYou()[0].name}的家長會，你又是一個人坐在那排椅子上。你對自己說：今天，我已經把兩個人的份都做了。` },
+  { ages: [25, 50], cond: (s, h) => h.partnerStatus() === 'widowed' && h.minorsWithYou().length > 0, text: (s, h) => `你一個人把孩子帶大。每當${h.minorsWithYou()[0].name}問起離開的那位，你就把最好的故事一點一點拿出來。` },
   { ages: [30, 70], cond: (s, h) => h.partnerStatus() === 'divorced' && !h.hasChildren(), text: (s, h) => '離婚後的第一個生日，你自己買了蛋糕，自己唱了歌，有點走音。你把剩下的一半留給明天。' },
   { ages: [30, 80], cond: (s, h) => h.has('caregiver_parent'), text: (s, h) => '你的日子被劃成一格一格：吃藥的時間、複診的日期、洗澡的順序。你很少再問自己累不累，只問下一格是什麼。' },
   { ages: [30, 80], cond: (s, h) => h.has('caregiver_parent') && h.techReady(2008), text: (s, h) => '照顧人的日子裡，你的手機相簿多了很多別人不會拍的照片：藥盒、拐杖，還有一張偷拍的、睡著的側臉。' },
   { ages: [30, 80], cond: (s, h) => h.has('caregiver_parent') && !h.techReady(2008), text: (s, h) => '照顧人的日子裡，你的小本子上多了很多別人不會記的事：藥的名字、吃藥的時間，和半夜量到的體溫。' },
-  { ages: [60, 100], cond: (s, h) => h.married() && h.stat('health') < 50, text: (s, h) => `你和${h.partnerName()}互相扶著走路，分不清誰是誰的拐杖。你們笑起這件事，笑聲在走廊裡傳得很遠。` },
+  { ages: [60, 100], cond: (s, h) => h.married() && h.livesWith('partner') && h.stat('health') < 50, text: (s, h) => `你和${h.partnerName()}互相扶著走路，分不清誰是誰的拐杖。你們笑起這件事，笑聲在走廊裡傳得很遠。` },
   { ages: [18, 26], cond: (s, h) => h.inSchool() && h.hasChildren(), text: (s, h) => `你在課堂上聽得特別認真，因為回家之後不會有時間讀第二次。${h.childName(0)}睡著後的那一小時，是你一天裡最安靜的讀書時間。` },
   { ages: [18, 26], cond: (s, h) => h.inSchool() && h.parentsAlive() > 0 && h.isMigrant() === false && !h.urban(), text: (s, h) => `家裡寄來一個包裹，每樣東西都用報紙包了兩層。你一件一件拆開，才發現${h.parentsLabel()}連你小時候愛吃的那種糖都塞進去了。` },
   { ages: [6, 17], cond: (s, h) => h.has('orphan'), text: (s, h) => '你在別人家的飯桌上學會了安靜地吃飯，也學會了把自己的需要說得很小聲。但偶爾，總有人悄悄替你夾一塊最大的肉。' },
@@ -284,10 +293,10 @@ export default [
   { ages: [6, 14], cond: (s, h) => h.urban() && s.family.wealthQ <= 2, text: (s, h) => '你住的巷子很窄，鄰居的說話聲比自己家裡的還清楚。你學會了只聽腳步聲就知道是誰回來了。' },
   { ages: [22, 60], cond: (s, h) => h.workStatus() === 'homemaker', text: (s, h) => '你在市場上把價錢談到剛剛好，回家路上遇見老鄰居，聊了一會兒。那是今天唯一一段完全屬於你自己的對話。' },
   { ages: [25, 70], cond: (s, h) => h.isMigrant() && h.employed() && ['L', 'LM'].includes(h.homeCountry().income), text: (s, h) => `你每個月從收入裡留下大約${h.money(h.annualIncome() / 12 * 0.3)}寄回家鄉。數字不大，但你知道在那邊，它是學費、是藥，也是一片牢固的屋頂。` },
-  { ages: [30, 60], cond: (s, h) => h.isMigrant() && h.hasChildren() && h.youngestChildAge() >= 3 && h.youngestChildAge() <= 14, text: (s, h) => '孩子們用這裡的話吵架，用你的母語撒嬌。你發現自己的口音，正在被他們一點一點收藏起來。' },
+  { ages: [30, 60], cond: (s, h) => h.isMigrant() && h.minorsWithYou().some((c) => s.year - c.birthYear >= 3 && s.year - c.birthYear <= 14), text: (s, h) => '孩子們用這裡的話吵架，用你的母語撒嬌。你發現自己的口音，正在被他們一點一點收藏起來。' },
   { ages: [22, 60], cond: (s, h) => h.hasPartner() && s.partner.gender === s.gender, text: (s, h) => `你和${h.partnerName()}的日常跟誰家都差不多：誰洗碗、誰買菜、晚上看哪一部片，吵了又笑了。` },
-  { ages: [45, 80], cond: (s, h) => h.married() && s.children.length === 0, text: (s, h) => `你們沒有孩子，家裡安安靜靜，卻有一種不必向誰交代的自由。今年你和${h.partnerName()}把整個春天花在一趟慢慢的旅行上。` },
-  { ages: [20, 60], cond: (s, h) => h.isJob('guard', 'nurse', 'driver', 'cook', 'caregiver') && h.wageEarner(), text: (s, h) => '你的作息和家人錯開，別人睡覺時你出門，別人出門時你回家。你習慣了黎明前的街上獨自走一段路。' },
+  { ages: [45, 80], cond: (s, h) => h.married() && h.livesWith('partner') && s.children.length === 0, text: (s, h) => `你們沒有孩子，家裡安安靜靜，卻有一種不必向誰交代的自由。今年你和${h.partnerName()}把整個春天花在一趟慢慢的旅行上。` },
+  { ages: [20, 60], cond: (s, h) => (h.isJob('guard', 'nurse', 'driver', 'cook', 'caregiver') && h.wageEarner()) && !h.livesAlone(), text: (s, h) => '你的作息和家人錯開，別人睡覺時你出門，別人出門時你回家。你習慣了黎明前的街上獨自走一段路。' },
   { ages: [25, 65], cond: (s, h) => h.isJob('teacher'), text: (s, h) => '你教過的孩子在街上喊你「老師」，你已經認不出他的臉，卻認得那雙眼睛。你點點頭，說了一句：「長大了。」' },
   { ages: [25, 65], cond: (s, h) => h.isJob('nurse', 'doctor', 'caregiver') && h.wageEarner(), text: (s, h) => '你今天又聽了一個不容易聽的故事。下班前你在走廊盡頭站了一會兒，才把自己整個收拾回來。' },
   { ages: [20, 75], cond: (s, h) => h.isJob('artisan'), text: (s, h) => '你的手指記得材料的紋理，比你的腦袋記得更多。有時別人問你怎麼做的，你只能把工具遞給他，讓他自己摸摸看。' },
@@ -315,7 +324,7 @@ export default [
   { ages: [8, 90], cond: (s, h) => h.highAltitude(), text: (s, h) => '高處的早晨冷得很乾淨，你呼出的氣在眼前變成一小團白霧。走快一點就會喘，你早就學會了慢慢走。' },
   { ages: [8, 90], cond: (s, h) => h.climate() === 'highland' && !h.highAltitude(), text: (s, h) => '山上的天氣一天變三次：早晨披外套，中午捲袖子，傍晚又得把外套找出來。你已經不覺得奇怪了。' },
   { ages: [6, 90], cond: (s, h) => h.coastal() && h.climate() !== 'polar', text: (s, h) => '海風把鹽味留在曬衣繩上的衣服上。你已經習慣了，甚至離開幾天之後，會想念這種鹹鹹的味道。' },
-  { ages: [6, 80], cond: (s, h) => h.climate() === 'tropical' && h.urban(), text: (s, h) => '夜裡的城市熱得像一鍋湯，你把窗戶全部打開，聽著遠處的車聲和誰家的電視，慢慢睡著。' },
+  { ages: [6, 80], cond: (s, h) => h.climate() === 'tropical' && h.urban(), text: (s, h) => `夜裡的城市熱得像一鍋湯，你把窗戶全部打開，聽著遠處的車聲和誰家的${h.techReady(1960) ? '電視' : '收音機'}，慢慢睡著。` },
   { ages: [10, 90], cond: (s, h) => h.climate() === 'arid' && h.urban(), text: (s, h) => '中午的街道空蕩蕩的，所有人都躲進室內，到了傍晚，整座城市才像被重新打開，人聲和燈光一起冒出來。' },
 
   // ---- 信仰與傳統的日常（不寫節日名，寫每天的小事） ----
@@ -335,5 +344,15 @@ export default [
   { ages: [8, 60], cond: (s, h) => h.yearIn(1955, 1975) && h.incomeAt() === 'H', text: (s, h) => '家裡新買的收音機成了客廳的主角。大人要聽新聞，孩子要聽故事，兩邊常為了轉台而爭起來。' },
   { ages: [10, 70], cond: (s, h) => h.yearIn(1975, 1995) && h.urban() && h.incomeAtLeast('UM'), text: (s, h) => '街角新開了一間店，玻璃櫥窗亮晶晶的，大家下班路過都忍不住往裡面看一眼。你也看，卻不一定買。' },
   { ages: [20, 80], cond: (s, h) => h.era() === 'future' && h.incomeAtLeast('UM'), text: (s, h) => '住處自己調整溫度，你卻常常跑去窗邊吹風，覺得那樣才像真的夏天。' },
-  { ages: [20, 80], cond: (s, h) => h.era() === 'future' && !h.incomeAtLeast('UM'), text: (s, h) => '家裡新裝的小型太陽能板讓夜晚有了光。你和家人比誰第一個發現冰箱裡多了一盒冰涼的東西。' },
+  { ages: [20, 80], cond: (s, h) => (h.era() === 'future' && !h.incomeAtLeast('UM')) && !h.livesAlone(), text: (s, h) => '家裡新裝的小型太陽能板讓夜晚有了光。你和家人比誰第一個發現冰箱裡多了一盒冰涼的東西。' },
+
+  // ---- Phase 6B: 家人不在身邊的日子（獨自在異地、孩子或伴侶留在原處、長輩在遠方） ----
+  { ages: [20, 60], cond: (s, h) => h.isMigrant() && h.childrenApart().length > 0, text: (s, h) => `你在${h.countryName()}的床頭貼著${h.childrenApart()[0].name}的照片。每個月發薪水的那天，你先去匯款，才去買自己的晚餐。` },
+  { ages: [20, 60], cond: (s, h) => h.isMigrant() && h.childrenApart().length > 0 && h.techReady(2012), text: (s, h) => `每天晚上八點，你的手機會亮起來，${h.childrenApart()[0].name}在螢幕那頭搶著報告今天的事。掛斷之後，你把話都留在腦子裡，再慢慢走回宿舍。` },
+  { ages: [22, 62], cond: (s, h) => h.isMigrant() && h.coupleApart(), text: (s, h) => `你和${h.partnerName()}一年只見幾個星期，剩下的日子靠${h.techReady(2000) ? '一支手機' : '一通通越洋電話和一封封信'}。你們學會了在每通電話裡留一點空白，讓對方也能說幾句沒有被剪過的話。` },
+  { ages: [22, 62], cond: (s, h) => h.isMigrant() && h.coupleApart() && h.stat('happiness') < 50, text: (s, h) => `${h.partnerName()}在電話裡說家裡的水龍頭壞了，你說你明天找人修，才想起自己人在國外。掛上電話你坐了很久，那個水龍頭，成了這一年最難聽的聲音。` },
+  { ages: [25, 70], cond: (s, h) => h.parentsFar(), text: (s, h) => `${h.parentsOr('長輩')}在電話裡總是說「我很好，不用擔心」，你從背景裡的聲音，聽得出家裡其實很安靜。你把下次回去的日期，悄悄往前挪了一個月。` },
+  { ages: [20, 65], cond: (s, h) => h.isMigrant() && h.aloneAbroad() && h.yearsAbroad() >= 3, text: (s, h) => `${h.countryName()}的日子已經有了固定的樣子：上班、宿舍、週末的市場。你一個人煮了一鍋家鄉的湯，煮得太多，端給了隔壁的鄰居，兩個人隔著一張矮桌吃完。` },
+  { ages: [24, 60], cond: (s, h) => h.apartFrom('children') && h.childrenApart().some((c) => s.year - c.birthYear >= 12 && s.year - c.birthYear <= 17), text: (s, h) => `${h.childrenApart()[0].name}在電話裡的聲音變粗了，說話也學會了你不熟悉的詞。你忽然發現，自己離開的這些年，孩子已經自己長成了另一個人。` },
+  { ages: [30, 70], cond: (s, h) => h.apartFrom('children') && h.childrenNearby().length === 0 && h.hasChildren() && h.isMigrant() && h.techReady(2000), text: (s, h) => '孩子們都在家鄉，各有各的生活。逢年過節，你的手機裡會多出一整排祝福，你一則一則回，回到最後一則時，才發現螢幕上有一滴水。' },
 ];

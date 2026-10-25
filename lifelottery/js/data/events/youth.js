@@ -79,7 +79,7 @@ export default [
     weight: 0.9,
     tags: ['culture', 'friends'],
     text: (s, h) => {
-      if (h.year() < 1990) return '你把零用錢存起來，只為了買一卷錄音帶。夜裡你把收音機貼在耳邊，等主持人點播那首歌，按下錄音鍵的手指都在抖，連呼吸聲都怕被錄進去。';
+      if (h.year() < 1990) return `你把${h.pocketMoney()}存起來，只為了買一卷錄音帶。夜裡你把收音機貼在耳邊，等主持人點播那首歌，按下錄音鍵的手指都在抖，連呼吸聲都怕被錄進去。`;
       if (h.year() < 2008) return '你和朋友交換 CD 與隨身聽，耳機一人一邊。同一首歌你聽了兩百遍，歌詞背到連夢話都在唱。';
       return '你的播放清單裡，每首歌都有一段故事：哪天哭過、哪天考砸、哪天好像戀愛了。你把清單分享給朋友，有人回「這首不錯」，你卻高興了一整晚。';
     },
@@ -467,6 +467,7 @@ export default [
         label: '繼續保密',
         effects: { happiness: +1, social: -1 },
         set: ['y_secret_romance'],
+        unset: ['y_called_friend'],
         result: '你們約在離家很遠的地方見面，像兩位地下情報員。刺激是刺激，只是每次說謊，你的胃都會縮一下。',
         schedule: [{ id: 'youth_secret_found_out', inYears: [1, 2] }],
         ai: 1.5,
@@ -474,7 +475,7 @@ export default [
       {
         label: '先介紹成「普通朋友」',
         effects: { happiness: +1, social: +1 },
-        set: ['y_secret_romance'],
+        set: ['y_secret_romance', 'y_called_friend'],
         result: '你說對方是「同學」，大人點點頭，沒多問。有一次他們來家裡，大家像一群演員，一起把場面撐了下來。',
         schedule: [{ id: 'youth_secret_found_out', inYears: [1, 3] }],
         ai: 1,
@@ -597,7 +598,7 @@ export default [
     text: (s, h) => '朋友邀你參加一場晚上的聚會，大人卻說十點前一定要回家，一分鐘都不能晚。你在心裡練了三個晚上的說服詞，站在客廳，手心全是汗。',
     choices: [
       {
-        label: '據理力爭，談判延後',
+        label: '把理由一條條說給大人聽，爭取延後',
         effects: (s, h) => {
           if (h.chance(0.6)) { h.change('social', +2); h.change('happiness', +2); h.set('y_curfew_ok'); }
           else { h.change('happiness', -2); h.unset('y_curfew_ok'); }
@@ -645,9 +646,9 @@ export default [
         ai: (s, h) => (h.isPoor() ? 1.6 : 0.9),
       },
       {
-        label: '把自己的零用錢交出去',
+        label: '把自己存的錢交出去',
         effects: { wealth: +1, social: +1, happiness: +1 },
-        result: '你把存了很久的零用錢放在桌上，一句話也沒說。大人沉默很久，把錢推回你面前：「我們會想辦法的。」',
+        result: (s, h) => `你把存了很久的${h.pocketMoney()}放在桌上，一句話也沒說。大人沉默很久，把錢推回你面前：「我們會想辦法的。」`,
         ai: 1.2,
       },
       {
@@ -695,7 +696,7 @@ export default [
     major: true,
     weight: 8,
     tags: ['family', 'hardship'],
-    cond: (s, h) => h.has('orphan'),
+    cond: (s, h) => h.has('orphan') && !h.married() && !h.hasChildren(),
     text: (s, h) => '父母都不在了。親戚們在客廳商量你要去誰家，彼此客氣得過了頭。你坐在角落，聽著自己的名字在別人的嘴裡被傳來傳去，像一個沒有人敢拿穩的盤子。',
     choices: [
       {
@@ -713,7 +714,7 @@ export default [
       },
       {
         label: '找工作，自己養活自己',
-        cond: (s, h) => h.age() >= 14,
+        cond: (s, h) => h.age() >= 15, // Phase 6A: not a 13-year-old's decision to make alone
         effects: (s, h) => {
           if (h.inSchool()) h.dropOut();
           if (!h.employed()) h.startJob(h.pick(['laborer', 'cook', 'street_vendor']));
@@ -721,6 +722,15 @@ export default [
         },
         result: '你在工地（或餐館）找到了位置。老闆看你年紀小，多給了你一碗湯。你學得很快，因為你沒有別的選擇。',
         ai: (s, h) => (h.isPoor() ? 1.2 : 0.4),
+      },
+      {
+        // 13-14: not old enough to be sent out to work; they can ask the grown-ups around them
+        label: '去請老師和鄰居幫忙，找一個能繼續上學的落腳處',
+        who: 'child',
+        cond: (s, h) => h.age() < 15 && h.inSchool(),
+        effects: { knowledge: +1, social: +2, wealth: -1, happiness: -1 },
+        result: '你鼓起勇氣去找老師，又請鄰居陪你去拜託遠房的親戚。幾天後有人點了頭，學校的位子也替你保留著。你睡在陌生的床上，心裡卻有一小塊地方安定了下來。',
+        ai: 1.5,
       },
     ],
   },
@@ -801,7 +811,12 @@ export default [
     major: true,
     weight: 0,
     tags: ['safety', 'regional', 'followup'],
-    text: (s, h) => '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。',
+    // the corner boys remember how the first offer ended (childhood_corner_boys)
+    text: (s, h) => (h.has('c_corner_errand')
+      ? '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。你小時候替他們跑過腿，他們說「你早就懂規矩了」。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'
+      : h.has('c_refused_corner')
+        ? '街角那幾個大哥哥沒有忘記你。幾年前你搖頭走開，他們笑了一陣；如今他們換了說法，給的是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'
+        : '街角那幾個大哥哥又找上了你，這次給的不是糖，而是一份「工作」：站崗、送貨、聽電話。報酬是你家一個月的伙食，條件是別問，也別告訴任何人。'),
     choices: [
       {
         label: '拒絕，並找信任的大人幫忙',
@@ -817,7 +832,7 @@ export default [
         ai: 1.5,
       },
       {
-        label: '接下這份工作',
+        label: '點頭答應，跟著他們去做事',
         effects: (s, h) => { h.change('wealth', +5); h.change('social', -3); h.change('health', -2); h.addRisk(1.3, 5); },
         set: ['y_gang_member'],
         result: '第一個月你領到的錢，比大人一整年存的還多。你開始買新鞋、請朋友吃飯，卻也學會了在街上永遠背對著牆壁走。',
@@ -1328,7 +1343,7 @@ export default [
       {
         label: '跟大人談條件，一起改規則',
         effects: { happiness: +1, social: +1, knowledge: +1 },
-        result: (s, h) => `你們坐下來談了半個小時。最後的規則是：吃飯時不看、${h.inSchool() ? '考試週交出' : '忙的時候交出'}、週末彈性。你第一次覺得自己被當成能談判的大人。`,
+        result: (s, h) => `你們坐下來談了半個小時。最後的規則是：吃飯時不看、${h.inSchool() ? '考試週交出' : '忙的時候交出'}、週末彈性。你第一次覺得自己被當成能一起訂規則的大人。`,
         ai: 1.5,
       },
     ],
@@ -1569,9 +1584,9 @@ export default [
     ages: [13, 24],
     weight: 0,
     tags: ['followup', 'love', 'family'],
-    text: (s, h) => `大人整理你房間時，看到了${h.year() < 2005 ? '藏起來的信' : '手機螢幕上跳出的訊息'}。晚上，他們把你叫到餐桌邊。出乎意料，沒有人大吼，只是沉默很久，然後有人問：「你為什麼不早點說？」`,
+    text: (s, h) => `大人整理你房間時，看到了${h.year() < 2005 ? '藏起來的信' : '手機螢幕上跳出的訊息'}。晚上，他們把你叫到餐桌邊。出乎意料，沒有人大吼，只是沉默很久，然後有人問：「${h.has('y_called_friend') ? '那個你說的「普通朋友」，其實不普通，對不對？' : '你為什麼不早點說？'}」`,
     effects: { happiness: -2, social: +1, knowledge: +1 },
-    unset: ['y_secret_romance'],
+    unset: ['y_secret_romance', 'y_called_friend'],
   },
   {
     id: 'youth_sneak_caught',

@@ -18,6 +18,12 @@
 // All functions must be total: they are called on random states by tests/events.test.mjs, so use
 // helpers like h.partnerName() (safe) rather than s.partner.name (may be null).
 
+// Phase 6A (decision agency): `decider: 'family'` events are decided by the family while the person is under 12 (the choices listed for
+// `notTeen` are the family's options, each with a `familyResult` told from the child's side); 12-17 get their own `teenOnly` choices,
+// written for a young person (`who: 'child'`); adults see the original choices.
+const notTeen = (s, h) => h.agency() !== 'teen';
+const teenOnly = (s, h) => h.agency() === 'teen';
+
 const CONSCRIPT = new Set(['KOR', 'TWN', 'ISR', 'SGP', 'RUS', 'TUR', 'EGY', 'IRN', 'GRC', 'FIN', 'CHE', 'AUT', 'NOR', 'SWE', 'THA', 'PRK', 'UKR', 'BLR', 'VNM']);
 
 export default [
@@ -318,7 +324,7 @@ export default [
   {
     id: 'seed_scholarship_or_work',
     title: '念下去，還是去工作',
-    ages: [17, 19],
+    ages: [18, 19], // Phase 6A: signing a student loan is for a legal adult (was 17-19)
     tags: ['education', 'money'],
     major: true,
     cond: (s, h) => h.inSchool() && h.eduYears() >= 11 && h.wealthQ() <= 3,
@@ -551,7 +557,7 @@ export default [
     tags: ['family', 'marriage'],
     major: true,
     cond: (s, h) => h.married() && h.yearsMarried() <= 1 && !h.has('wedding_done') && s.age >= 18,
-    text: (s, h) => `你和${h.partnerName()}已經登記，但兩家人對婚禮的期待截然不同。親戚的電話一通接著一通，帳本上的數字讓你們都沉默了。`,
+    text: (s, h) => `你和${h.partnerName()}已經登記，但${h.parentsGone() ? `${h.partnerName()}的家人和你的親戚` : '兩家人'}對婚禮的期待截然不同。親戚的電話一通接著一通，帳本上的數字讓你們都沉默了。`,
     choices: [
       {
         label: '盛大的婚宴',
@@ -582,7 +588,7 @@ export default [
     ages: [20, 50],
     tags: ['family'],
     cond: (s, h) => h.hasChildren() && h.youngestChildAge() === 1 && !h.has('saw_first_steps'),
-    text: (s, h) => `${h.lastChildName()}扶著沙發邊緣，搖搖晃晃地朝你走來，然後撲進你的懷裡。那一刻，你所有的疲憊都消失了。`,
+    text: (s, h) => `${h.youngestChildName()}扶著沙發邊緣，搖搖晃晃地朝你走來，然後撲進你的懷裡。那一刻，你所有的疲憊都消失了。`,
     effects: { happiness: +5, social: +1 },
     set: ['saw_first_steps'],
   },
@@ -626,20 +632,20 @@ export default [
     tags: ['family', 'education'],
     major: true,
     cond: (s, h) => h.hasChildren() && h.youngestChildAge() >= 5 && h.youngestChildAge() <= 12 && !h.has('child_school_decided'),
-    text: (s, h) => `${h.childName(0)}快要升上更高的年級了。鄰居們都在討論哪間學校好、哪家補習班有名。你看著孩子在飯桌前寫作業，不知道該為他多爭取一點，還是多放手一些。`,
+    text: (s, h) => `${h.childName(0)}快要升上更高的年級了。鄰居們都在討論哪間學校好、哪家補習班有名。${h.minorsWithYou().length ? '你看著孩子在飯桌前寫作業' : `你聽${h.caregiverOfChildren() || '照顧孩子的人'}說起孩子的功課`}，不知道該為他多爭取一點，還是多放手一些。`,
     choices: [
       {
         label: '花錢送孩子上補習與才藝',
         effects: { wealth: -5, happiness: -1, social: +1 },
         set: ['child_school_decided', 'child_tutoring'],
-        result: '每個週末你都在接送。孩子成績進步了，笑容卻少了一點。你偶爾懷疑：這是他要的，還是你要的？',
+        result: (s, h) => `${h.minorsWithYou().length ? '每個週末你都在接送。' : '你匯去補習和才藝的費用，每個週末只在電話裡聽他說課上了什麼。'}孩子成績進步了，笑容卻少了一點。你偶爾懷疑：這是他要的，還是你要的？`,
         ai: (s, h) => (h.incomeAtLeast('UM') && h.isRich() ? 1.5 : 0.7),
       },
       {
         label: '讓孩子照自己的步調長大',
         effects: { happiness: +4, social: +2 },
         set: ['child_school_decided'],
-        result: '你選擇陪孩子走路回家、聽他說學校的事。成績沒有特別亮眼，但他的話變得很多，眼睛也特別亮。',
+        result: (s, h) => `${h.minorsWithYou().length ? '你選擇陪孩子走路回家、聽他說學校的事。' : '你選擇不加課，只在每次通電話時，耐心聽他說學校的事。'}成績沒有特別亮眼，但他的話變得很多，眼睛也特別亮。`,
         ai: 2,
       },
       {
@@ -654,14 +660,14 @@ export default [
   },
   {
     id: 'seed_parent_illness',
-    title: '父母病了',
+    title: '至親病倒了',
     ages: [30, 65],
     tags: ['family', 'caregiving'],
     major: true,
     cond: (s, h) => (s.family.mother.alive && s.family.mother.age >= 62) || (s.family.father.alive && s.family.father.age >= 62),
     text: (s, h) => {
       const who = s.family.mother.alive && s.family.mother.age >= 62 ? s.family.mother.name : s.family.father.name;
-      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 0 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
+      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 1 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : h.siblings() === 1 ? '電話那頭，你的手足也有自己的難處。兩個人都在等對方先開口。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
     },
     choices: [
       {
@@ -919,7 +925,7 @@ export default [
     tags: ['family', 'milestone'],
     milestone: true,
     cond: (s, h) => h.hasChildren() && !h.has('grandparent') && h.expectedGrandchildren() > 0,
-    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「${h.hasPartner() ? '爸媽' : h.male() ? '爸' : '媽'}，我要當${h.hasPartner() ? '爸媽' : h.male() ? '爸爸' : '媽媽'}了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
+    text: (s, h) => `${h.childName(0)}打電話來，聲音發抖：「${h.hasPartner() ? '爸媽' : h.male() ? '爸' : '媽'}，我要當${h.childHe(0) === '她' ? '媽媽' : '爸爸'}了。」幾個月後，你抱起了孫輩的小小身體，覺得時間繞了一圈，又回到了原點。`,
     effects: { happiness: +8, social: +4 },
     set: ['grandparent'],
     highlight: '抱起了第一個孫輩。',
@@ -982,22 +988,46 @@ export default [
     chance: 0.012,
     once: false,
     cooldown: 15,
+    decider: 'family', // a child is carried to the high ground; it is the grown-ups who decide to run or to stay
     cond: (s, h) => h.isRegion('SAS', 'SEA', 'EAS', 'LAC', 'OCE') && (h.income() !== 'H' || h.chance(0.3)),
     text: (s, h) => '連續幾天的暴雨讓河水漫過了堤防。夜裡，水聲越來越近，鄰居在窗外大聲喊著要大家快跑。',
     choices: [
       {
         label: '立刻帶著家人撤離',
+        memory: (s, h) => `是${h.whoDecides()}牽著你，抓了最重要的幾樣東西往高處跑，回頭時屋子已經泡在水裡`,
+        cond: notTeen,
         effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
         result: '你抱起最重要的幾樣東西往高處跑。天亮時回頭看，屋子已泡在水裡。你什麼都沒了，但每個人都還在。',
+        familyResult: (s, h) => `${h.whoDecides('flood')}一把${h.carryYou().slice(0, 1)}起你，另一隻手抓起最重要的幾樣東西，往高處跑。天亮時你回頭看，屋子已泡在水裡。家裡什麼都沒了，但每個人都還在。`,
         ai: 4,
       },
       {
         label: '留下來守住家當',
+        memory: (s, h) => `${h.whoDecides()}把你送到鄰居家的高處，自己回去守著家當，你睜著眼睛等到天亮`,
+        cond: notTeen,
         effects: (s, h) => {
-          if (h.chance(0.08)) { h.die('disaster'); return; }
+          if (!h.isKid() && h.chance(0.08)) { h.die('disaster'); return; }
+          if (h.isKid()) { h.change('health', -2); h.change('happiness', -4); h.change('wealth', -2); return; } // a child is sent up to the neighbours' roof; only the grown-ups face the water
           h.change('health', -6); h.change('happiness', -4); h.change('wealth', -2);
         },
         result: (s, h) => (s.alive ? '你守了一整夜，水位在窗台下停住了。累到沒有力氣說話，但屋子保住了。' : ''),
+        familyResult: (s, h) => `${h.whoDecides('flood')}先把你送到鄰居家的高處，自己回去守著家當。你在別人的屋簷下睜著眼睛等到天亮。水位在窗台下停住了，大人回來時累到說不出話，但屋子保住了。`,
+        ai: 0.6,
+      },
+      {
+        label: '催家人快走，拉著弟妹一起往高處跑',
+        who: 'child',
+        cond: teenOnly,
+        effects: (s, h) => { h.change('wealth', -5); h.change('happiness', -4); h.change('social', +2); },
+        result: '你一邊大喊，一邊拉著弟妹跟上大人往高處跑。天亮時回頭看，屋子已泡在水裡。你們什麼都沒了，但每個人都還在。',
+        ai: 4,
+      },
+      {
+        label: '跟著大人留在二樓，幫忙把家當搬到高處',
+        who: 'child',
+        cond: teenOnly,
+        effects: (s, h) => { h.change('health', -4); h.change('happiness', -4); h.change('wealth', -2); },
+        result: '你和大人一趟又一趟，把能搬的家當搬上二樓。水位在窗台下停住了。累到沒有力氣說話，但屋子保住了。',
         ai: 0.6,
       },
     ],
