@@ -21,6 +21,8 @@
 import { hash01 } from './rng.js';
 
 export const MEMORY_CAP = 48;
+/** Quiet memories (kin deaths, Phase 7A) have a cap of their own, so they never push an ordinary memory out of the 48. */
+export const QUIET_CAP = 16;
 
 /** The kinds of moment a memory belongs to; an event of the same domain may call an older one back. */
 export const DOMAINS = ['school', 'work', 'money', 'family', 'love', 'health', 'move', 'bond', 'life'];
@@ -126,11 +128,13 @@ export function remember(s, key, phrase, opts = {}) {
   if (w > 1) m.w = w;
   if (opts.plain) m.u = 1; // the generic "面對…，你選了…": kept for the record (the consequence tracker), never spoken
   if (opts.told) m.s = 1; // the choice already has a follow-up of its own: the others are called back first
+  if (opts.quiet) m.q = 1; // kept (family drawer, life story) but never chosen by a reflection or an echo, and outside the cap of the others
   if (i >= 0) { if (list[i].n) { m.n = list[i].n; m.l = list[i].l; } list[i] = m; } else list.push(m);
-  if (list.length > MEMORY_CAP) {
-    let lo = 0;
-    for (let j = 1; j < list.length; j++) if (score(list[j]) < score(list[lo])) lo = j;
-    list.splice(lo, 1);
+  const group = list.filter((x) => !!x.q === !!m.q);
+  if (group.length > (m.q ? QUIET_CAP : MEMORY_CAP)) {
+    let lo = group[0];
+    for (const x of group) if (score(x) < score(lo)) lo = x;
+    list.splice(list.indexOf(lo), 1);
   }
   return true;
 }
@@ -139,6 +143,7 @@ export function remember(s, key, phrase, opts = {}) {
 export function sanitizeMemories(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
+  let loud = 0, quiet = 0;
   for (const m of list) {
     if (!m || typeof m.k !== 'string' || typeof m.p !== 'string' || !Number.isFinite(m.a)) continue;
     const e = { k: m.k.slice(0, 80), p: m.p.slice(0, 110), a: Math.max(0, Math.floor(m.a)), g: DOMAINS.includes(m.g) ? m.g : 'life' };
@@ -146,10 +151,12 @@ export function sanitizeMemories(list) {
     if (m.w > 1) e.w = Math.min(3, Math.floor(m.w));
     if (m.u) e.u = 1;
     if (m.s) e.s = 1;
+    if (m.q) e.q = 1;
     if (m.n > 0) e.n = Math.min(9, Math.floor(m.n));
     if (Number.isFinite(m.l) && m.l >= 0) e.l = Math.floor(m.l);
+    if ((e.q ? quiet : loud) >= (e.q ? QUIET_CAP : MEMORY_CAP)) continue;
+    if (e.q) quiet++; else loud++;
     out.push(e);
-    if (out.length >= MEMORY_CAP) break;
   }
   return out;
 }
@@ -198,7 +205,7 @@ const FRESH_AFTER = 10; // a memory that was spoken is not spoken again for this
 export const resting = (s, m) => !!(m.n && s.age - (m.l ?? -99) < FRESH_AFTER);
 
 function candidates(s, minGap, skip) {
-  return (s.memories || []).filter((m) => !m.u && s.age - m.a >= minGap && !(m.n && s.age - (m.l ?? -99) < FRESH_AFTER) && !(skip && skip(m)));
+  return (s.memories || []).filter((m) => !m.u && !m.q && s.age - m.a >= minGap && !(m.n && s.age - (m.l ?? -99) < FRESH_AFTER) && !(skip && skip(m)));
 }
 
 const kindOf = (m) => m.k.split(':')[0];

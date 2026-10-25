@@ -8,6 +8,7 @@ import { lifeTable } from './mortality.js';
 import { rand, randInt, poisson, normal, clamp, weightedIndex } from './rng.js';
 import { placePhrases } from './place.js';
 import { RELIGION_LABELS } from '../data/religion.js';
+import { cleanBirthKin } from './kin.js';
 
 export const WEALTH_LABELS = ['最貧困的五分之一', '偏低的五分之一', '中等的五分之一', '偏高的五分之一', '最富裕的五分之一'];
 export const WEALTH_SHORT = ['赤貧', '清寒', '小康', '寬裕', '富裕'];
@@ -101,7 +102,7 @@ const cleanParent = (p) => (p && typeof p === 'object' && typeof p.alive === 'bo
 /**
  * Validate and clean the "start" of a life (the `birth` object of createLife / the album's `meta.birth`):
  *   { v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ,                 <- always (a partial start)
- *     poolKey, name:{ given, family, full, givenToken, familyToken }, siblings,
+ *     poolKey, name:{ given, family, full, givenToken, familyToken }, siblings, kin?:{ siblings:[{ name, given, gender, birthYear }] },
  *     mother:{ alive, age, name }, father:{ ... }, religion, business }                  <- the rest (a complete start)
  * Returns the clean object with `full: boolean`, or null when even the partial start is unusable (unknown country, ...).
  */
@@ -125,8 +126,9 @@ export function normalizeBirth(b) {
     && typeof n.givenToken === 'string' && typeof n.familyToken === 'string'
     && isInt(b.siblings, 0, 11) && mother && father && RELIGION_LABELS[b.religion];
   if (!complete) return out;
+  const kin = cleanBirthKin(b.kin, b.birthYear); // Phase 7A: the family roster at birth (optional: an older record plans it from the number)
   return {
-    ...out, full: true, poolKey: b.poolKey, siblings: b.siblings, mother, father, religion: b.religion,
+    ...out, full: true, poolKey: b.poolKey, siblings: b.siblings, mother, father, religion: b.religion, ...(kin ? { kin } : {}),
     name: { given: n.given, family: n.family, full: n.full, givenToken: n.givenToken, familyToken: n.familyToken },
     business: typeof b.business === 'boolean' ? b.business : undefined,
   };
@@ -138,7 +140,7 @@ function birthFromStart(nb) {
     eraKey: nb.eraKey, birthYear: nb.birthYear, country: BY_CODE[nb.countryCode], gender: nb.gender, wealthQ: nb.wealthQ, urban: nb.urban, city: nb.city,
     poolKey: nb.poolKey, name: { ...nb.name }, siblings: nb.siblings,
     parents: { mother: { ...nb.mother }, father: { ...nb.father } },
-    religion: nb.religion, business: nb.business,
+    religion: nb.religion, business: nb.business, kin: nb.kin,
   };
 }
 

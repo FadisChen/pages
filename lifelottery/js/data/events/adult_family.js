@@ -845,7 +845,7 @@ export default [
     choices: [
       {
         label: '請家裡的長輩或親戚幫忙',
-        cond: (s, h) => (h.parentsAlive() > 0 || h.siblings() > 0) && (!h.isMigrant() || h.livesWith('parents')),
+        cond: (s, h) => (h.parentsAlive() > 0 || h.siblingsAtBirth() > 0) && (!h.isMigrant() || h.livesWith('parents')),
         effects: { wealth: +1, social: +2, happiness: +1, health: -1 },
         set: ['f_childcare', 'f_relative_care'],
         result: '長輩們每天早上準時出現，孩子也學會了他們的口頭禪。你偶爾和長輩在育兒方式上有些小爭執，但看孩子笑得開心，也就算了。',
@@ -1123,7 +1123,7 @@ export default [
     ages: [28, 56],
     weight: 0.7,
     tags: ['family', 'caregiving', 'money'],
-    cond: (s, h) => h.siblings() > 0 && !h.incomeAtLeast('H') && !h.has('f_fostered'),
+    cond: (s, h) => h.siblingsAtBirth() > 0 && !h.incomeAtLeast('H') && !h.has('f_fostered'),
     text: (s, h) => '你的手足出了事——也許生病、也許遠行、也許是離世——留下了年幼的孩子。親戚們在你家客廳商量由誰照顧，每個人都有各自的難處，目光慢慢轉向你。',
     choices: [
       {
@@ -1159,7 +1159,7 @@ export default [
     ages: [20, 38],
     weight: 1,
     tags: ['family', 'siblings', 'money'],
-    cond: (s, h) => h.siblings() > 0 && !h.incomeAtLeast('UM') && working(h) && !h.has('f_sibling_fees'),
+    cond: (s, h) => h.siblingsAtBirth() > 0 && !h.incomeAtLeast('UM') && working(h) && !h.has('f_sibling_fees'),
     text: (s, h) => '家裡年紀更小的弟妹，成績不錯。老師說他們應該繼續讀下去。家人沒有開口，但每次寄回去的那筆錢，大家都知道是你在撐著，只是誰也沒有說出口。',
     choices: [
       {
@@ -1194,7 +1194,7 @@ export default [
     cooldown: 8,
     weight: 0.8,
     tags: ['family', 'siblings', 'money'],
-    cond: (s, h) => h.siblings() > 0 && h.stat('wealth') >= 20,
+    cond: (s, h) => h.siblingsAtBirth() > 0 && h.stat('wealth') >= 20,
     text: (s, h) => '你的手足打電話來，語氣比平常客氣許多，最後才吞吞吐吐地說出需要一筆錢。你想起小時候，對方曾把唯一的糖果分了一半給你。',
     choices: [
       {
@@ -1225,8 +1225,8 @@ export default [
     cooldown: 8,
     weight: 0.5,
     tags: ['family', 'siblings'],
-    cond: (s, h) => h.siblings() > 0,
-    text: (s, h) => `難得${h.siblings() > 1 ? '手足都' : '你和手足'}回到老家。你們擠在小時候的那間客廳，翻出舊相簿，笑著糾正彼此的記憶：「明明是你先打我的！」「我才沒有！」笑聲震得老房子的窗戶都在抖。`,
+    cond: (s, h) => h.siblingsAtBirth() > 0,
+    text: (s, h) => `難得${h.siblingsAtBirth() > 1 ? '手足都' : '你和手足'}回到老家。你們擠在小時候的那間客廳，翻出舊相簿，笑著糾正彼此的記憶：「明明是你先打我的！」「我才沒有！」笑聲震得老房子的窗戶都在抖。`,
     effects: { social: +4, happiness: +3 },
   },
   {
@@ -1237,7 +1237,7 @@ export default [
     cooldown: 12,
     weight: 0.4,
     tags: ['family', 'siblings', 'conflict', 'chain'],
-    cond: (s, h) => h.siblings() > 0,
+    cond: (s, h) => h.siblingsAtBirth() > 0,
     text: (s, h) => '一次聚餐上，你和手足為了一件小事吵了起來，話愈說愈重。散場時沒有人說再見。接下來幾個月，彼此的電話號碼都還在，誰也沒有先撥出去。',
     effects: { happiness: -3, social: -3 },
     schedule: [{ id: 'family_sibling_reconcile', inYears: [2, 7] }],
@@ -1294,8 +1294,8 @@ export default [
     ages: [30, 66],
     weight: 0.9,
     tags: ['family', 'siblings', 'inheritance'],
-    cond: (s, h) => !s.family.mother.alive && !s.family.father.alive && h.siblings() > 0 && !h.has('f_estate'),
-    text: (s, h) => `父母留下的房子與一小塊地，需要${h.siblings() > 1 ? '手足們' : '你和手足'}坐下來決定怎麼處理。每個人都帶著回憶，也帶著各自的帳單。老家的灶台上，還擺著那個缺了一角的碗。`,
+    cond: (s, h) => !s.family.mother.alive && !s.family.father.alive && h.siblingsAtBirth() > 0 && !h.has('f_estate'),
+    text: (s, h) => `父母留下的房子與一小塊地，需要${h.siblingsAtBirth() > 1 ? '手足們' : '你和手足'}坐下來決定怎麼處理。每個人都帶著回憶，也帶著各自的帳單。老家的灶台上，還擺著那個缺了一角的碗。`,
     choices: [
       {
         label: '賣掉老家，平均分配',
@@ -1329,12 +1329,12 @@ export default [
     cooldown: 8,
     weight: 0.5,
     tags: ['family', 'festival', 'parents'],
-    cond: (s, h) => (h.parentsAlive() > 0 || h.siblings() > 0) && (!h.isMigrant() || h.livesWith('parents')), // from abroad: 回去看看 (migration_visit_home) and the festival lines of the helpers
+    cond: (s, h) => (h.parentsAlive() > 0 || h.siblingsAtBirth() > 0) && (!h.isMigrant() || h.livesWith('parents')), // from abroad: 回去看看 (migration_visit_home) and the festival lines of the helpers
     text: (s, h) => h.parentsGone() ? h.byIncome({
       L: `${h.festival()}那幾天，遠近的親戚和手足都回到老屋。院子裡擠滿了人，孩子滿地亂跑，大人們用方言比賽誰的故事最荒唐。灶台邊少了你爸媽的身影，有人默默多擺了兩雙碗筷，沒有人說破。`,
       LM: `你擠上了人滿為患的車，搭了一整天才回到老家。一進門，${h.standIn() || '親戚'}把你拉到桌邊，筷子上已經夾了菜，說：「先吃，再說話。」桌上最靠門的位子，是過世的爸媽以前坐的，今年還是沒有人去坐。`,
       UM: `${h.festival()}一到，手足和親戚都聚了過來。你在廚房幫忙備菜，聽長輩說著三十年前同一個笑話，笑得比第一次聽時還大聲。有人輕聲說：「要是你爸媽還在，一定又要搶著說後面那一句。」大家笑了，也靜了一下。`,
-      H: `${h.festival()}這天，${h.siblings() > 1 ? '手足們' : '你和手足'}難得聚齊。大家一邊吃飯一邊看${h.yearIn(2008, 3000) ? '手機' : '電視'}，卻在某個時刻同時抬起頭，因為有人說起了爸媽以前的糗事。整桌的笑聲把屋子都撐大了，笑完，每個人的眼眶都有點紅。`,
+      H: `${h.festival()}這天，${h.siblingsAtBirth() > 1 ? '手足們' : '你和手足'}難得聚齊。大家一邊吃飯一邊看${h.yearIn(2008, 3000) ? '手機' : '電視'}，卻在某個時刻同時抬起頭，因為有人說起了爸媽以前的糗事。整桌的笑聲把屋子都撐大了，笑完，每個人的眼眶都有點紅。`,
     }) : h.byIncome({
       L: `${h.festival()}那幾天，遠近的親戚都回到老家。院子裡擠滿了人，孩子滿地亂跑，大人們用方言比賽誰的故事最荒唐，深夜院子裡還有人在唱歌。`,
       LM: '你擠上了人滿為患的車，搭了一整天才回到老家。一進門，長輩把你拉到桌邊，筷子上已經夾了菜，說：「先吃，再說話。」你一口氣吃了三碗。',

@@ -667,7 +667,7 @@ export default [
     cond: (s, h) => (s.family.mother.alive && s.family.mother.age >= 62) || (s.family.father.alive && s.family.father.age >= 62),
     text: (s, h) => {
       const who = s.family.mother.alive && s.family.mother.age >= 62 ? s.family.mother.name : s.family.father.name;
-      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblings() > 1 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : h.siblings() === 1 ? '電話那頭，你的手足也有自己的難處。兩個人都在等對方先開口。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
+      return `${who}突然病倒了。醫生說需要長期照顧，${h.siblingsAtBirth() > 1 ? '電話那頭，兄弟姊妹們各自有難處。所有人都在等別人先決定。' : h.siblingsAtBirth() === 1 ? '電話那頭，你的手足也有自己的難處。兩個人都在等對方先開口。' : '親戚們各自有難處，你心裡清楚，這件事多半只能由你來扛。'}`;
     },
     choices: [
       {
@@ -686,7 +686,7 @@ export default [
       },
       {
         label: '與手足輪流分擔',
-        cond: (s, h) => h.siblings() > 0,
+        cond: (s, h) => h.siblingsAtBirth() > 0,
         effects: { happiness: -1, health: -2, social: +1 },
         result: '你和手足排出輪值表。吵過幾次架，也在病房外一起吃過便當。那是這些年裡你們最常聚在一起的時光。',
         ai: 2,

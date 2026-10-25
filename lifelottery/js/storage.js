@@ -185,6 +185,30 @@ function riskTrail(v, age) {
   return out.some(Number.isNaN) || out.length < Math.floor(num(age)) ? null : out;
 }
 
+const yr = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
+const gen = (v) => (v === 'M' ? 'M' : 'F');
+/**
+ * The family roster of a summary (Phase 7A, engine/kin.js kinSummary): siblings, parents, partners and in-laws with years and causes.
+ * Sizes are capped; an old record has none (undefined), and everything that reads it must cope with that.
+ */
+function cleanKinSummary(k) {
+  if (!k || typeof k !== 'object') return undefined;
+  const person = (p) => ({ name: str(p.name, 80), alive: !!p.alive, birthYear: yr(p.birthYear), deathYear: yr(p.deathYear), deathAge: yr(p.deathAge), cause: str(p.cause, 24), causeLabel: str(p.causeLabel, 30) });
+  const parent = (p) => (p && typeof p === 'object' ? person(p) : null);
+  return {
+    siblings: arr(k.siblings).slice(0, 14).filter((p) => p && typeof p === 'object' && typeof p.name === 'string').map((p) => ({
+      ...person(p), given: str(p.given, 80, str(p.name, 80)), gender: gen(p.gender), word: str(p.word, 6), older: !!p.older, married: !!p.married, kids: Math.max(0, Math.min(20, Math.round(num(p.kids)))),
+    })),
+    parents: { mother: parent(k.parents && k.parents.mother), father: parent(k.parents && k.parents.father) },
+    partners: arr(k.partners).slice(0, 8).filter((p) => p && typeof p === 'object' && typeof p.name === 'string').map((p) => ({
+      ...person(p), gender: gen(p.gender), status: str(p.status, 10), since: yr(p.since), until: yr(p.until), marriedYear: yr(p.marriedYear), current: !!p.current,
+    })),
+    inLaws: arr(k.inLaws).slice(0, 16).filter((p) => p && typeof p === 'object' && typeof p.name === 'string').map((p) => ({
+      ...person(p), rel: p.rel === 'father' ? 'father' : 'mother', word: str(p.word, 10), partnerName: str(p.partnerName, 80), current: !!p.current,
+    })),
+  };
+}
+
 /**
  * Coerce an imported/loaded summary to a shape the UI can render without ever throwing.
  * Returns null when it is not recognisable as a life summary at all.
@@ -249,6 +273,7 @@ export function normalizeSummary(x) {
     ...(x.eulogy && x.eulogy.v === 1 && typeof x.eulogy.text === 'string' ? { eulogy: { v: 1, text: str(x.eulogy.text, 400), short: str(x.eulogy.short, 120), shape: str(x.eulogy.shape, 12), slots: [], opening: str(x.eulogy.opening, 16) } } : {}), // Phase 5B: the life story is kept with the record
     ...(x.keepsake && typeof x.keepsake.text === 'string' && Number.isFinite(x.keepsake.age) ? { keepsake: { age: num(x.keepsake.age), text: str(x.keepsake.text, 80), kind: ['f', 'loss', 'c'].includes(x.keepsake.kind) ? x.keepsake.kind : 'c' } } : {}), // Phase 6C
     highlights: arr(x.highlights).slice(0, 80).filter((h) => h && typeof h.text === 'string').map((h) => ({ age: num(h.age), year: num(h.year), text: str(h.text, 300) })),
+    ...(x.kin ? { kin: cleanKinSummary(x.kin) } : {}), // Phase 7A: the family roster; records from before have none
     counts: { choices: num(counts.choices), events: num(counts.events), milestones: num(counts.milestones), years: num(counts.years, num(x.age)) },
     stats,
     statHistory,
@@ -278,6 +303,9 @@ export function cleanStart(b) {
     out.father = parent(b.father);
     out.religion = str(b.religion, 12);
     if (typeof b.business === 'boolean') out.business = b.business;
+    if (b.kin && typeof b.kin === 'object' && Array.isArray(b.kin.siblings)) { // Phase 7A: the siblings planned at birth (engine/kin.js cleanBirthKin checks them for real)
+      out.kin = { siblings: b.kin.siblings.slice(0, 11).filter((e) => e && typeof e === 'object' && typeof e.name === 'string' && Number.isFinite(e.birthYear)).map((e) => ({ name: str(e.name, 80), given: str(e.given, 80, str(e.name, 80)), gender: gen(e.gender), birthYear: Math.round(e.birthYear) })) };
+    }
   }
   return out;
 }

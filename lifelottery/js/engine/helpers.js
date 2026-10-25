@@ -16,6 +16,9 @@ import { FOCUS_BY_ID } from './focus.js';
 import { describeCause } from './mortality.js';
 import { rand, between, randInt, chance, pick, clamp, hash01 } from './rng.js';
 import { remember, memoryOf, speech, listMemories, resting } from './memory.js';
+import {
+  siblingsOf, siblingOf, sibWord, partnersOf, currentPartnerOf, exPartnersOf, lastPartnerOf, inLawsOf, parentDiedAtOf, kinView, inLawWordOf,
+} from './kin.js';
 
 export { hash01 };
 import {
@@ -340,7 +343,39 @@ export class Helpers {
     return Math.min(n, 8);
   }
   hasGrandchildren() { return !!this.s.flags.grandparent; }
-  siblings() { return this.s.family.siblings; }
+  /** How many siblings the person has over a whole life, as the birth lottery drew it (a number; it never changes). Legacy: events written before the roster (Phase 7A) use it. New text should ask the roster: siblings(), livingSiblings(), hasLivingSibling(). */
+  siblingsAtBirth() { return this.s.family.siblings; }
+  // ---- the family roster (Phase 7A, kin.js): every sibling, partner and in-law as a person ----
+  /** The siblings born so far, oldest first, the living and the dead: [{ id, name, given, gender, birthYear, older, alive, deathYear, deathAge, cause, where, married, kids }]. `sel` filters: { older, younger, gender, alive, id, name }. */
+  siblings(sel) { return siblingsOf(this.s, sel); }
+  /** The siblings who are alive. */
+  livingSiblings() { return siblingsOf(this.s, { alive: true }); }
+  /** One sibling matching `sel` (the one closest in age; the older on a tie), or null. */
+  sibling(sel) { return siblingOf(this.s, sel); }
+  /** Is there a living sibling (matching `sel`: h.hasLivingSibling({ older: true, gender: 'M' }) = a living older brother)? */
+  hasLivingSibling(sel) { return siblingsOf(this.s, { ...(sel && typeof sel === 'object' ? sel : {}), alive: true }).length > 0; }
+  /** The given name of a sibling ('' if there is none): h.siblingName({ older: true }). Pass `{ full: true }` as the second argument for the full name. */
+  siblingName(sel, opts = {}) { const x = siblingOf(this.s, sel); return x ? (opts.full ? x.name : x.given) : ''; }
+  /** 哥哥 | 姊姊 | 弟弟 | 妹妹 for a sibling ('' if there is none), by birth order and gender. */
+  siblingWord(sel) { const x = siblingOf(this.s, sel); return x ? sibWord(x) : ''; }
+  /** Every partner the person has had, oldest first: [{ id, name, gender, birthYear, status ('dating' | 'married' | 'divorced' | 'widowed' | 'ended'), since, until, marriedYear, alive, deathYear, cause }]. */
+  partners() { return partnersOf(this.s); }
+  /** The partner entry of the person's current relationship (dating or married), or null. */
+  currentPartner() { return currentPartnerOf(this.s); }
+  /** The former partners who parted from the person (divorced or ended), oldest first. A late spouse is not an ex. */
+  exPartners() { return exPartnersOf(this.s); }
+  /** The most recent former partner (divorced, ended or widowed), or null. After a remarriage this is the one before the current partner. */
+  lastPartner() { return lastPartnerOf(this.s); }
+  /** A parent of the current partner (married or widowed): h.inLaw('mother') | h.inLaw('father') → { id, rel, name, given, birthYear, alive, deathYear, cause }, or null (no such partner, divorced, no marriage yet). */
+  inLaw(rel) { return inLawsOf(this.s, rel === 'father' ? 'father' : 'mother'); }
+  /** The partner's parents who are alive (0 to 2 entries). */
+  inLawsAlive() { return inLawsOf(this.s).filter((x) => x.alive); }
+  /** 岳父 | 岳母 | 公公 | 婆婆 (or 伴侶的父親 | 伴侶的母親) for the current partner's parent; '' when there is no such person. */
+  inLawWord(rel) { return inLawWordOf(this.s, rel === 'father' ? 'father' : 'mother'); }
+  /** When and how a parent died: { year, age (the person's age then), parentAge, cause, causeLabel, beforeBirth }, or null while the parent is alive. h.parentDiedAt('mother'). */
+  parentDiedAt(who) { return parentDiedAtOf(this.s, who === 'father' ? 'father' : 'mother'); }
+  /** The whole roster as plain data (copies): { siblings, coming, parents, partners, inLaws }, ages and labels filled in. */
+  kin() { return kinView(this.s); }
   /**
    * Does the family run a small business (shop, stall, workshop, farm stand)? Decided once per life by `stable()` so every
    * event that mentions "家裡的店" agrees. Only middle-quintile families (2-4) have one; about a third of them.

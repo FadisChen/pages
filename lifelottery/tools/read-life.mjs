@@ -12,6 +12,7 @@ import { getSummary } from '../js/engine/summary.js';
 import { setFocus } from '../js/engine/focus.js';
 import { makeHelpers } from '../js/engine/helpers.js';
 import { BY_CODE } from '../js/data/countries.js';
+import { kinView } from '../js/engine/kin.js';
 
 export function playLife(opt) {
   const settings = { era: opt.era || 'present', drawMode: opt.draw || 'births' };
@@ -32,6 +33,22 @@ export function playLife(opt) {
   return s;
 }
 
+/** The family roster (Phase 7A) as plain lines: parents, siblings, partners, in-laws, each with years and cause. */
+export function renderKin(s) {
+  const v = kinView(s);
+  if (!v) return [];
+  const span = (p) => `${p.birthYear ?? '?'}–${p.alive ? '' : p.deathYear}`;
+  const end = (p) => (p.alive ? `${p.age ?? '?'} 歲，健在` : `享年 ${p.deathAge ?? p.age ?? '?'}，${p.causeLabel || '?'}`);
+  const out = ['--- 家族名冊（死亡時） ---'];
+  for (const [w, label] of [['mother', '母'], ['father', '父']]) { const p = v.parents[w]; out.push(`${label}  ${p.name}  ${span(p)}  ${end(p)}  住處 ${p.where || '-'}`); }
+  out.push(`手足 ${v.siblings.length} 人${v.coming ? `（還有 ${v.coming} 人未出生）` : ''}，健在 ${v.siblings.filter((x) => x.alive).length}`);
+  for (const x of v.siblings) out.push(`  ${x.word.padEnd(2)} ${x.name}  ${span(x)}  ${end(x)}  ${x.married ? `已婚，${x.kids} 個孩子` : '未婚'}  住處 ${x.where || '-'}`);
+  if (!v.partners.length) out.push('伴侶 無');
+  for (const p of v.partners) out.push(`伴侶 ${p.name}  ${p.status}${p.current ? '（現任）' : ''}  ${p.since}–${p.until ?? ''}  ${span(p)}  ${end(p)}`);
+  for (const x of v.inLaws) out.push(`  姻親 ${x.word} ${x.name}  ${span(x)}  ${end(x)}${x.current ? '' : '（前任伴侶的）'}`);
+  return out;
+}
+
 export function renderLife(s) {
   const home = BY_CODE[s.homeCountryCode];
   const out = [];
@@ -46,6 +63,7 @@ export function renderLife(s) {
     out.push(`${String(e.age).padStart(3)} ${e.kind.padEnd(9)} ${e.title && e.kind !== 'year' ? e.title + '：' : ''}${e.text}${d}${e.echo ? `\n${' '.repeat(14)}↳ ${e.echo}` : ''}`);
   }
   const sum = getSummary(s);
+  out.push('', ...renderKin(s));
   out.push('', `--- 重要時刻（${sum.highlights.length}） ---`, ...sum.highlights.map((h) => `${h.age} 歲：${h.text}`));
   out.push('', `選擇 ${sum.counts.choices}，事件 ${sum.counts.events}，里程碑 ${sum.counts.milestones}；享年 ${sum.age}（本國平均 ${sum.lifespan.countryLe}）`);
   return out.join('\n');

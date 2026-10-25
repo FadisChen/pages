@@ -592,7 +592,7 @@ export default [
     ages: [20, 60],
     weight: 0.22,
     tags: ['migration', 'family'],
-    cond: (s, h) => !h.isMigrant() && !h.incomeAtLeast('H') && (h.siblings() > 0 || h.parentsAlive() > 0) && !h.has('m_reunion') && !h.retired(),
+    cond: (s, h) => !h.isMigrant() && !h.incomeAtLeast('H') && (h.siblingsAtBirth() > 0 || h.parentsAlive() > 0) && !h.has('m_reunion') && !h.retired(),
     text: (s, h) => '你的親人早幾年出國，現在站穩了腳步，打來電話說可以幫你辦團聚手續。電話那頭有新家的聲音：孩子的笑聲、說著另一種語言的鄰居。',
     choices: [
       {
@@ -984,7 +984,7 @@ export default [
         set: ['m_remit'],
         result: '你只留下夠生活的錢，其他的全寄回去。家人寄來新屋頂的照片，你在公車上把它拿出來看了好幾次。',
         schedule: [{ id: 'migration_remittance_fruit', inYears: [3, 5] }],
-        ai: (s, h) => (h.hasChildren() || h.siblings() > 0 ? 1.6 : 1),
+        ai: (s, h) => (h.hasChildren() || h.siblingsAtBirth() > 0 ? 1.6 : 1),
       },
       {
         label: '寄一半，存一半，準備接家人過來',
@@ -1048,7 +1048,7 @@ export default [
     cooldown: 8,
     weight: 0.5,
     tags: ['migration', 'money', 'regional'],
-    cond: (s, h) => !h.isMigrant() && !h.incomeAtLeast('H') && (h.siblings() > 0 || h.parentsAlive() > 0) && h.isRegion('SAS', 'SEA', 'LAC', 'SSA', 'MENA', 'CAS', 'EUR'),
+    cond: (s, h) => !h.isMigrant() && !h.incomeAtLeast('H') && (h.siblingsAtBirth() > 0 || h.parentsAlive() > 0) && h.isRegion('SAS', 'SEA', 'LAC', 'SSA', 'MENA', 'CAS', 'EUR'),
     text: (s, h) => h.byIncome({
       L: '村裡的小店有人收到了匯款通知，櫃檯前圍了一圈人。這一次是你家：遠在國外的親人寄了錢來，你拿到錢後，先把欠鄰居的米錢還了。',
       LM: '收到了一筆匯款通知，是在海外工作的親人寄來的。你用這筆錢繳了學費、買了藥，還剩一點，大家商量著要不要修屋頂。你把匯款收據小心折好，收進抽屜。',
@@ -1158,7 +1158,7 @@ export default [
     cond: (s, h) => h.isMigrant() && h.parentsFar() && Math.max(s.family.mother.alive ? s.family.mother.age : 0, s.family.father.alive ? s.family.father.age : 0) >= 62 && !h.has('m_parent_far'),
     text: (s, h) => {
       const link = linkOf(h);
-      const who = h.siblings() > 0 ? '手足' : '鄰居';
+      const who = h.siblingsAtBirth() > 0 ? '手足' : '鄰居';
       const news = link.how === '寫信' ? `一封蓋著加急戳記的電報送到宿舍門口，是${who}發來的：` : `深夜，${link.far}傳來${who}壓低的聲音：`;
       return `${news}${h.parentsOr('長輩')}住院了，醫生說要觀察一陣子。你${link.how === '寫信' ? '捏著那張薄薄的電報紙' : `握著${link.device}`}站在${h.countryName()}的宿舍走廊，離病房有一整片海那麼遠。請假要經過許多手續，機票貴得離譜，身邊的人都說「你先顧好自己」。`;
     },
@@ -1174,7 +1174,7 @@ export default [
         label: '寄錢回去，請手足先照顧',
         effects: { wealth: -3, happiness: -3, social: 0 },
         set: ['m_parent_far'],
-        result: (s, h) => `你把存款轉給${h.siblings() > 0 ? '手足' : '鄰居'}，${linkOf(h).how === '寫信' ? '一天發兩封電報' : '一天打兩次電話'}問病情。你沒能在病床邊，只能在${h.countryName()}把${linkOf(h).how === '視訊' ? '手機' : '電話'}放在枕頭旁，這樣再遠的鈴聲你都不會漏掉。`,
+        result: (s, h) => `你把存款轉給${h.siblingsAtBirth() > 0 ? '手足' : '鄰居'}，${linkOf(h).how === '寫信' ? '一天發兩封電報' : '一天打兩次電話'}問病情。你沒能在病床邊，只能在${h.countryName()}把${linkOf(h).how === '視訊' ? '手機' : '電話'}放在枕頭旁，這樣再遠的鈴聲你都不會漏掉。`,
         ai: (s, h) => (h.isPoor() ? 1.6 : 1),
       },
       {
@@ -1340,7 +1340,7 @@ export default [
     cooldown: 10,
     weight: 0.7,
     tags: ['migration', 'homesick', 'travel', 'family'],
-    cond: (s, h) => h.isMigrant() && (h.siblings() > 0 || h.parentsAlive() > 0 || h.childrenApart().length > 0 || h.coupleApart()),
+    cond: (s, h) => h.isMigrant() && (h.siblingsAtBirth() > 0 || h.parentsAlive() > 0 || h.childrenApart().length > 0 || h.coupleApart()),
     text: (s, h) => {
       const kid = youngestApart(s, h);
       const home = h.childrenApart().length || h.coupleApart();

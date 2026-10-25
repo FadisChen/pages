@@ -23,6 +23,7 @@ import { drawGroup, getPool, childFamilyToken } from '../data/names.js';
 import { fxOf } from './focus.js';
 import { placeGeo } from '../data/geo.js';
 import { remember, noteSpoken, speech, resting } from './memory.js';
+import { kinYear, kinParentDied, syncPartner, inLawsOf } from './kin.js';
 
 export const STAT_KEYS = ['health', 'happiness', 'knowledge', 'wealth', 'social'];
 export const EDU_LEVELS = ['none', 'primary', 'secondary', 'tertiary', 'graduate'];
@@ -363,8 +364,11 @@ export function standInKin(s) {
   return s.family.siblings > 0 ? '年紀最長的手足' : '';
 }
 
-/** Have the partner's parents died too? (not simulated: decided per life by the partner's age, so a wedding at 60 is often a wedding without any parents). */
+/** Have the partner's parents died too? From the roster (kin.js) once there is a marriage; the old guess by the partner's age only for a state without one. */
 export function partnerParentsGone(s) {
+  // the roster (kin.js) knows: both of the partner's parents are dead (created at the marriage, by the life tables)
+  const laws = inLawsOf(s);
+  if (laws.length) return laws.every((x) => !x.alive);
   const a = s.partner ? s.partner.age : s.age;
   return stableFlip(s, 'pt_parents_gone', clamp((a - 38) / 40, 0, 0.9));
 }
@@ -460,6 +464,7 @@ function agePeople(s, ctx) {
     const q = baselineQ(ctx.home, sex, s.birthYear, p.age - 1);
     if (rand(s.rng) < q) {
       p.alive = false;
+      kinParentDied(s, who); // the roster notes the year and the cause (no random number is used)
       const delta = applyDelta(s, {
         happiness: s.age < 18 ? -9 : -7, social: -3,
         wealth: s.age < 18 && who === 'father' && s.family.wealthQ <= 3 ? -3 : 0,
@@ -487,6 +492,7 @@ function agePeople(s, ctx) {
         const wasMarried = pt.status === 'married';
         const apart = !ensureHousehold(s).partner; // the couple lived in different places (one of them was working far away)
         pt.status = 'widowed';
+        syncPartner(s); // the roster notes the death (year, age, cause)
         householdOnPartnerGone(s, 'widowed');
         const delta = applyDelta(s, { happiness: wasMarried ? -14 : -8, social: -4, health: -2 });
         pushLog(s, 'milestone', wasMarried ? '失去伴侶' : '失去心上人',
@@ -1576,6 +1582,7 @@ export function newPartner(s, opts = {}) {
   if (!opts.replace && s.partner && (s.partner.status === 'dating' || s.partner.status === 'married')) return s.partner;
   const status = opts.status === 'married' ? 'married' : 'dating';
   s.partner = makePartner(s, ctx, 'dating', opts);
+  syncPartner(s);
   s.flags._coolUntil = 0;
   const hh = ensureHousehold(s);
   hh.partner = false; // a new person: nobody has moved in yet
@@ -1596,6 +1603,7 @@ export function endRelationship(s, years) {
   const f = s.flags;
   const cool = years ?? randInt(s.rng, 2, 4);
   s.partner = null;
+  syncPartner(s);
   const hh = ensureHousehold(s);
   hh.partner = false;
   if (hh.sep) hh.sep.partner = false;
@@ -1610,6 +1618,7 @@ export function endRelationship(s, years) {
 
 export function setPartner(s, p) {
   s.partner = p;
+  syncPartner(s);
   const hh = ensureHousehold(s);
   hh.partner = !!p && p.status === 'married';
   if (hh.sep) hh.sep.partner = false;
@@ -1623,6 +1632,7 @@ export function marry(s) {
   }
   s.partner.status = 'married';
   s.partner.since = s.year;
+  syncPartner(s); // the roster: married this year, the partner's parents are created
   s.flags._married = (s.flags._married || 0) + 1;
   remember(s, `love:wed${s.flags._married}`, `你和${s.partner.name}結了婚`, { tag: 'love', w: 3 });
   householdOnMarry(s);
@@ -1634,6 +1644,7 @@ export function marry(s) {
 export function divorce(s) {
   if (!s.partner || s.partner.status !== 'married') return false;
   s.partner.status = 'divorced';
+  syncPartner(s);
   s.flags._divorces = (s.flags._divorces || 0) + 1;
   remember(s, `love:div${s.flags._divorces}`, `你和${s.partner.name}的婚姻走到了盡頭`, { tag: 'love', w: 3 });
   householdOnPartnerGone(s, 'divorce');
@@ -1788,10 +1799,12 @@ function love(s, ctx) {
     if (ea >= f._dateAt && age < 75 && f._marryAt < 999) {
       const status = ea >= f._marryAt ? 'married' : 'dating';
       s.partner = makePartner(s, ctx, 'dating');
+      syncPartner(s);
       if (status === 'married') doMarriage(s, ctx);
       else pushLog(s, 'milestone', '心動', loveText(s, ctx), applyDelta(s, { happiness: 6, social: 3 }));
     } else if (f._marryAt >= 999 && age >= 21 && age <= 45 && !s.flags._noDating && chance(s.rng, 0.04 * (fx.informal ?? 1))) {
       s.partner = makePartner(s, ctx, 'dating');
+      syncPartner(s);
       pushLog(s, 'milestone', '一段感情', '你遇見了一個讓你想花時間相處的人，雖然誰都沒有提到婚姻這個詞。', applyDelta(s, { happiness: 6, social: 3 }));
     }
     return;
@@ -1802,6 +1815,7 @@ function love(s, ctx) {
     } else if (chance(s.rng, (f._marryAt < 999 ? 0.07 : 0.14) * (fx.breakup ?? 1))) {
       pushLog(s, 'event', '分手', `你和${pt.name}走到了盡頭。沒有誰對誰錯，只是兩個人看的方向不同了。`, applyDelta(s, { happiness: -7, social: -2 }));
       s.partner = null;
+      syncPartner(s);
       if (f._marryAt < 999) { f._dateAt = age + randInt(s.rng, 1, 3); f._marryAt = Math.max(f._marryAt, f._dateAt + randInt(s.rng, 1, 3)); }
     }
     return;
@@ -1956,6 +1970,7 @@ export function runSystems(s) {
   love(s, ctx);
   fertility(s, ctx);
   householdYear(s, ctx);
+  kinYear(s, ensureHousehold(s)); // the family roster (kin.js): siblings born and lost, the partner's parents, one merged line for the year's deaths
   wealthDynamics(s, ctx);
   statsDrift(s, ctx);
 }

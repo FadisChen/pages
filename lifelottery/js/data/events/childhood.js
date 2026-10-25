@@ -288,7 +288,7 @@ export default [
     ages: [5, 12],
     weight: 0.8,
     tags: ['family', 'money'],
-    cond: (s, h) => h.wealthQ() <= 3 && (h.siblings() >= 1 || !h.incomeAtLeast('UM')),
+    cond: (s, h) => h.wealthQ() <= 3 && (h.siblingsAtBirth() >= 1 || !h.incomeAtLeast('UM')),
     text: (s, h) => `你身上的衣服是兄姊或表親穿過的，袖口縫過兩次，膝蓋補得很整齊。新衣只在${h.festival()}才有，所以你格外愛惜，連洗都捨不得用力搓，晾衣服時還要特地挑最好的位置。`,
     effects: { happiness: +1, wealth: -1 },
   },
@@ -660,7 +660,7 @@ export default [
       },
       {
         label: '說是兄姊或弟妹做的',
-        cond: (s, h) => h.siblings() >= 1,
+        cond: (s, h) => h.siblingsAtBirth() >= 1,
         effects: { happiness: -3, social: -3 },
         set: ['c_blamed_sibling'],
         result: '挨罵的是你的手足。他看了你一眼，什麼也沒說。那天晚上，他翻身面向了牆壁。',
@@ -713,7 +713,7 @@ export default [
     major: true,
     weight: 0.9,
     tags: ['family', 'childhood', 'chain'],
-    cond: (s, h) => h.siblings() >= 1 && h.parentsAlive() >= 1,
+    cond: (s, h) => h.siblingsAtBirth() >= 1 && h.parentsAlive() >= 1,
     text: (s, h) => '家裡來了一個皺巴巴的小嬰兒，所有人都圍著他轉。你站在人群外面，手裡的玩具忽然變得不好玩了。你低頭盯著腳尖，覺得自己好像一下子變成了客人。',
     choices: [
       {
@@ -1202,7 +1202,7 @@ export default [
     major: true,
     weight: 0.8,
     tags: ['family', 'fairness'],
-    cond: (s, h) => h.siblings() >= 1 && h.parentsAlive() >= 1,
+    cond: (s, h) => h.siblingsAtBirth() >= 1 && h.parentsAlive() >= 1,
     text: (s, h) => (h.female() && h.isRegion('SAS', 'MENA', 'SSA', 'CAS', 'EAS') && !h.incomeAtLeast('H')
       ? '家務的分配好像總是不太公平：你在廚房、水邊忙進忙出，窗外院子裡玩球的歡呼聲，卻從來不是為你喊的。你把洗好的碗放進櫃子，忽然很想問為什麼，濕答答的手指在圍裙上擦了又擦。'
       : '家裡的家務越來越多，輪到你的那份總是做得最久。你看著手上的抹布，想著為什麼某些人的名字總是不在輪值表上，忽然覺得手上的水好冰，冰得有點委屈。'),

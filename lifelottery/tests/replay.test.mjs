@@ -72,8 +72,9 @@ test('createLife with a birth reuses the whole start and takes the rest from the
     assert.equal(again.year, b.birthYear);
     assert.equal(again.settings.era, b.eraKey, 'the era comes from the start, not from the settings');
     assert.equal(again.family.siblings, b.siblings);
-    assert.deepEqual(again.family.mother, b.mother);
-    assert.deepEqual(again.family.father, b.father);
+    const core = (p) => ({ alive: p.alive, age: p.age, name: p.name }); // (a parent also carries birthYear, deathYear, cause and where since Phase 7A)
+    assert.deepEqual(core(again.family.mother), b.mother);
+    assert.deepEqual(core(again.family.father), b.father);
     assert.equal(again.religion, b.religion);
     assert.equal(makeHelpers(again).familyBusiness(), b.business);
     assert.deepEqual(birthOf(again), b, 'a replayed life has the same start again (so it can be replayed in turn)');

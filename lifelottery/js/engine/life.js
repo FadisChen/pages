@@ -21,6 +21,7 @@ import { runEvents, resolveChoice, autoPickIndex, getPendingChoice, sanitizeNove
 import { makeHelpers, recordDeath, hash01 } from './helpers.js';
 import { drawReligion, RELIGION_LABELS } from '../data/religion.js';
 import { sanitizeMemories, listMemories } from './memory.js';
+import { initKin, ensureKin, kinView, birthKinOf, kinAnnounce } from './kin.js';
 import { FOCI, FOCUS_BY_ID, FOCUS_PROMPT_AGES, availableFoci, setFocus, autoFocus, ensureFocus, lapseFocus } from './focus.js';
 
 export { normalizeBirth };
@@ -114,6 +115,7 @@ export function createLife(settings = {}, seed = Date.now(), opts = {}) {
   if (typeof b.business === 'boolean') s.flags._fix = { family_business: b.business }; // read by stableFlip (systems.js)
   const novelty = sanitizeNovelty(opts.novelty);
   if (novelty) s.novelty = novelty;
+  initKin(s, b.kin); // the family roster (kin.js): siblings, born and still to come; no random number is used
   initSystems(s);
   pushLog(s, 'milestone', '誕生', `${s.year} 年，${s.name.full}出生在${b.country.name}${s.urban ? s.city : s.city + '附近的鄉下'}。`);
   s.statHistory.push(snapshotRow(s));
@@ -148,6 +150,7 @@ export function birthOf(s) {
     father: parent('father', '父親過世'),
     religion: s.religion,
     business: makeHelpers(s).familyBusiness(),
+    kin: birthKinOf(s), // Phase 7A: the siblings planned at birth (names, genders, birth years), reused by a replay
   };
 }
 
@@ -190,6 +193,7 @@ export function advanceYear(s, { auto = false, autoFocus: autoF = auto } = {}) {
   runSystems(s);
   const h = makeHelpers(s);
   runEvents(s, h);
+  if (s.alive && !s.flags._choice) kinAnnounce(s); // (after the events: the news of a sibling's or an in-law's death cannot change which events the year holds)
   finishYear(s);
 
   if (!s.alive) return { entries: s.log.slice(start), pendingChoice: null, died: true, focusPrompt: false };
@@ -199,6 +203,7 @@ export function advanceYear(s, { auto = false, autoFocus: autoF = auto } = {}) {
       resolveChoice(s, h, autoPickIndex(s, h));
       s.statHistory[s.statHistory.length - 1] = snapshotRow(s);
     }
+    if (s.alive && !s.flags._choice) { kinAnnounce(s); s.statHistory[s.statHistory.length - 1] = snapshotRow(s); }
   }
   return { entries: s.log.slice(start), pendingChoice: s.flags._choice || null, died: !s.alive, focusPrompt: !!s.flags._focusPrompt };
 }
@@ -209,6 +214,7 @@ export function choose(s, optionIndex) {
   const start = s.log.length;
   const h = makeHelpers(s);
   resolveChoice(s, h, optionIndex);
+  if (s.alive && !s.flags._choice) kinAnnounce(s); // (the news that waited for the choice)
   if (s.statHistory.length) s.statHistory[s.statHistory.length - 1] = snapshotRow(s);
   return { entries: s.log.slice(start), pendingChoice: null, died: !s.alive, focusPrompt: !!s.flags._focusPrompt };
 }
@@ -243,6 +249,7 @@ export function deserialize(text) {
   if ('memories' in s) { const m = sanitizeMemories(s.memories); if (m.length) s.memories = m; else delete s.memories; } // Phase 6C; saves from before have none
   if ('novelty' in s) { const nv = sanitizeNovelty(s.novelty); if (nv) s.novelty = nv; else delete s.novelty; } // Phase 5C; saves from before have none
   if (!RELIGION_LABELS[s.religion]) s.religion = religionOf(s.seed, s.homeCountryCode, s.flags._pool, s.settings && s.settings.era, s.birthYear, s.name && s.name.full);
+  ensureKin(s); // Phase 7A; saves from before have no roster: it is derived from the numbers, names and years the save has (no random numbers)
   return s;
 }
 
@@ -298,6 +305,7 @@ export function getStatus(s) {
     mother: { ...s.family.mother },
     father: { ...s.family.father },
     siblings: s.family.siblings,
+    kin: kinView(s),
     conditions: [...s.conditions],
     smoker: s.smoker,
     alive: s.alive,

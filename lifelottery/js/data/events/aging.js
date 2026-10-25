@@ -157,7 +157,7 @@ export default [
       },
       {
         label: '和家人商量，一起分擔',
-        cond: (s, h) => h.hasChildren() || h.siblings() > 0,
+        cond: (s, h) => h.hasChildren() || h.siblingsAtBirth() > 0,
         effects: { wealth: +1, social: +3, happiness: +1 },
         result: (s, h) => (h.hasChildren()
           ? `你終於開口，孩子沒有一絲猶豫地說「應該的」。每個月他們匯來一些錢，你也${h.childrenNearby().length > 0 ? '幫他們看小孩、煮飯' : '在電話裡替他們操心'}，彼此都不欠誰。`
@@ -560,7 +560,7 @@ export default [
     choices: [
       {
         label: '和家人同住',
-        cond: (s, h) => h.childrenNearby().length > 0 || h.siblings() > 0 || !h.incomeAtLeast('UM'),
+        cond: (s, h) => h.childrenNearby().length > 0 || h.siblingsAtBirth() > 0 || !h.incomeAtLeast('UM'),
         effects: (s, h) => { h.moveInWithChild(); h.change('social', +3); h.change('happiness', +2); h.change('health', +1); },
         set: ['elder_housed'],
         result: (s, h) => (h.livesWith('children')

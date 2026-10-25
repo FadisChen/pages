@@ -91,7 +91,7 @@ export default [
     ages: [13, 19],
     weight: 0.9,
     tags: ['family', 'hardship'],
-    cond: (s, h) => h.siblings() >= 2 && (h.parentsAlive() < 2 || h.wealthQ() <= 2),
+    cond: (s, h) => h.siblingsAtBirth() >= 2 && (h.parentsAlive() < 2 || h.wealthQ() <= 2),
     text: (s, h) => `${h.inSchool() ? '放學後，你要先去接弟妹，煮晚飯、檢查作業' : '每天傍晚，你要先去接弟妹，煮晚飯、盯著他們把功課寫完'}，再把家裡最後一盞燈關上。你很少抱怨，因為你知道，自己是這個家裡一根小小的柱子。`,
     effects: { health: -1, knowledge: -1, social: +2, happiness: 0 },
   },

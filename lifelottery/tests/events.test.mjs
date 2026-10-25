@@ -167,7 +167,7 @@ test('state schema matches PLAN 5.4', () => {
   assert.ok(s.death && s.death.causeId && s.death.causeText && s.death.age === s.age && s.death.year === s.year);
   assert.equal(s.statHistory.length, s.age + 2, 'one history row per year plus birth and death rows');
   for (const e of s.log) {
-    assert.ok(['year', 'event', 'choice', 'milestone', 'death'].includes(e.kind));
+    assert.ok(['year', 'event', 'choice', 'milestone', 'death', 'kin'].includes(e.kind)); // ('kin': a sibling or an in-law died, Phase 7A)
     assert.ok(e.age >= 0 && e.year >= s.birthYear && typeof e.text === 'string');
   }
 });

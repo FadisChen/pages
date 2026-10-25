@@ -576,12 +576,12 @@ export default [
     cooldown: 8,
     weight: 0.7,
     tags: ['regional', 'money', 'migration'],
-    cond: (s, h) => lowInc(h) && REMIT.has(s.countryCode) && h.yearIn(1980, 2100) && (h.siblings() > 0 || h.hasChildren() || h.parentsAlive() > 0),
+    cond: (s, h) => lowInc(h) && REMIT.has(s.countryCode) && h.yearIn(1980, 2100) && (h.siblingsAtBirth() > 0 || h.hasChildren() || h.parentsAlive() > 0),
     text: (s, h) => `月底，${h.year() >= 2008 ? '手機跳出一則匯款通知' : '郵局的人把一張匯款單送到門口'}：在國外工作的家人又把一部分薪水寄了回來。你看著那個數字，知道它背後是對方在異地一個個疲倦的夜班。${h.livesAlone() ? '你一個人把這筆錢分成幾份，慢慢盤算該怎麼用。' : '全家人圍著，討論這筆錢該怎麼用。'}`,
     choices: [
       {
         label: '拿來付學費、買書與制服',
-        cond: (s, h) => h.hasChildren() || h.siblings() > 0,
+        cond: (s, h) => h.hasChildren() || h.siblingsAtBirth() > 0,
         effects: { knowledge: +3, wealth: -1, happiness: +2 },
         result: (s, h) => `你把學費繳清，剩下的給家裡的小孩買了新書包與兩雙鞋。${h.hasChildren() ? '孩子' : '弟妹'}在學校的筆記本上畫了一個國旗，旁邊寫了遠方那個人的名字。`,
         schedule: [{ id: 'regional_remittance_result', inYears: [2, 4] }],

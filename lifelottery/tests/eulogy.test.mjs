@@ -111,7 +111,8 @@ test('3000 lives: every eulogy is present, clean, 60-260 characters and 3-5 sent
   }
   assert.equal(bad.length, 0, `${bad.length} bad eulogies, first:\n${bad.slice(0, 4).join('\n')}`);
   // the corpus has to contain every tone, or the checks below prove little
-  for (const s of ['infant', 'child', 'youth', 'calamity', 'migrant', 'hard', 'long', 'quiet']) assert.ok((shapes[s] || 0) >= 8, `shape ${s} seen ${shapes[s] || 0} times: ${JSON.stringify(shapes)}`);
+  // (calamity is rare: the 800 lives of a quick run hold 6 to 9 of them, the 3000 of a complete run about 30)
+  for (const s of ['infant', 'child', 'youth', 'calamity', 'migrant', 'hard', 'long', 'quiet']) assert.ok((shapes[s] || 0) >= (s === 'calamity' ? scaled(8, 4, 4) : 8), `shape ${s} seen ${shapes[s] || 0} times: ${JSON.stringify(shapes)}`);
 });
 
 test('the same life gives the same words: repeated calls, the stored summary, and the album-normalised summary', () => {

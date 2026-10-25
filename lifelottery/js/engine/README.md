@@ -4,7 +4,7 @@ For the UI agent (Phase 2A), the event writers (2B–2D) and QA (3). Everything 
 is pure ES modules with **no DOM access**; it runs in browsers and in Node 22.
 
 ```
-js/engine/  rng · birth · mortality · systems · events · helpers · life · summary · focus (Phase 4A) · odds (Phase 4C)
+js/engine/  rng · birth · mortality · systems · events · helpers · life · summary · focus (Phase 4A) · odds (Phase 4C) · memory (6C) · kin (Phase 7A)
 js/data/    countries (generated) · eras · names · causes · conditions · yearly · riskref (generated) · religion · geo · money (Phase 4A) · worldmap (4C)
             events/ index · seed · childhood · youth · adult_work · adult_family · migration · health · aging · world · regional
 tools/      fetch-raw · build-data (→ countries.js) · calibrate-risk (→ riskref.js) · coherence-scan · read-life
@@ -40,14 +40,14 @@ if (!s.alive) getSummary(s);                    // review screen / share card / 
 | Function | Description |
 | --- | --- |
 | `createLife(settings, seed, opts?)` | New life. `settings`: `era` (`'past'`/`'present'`/`'future'`/`'random'`), `drawMode` (`'births'`/`'population'`), `pace` (`'short'`/`'standard'`/`'long'`), `autoChoice` (bool; a UI hint only). Optional `settings.birthYear` forces the "present" year. `seed` is any string/number: same seed + settings ⇒ identical life. `opts` can force `{ countryCode, gender, urban, wealthQ, birthYear, eraKey, city }` (tests, tools), carry the cross-life `novelty` counts, or carry a whole `birth` (next row). |
-| `createLife(settings, seed, { birth })` / `birthOf(state)` / `normalizeBirth(b)` | **Same start, live again** (Phase 5E). `birthOf(state)` returns the start of a life as plain JSON (`{ v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ, poolKey, name:{ given, family, full, givenToken, familyToken }, siblings, mother/father:{ alive, age, name }, religion, business }`), exact at any age (the parents' ages and `alive` are the values at birth). `createLife(settings, newSeed, { birth })` reuses all of it and takes everything else from the new seed: no random number is spent on the birth, so the life is a normal life from the first year on. The family-business answer (decided by `stableFlip`, which hashes the seed) is carried in `state.flags._fix = { family_business }`, which `stableFlip` honours. `normalizeBirth(b)` validates (`null` = unusable, e.g. unknown country; `.full === false` = only country, city, urban, gender, wealth, birth year and era are usable, the rest is drawn: this is how an old album record without a stored start is replayed). Without `birth` (or with `birth: undefined`) nothing changes: the same seed gives the same bytes as before (`tests/replay.test.mjs`). |
+| `createLife(settings, seed, { birth })` / `birthOf(state)` / `normalizeBirth(b)` | **Same start, live again** (Phase 5E). `birthOf(state)` returns the start of a life as plain JSON (`{ v:1, eraKey, birthYear, countryCode, city, urban, gender, wealthQ, poolKey, name:{ given, family, full, givenToken, familyToken }, siblings, mother/father:{ alive, age, name }, religion, business, kin?:{ siblings:[{ name, given, gender, birthYear }] } }`; `kin` is the sibling roster planned at birth, Phase 7A), exact at any age (the parents' ages and `alive` are the values at birth). `createLife(settings, newSeed, { birth })` reuses all of it and takes everything else from the new seed: no random number is spent on the birth, so the life is a normal life from the first year on. The family-business answer (decided by `stableFlip`, which hashes the seed) is carried in `state.flags._fix = { family_business }`, which `stableFlip` honours. `normalizeBirth(b)` validates (`null` = unusable, e.g. unknown country; `.full === false` = only country, city, urban, gender, wealth, birth year and era are usable, the rest is drawn: this is how an old album record without a stored start is replayed). Without `birth` (or with `birth: undefined`) nothing changes: the same seed gives the same bytes as before (`tests/replay.test.mjs`). |
 | `advanceYear(state, { auto?, autoFocus? })` | Lives one year. Returns `{ entries, pendingChoice, died, focusPrompt }`. `entries` are the new log entries of this year. If a choice is pending, calling it again returns the same `pendingChoice` and does **not** advance. `auto: true` resolves choices by their `ai` weights and picks the life focus itself at each stage prompt (simulations); `autoFocus: false` keeps the focus alone (tests that force one). `focusPrompt` is true in the year a new life stage starts (see "Life focus"). |
 | `FOCI`, `availableFoci(state)`, `setFocus(state, id)`, `autoFocus(state)` | The life focus API, see "Life focus (Phase 4A)" below. |
 | `choose(state, optionIndex)` | Resolve the pending choice. `optionIndex` indexes `pendingChoice.options` (not the original `choices` array). Returns `{ entries, pendingChoice: null, died }`. Throws if nothing is pending or the index is invalid. |
 | `autoChoose(state)` | Same as `choose`, picking by `ai` weights (seeded, so reproducible). Use it for the "自動抉擇" countdown. |
 | `getPendingChoice(state)` | `{ eventId, title, text, options: [{ index, label, hint? }] }` or `null`. Stored in `state.flags._choice`, so it survives save/load. |
 | `serialize(state)` / `deserialize(text)` | JSON string ↔ state. `deserialize` validates version, rng, country codes and throws on corrupt data. |
-| `getStatus(state)` | Compact read-only snapshot for the life-screen header and the people drawer (name, age, stage, country, stats, partner, children with ages, parents, conditions…). |
+| `getStatus(state)` | Compact read-only snapshot for the life-screen header and the people drawer (name, age, stage, country, stats, partner, children with ages, parents, conditions…, `kin`: the family roster, section 12). |
 | `lifeStage(age)` | `'嬰兒' … '高齡'`. |
 
 New state fields (Phase 4A): `state.religion` (family religion, see "Religion and culture"), `state.focus` (`'balance'` …) and `state.focusHistory` (`[{ age, focus }]`).
@@ -59,11 +59,12 @@ kept in `state.settings.eraSetting`.
 ### Log entries (`state.log`, `entries`)
 
 ```js
-{ age, year, kind: 'year'|'event'|'choice'|'milestone'|'death', title, text, delta? }   // delta: { health: -3, … } actual change
+{ age, year, kind: 'year'|'event'|'choice'|'milestone'|'death'|'kin', title, text, delta? }   // delta: { health: -3, … } actual change
 ```
 * `year` entries are the "平凡的一年" lines (`title` is `"{age} 歲"`; show only the text).
 * A major event produces an `event` entry (the situation) when it appears and a `choice` entry (title = chosen label, text = result) after `choose`.
 * `h.log(text)` entries have an empty `title`.
+* `kin` entries (Phase 7A) tell the death of a sibling or of the partner's parent (title `哥哥過世`, `岳母過世`, or `親人過世` for several in one year). They are written at the **end** of the year, after the events; a quiet year's `year` line is replaced by them. See section 12.
 * `state.highlights`: `[{ age, year, text }]` — texts do **not** contain the age; render as `"{age} 歲：{text}"`.
 * `state.statHistory`: one `{ age, health, happiness, knowledge, wealth, social }` row per year (+ birth row, + a row at death), ready for the SVG curve.
 
@@ -205,7 +206,7 @@ if single) rather than `s.partner.name`; `h.childName(0)` returns `'孩子'`. `t
 Direct state edits are allowed in function effects (`s.stats`, `s.flags`), but prefer helpers. Never offer suicide as a choice.
 Call helpers as methods: `h.chance(0.3)`, never destructure.
 
-### Helpers (`h`, all 181 in helpers.js, plus six from events.js; the household ones are in section 9, the memory ones in section 11)
+### Helpers (`h`, all 196 in helpers.js, plus six from events.js; the household ones are in section 9, the memory ones in section 11, the family roster ones in section 12)
 
 * **Randomness**: `rand() chance(p) pick(arr) between(a,b) randInt(a,b)` (seeded; reproducible).
 * **Time**: `age() year() birthYear() era() yearIn(a,b) ageIn(a,b)`.
@@ -218,7 +219,7 @@ Call helpers as methods: `h.chance(0.3)`, never destructure.
   to the nearest defined group: `h.byIncome({ L: '…', H: '…' })`. Use `income()` / `incomeAtLeast()` in `cond` for "what kind of country is this".
   `setUrban(true|false)` moves between countryside and city inside the current country; `setCity()` picks a random city of the country, `setCity('台北')`
   sets a name. (`migrate()` also moves you to a city of the new country and makes you urban with probability 0.85.)
-* **Identity & situation**: `stat(k) female() male() gender() wealthQ() annualIncome() isRich() isPoor() inSchool() inTertiary() eduLevel() eduAtLeast(level) eduYears() employed() unemployed() retired() workStatus() job() jobName() isJob(...ids) married() hasPartner() partnerStatus() partnerAge() yearsMarried() hasChildren() childCount() youngestChildAge() siblings() parentAlive('mother'|'father') parentsAlive() isSmoker() hasCondition(id) has(flag) flag(name) yearsSince(eventId) seenEvent(eventId) recentLog(titleOrKind, years?) stable(key, p)`.
+* **Identity & situation**: `stat(k) female() male() gender() wealthQ() annualIncome() isRich() isPoor() inSchool() inTertiary() eduLevel() eduAtLeast(level) eduYears() employed() unemployed() retired() workStatus() job() jobName() isJob(...ids) married() hasPartner() partnerStatus() partnerAge() yearsMarried() hasChildren() childCount() youngestChildAge() siblingsAtBirth() parentAlive('mother'|'father') parentsAlive() isSmoker() hasCondition(id) has(flag) flag(name) yearsSince(eventId) seenEvent(eventId) recentLog(titleOrKind, years?) stable(key, p)`.
   * `inTertiary()`: studying at university level or beyond right now (`inSchool() && eduYears() >= 12`).
   * `recentLog('母親過世' | ['母親過世', '父親過世'] | 'milestone', years = Infinity)`: the most recent log entry whose **title or kind** matches, at most `years` years ago, or `null`.
     Use it instead of scanning `s.log` in `cond`/`weight`.
@@ -313,9 +314,11 @@ node --test tests/agency.test.mjs      # Phase 6A: decision tiers, family-decide
 node tools/agency-scan.mjs 1500 --static --cards   # who decides: choice cards shown under 18 by event, adult-only acts found in them, and the static audit of every choice event x age x household
 node --test tests/consequence.test.mjs   # Phase 6C: the consequence tracker threshold (about half of the major choices echoed, 51 % measured, 17 % before 6C), the memory API, the decider per stage, the drawer's household view (section 11)
 node tools/consequence-scan.mjs --lives=2000 [--static] [--dynamic] [--top=40] [--blind] [--json=out.json]   # which major choices leave a mark on the rest of the life, and which do not
+node --test tests/kin.test.mjs        # Phase 7A: the family roster (section 12): sibling plan and mortality against the life tables, partners, in-laws, old saves, replays, and that the protagonist's random stream is untouched
+node tools/kin-determinism.mjs --base=/tmp/old/lifelottery --n=200   # plays seeds with an older checkout (git archive <commit> lifelottery | tar -x -C /tmp/old) and this one; every life must agree until the first kin line (and to the end with grief off)
 npm run test:quick                      # the whole suite with the heavy audits at a smaller size (LL_QUICK=1, about 4 minutes); `npm test` stays the complete run (section 7b)
 node tools/calibrate-risk.mjs [lives] [passes]          # regenerate data/riskref.js
-node tools/read-life.mjs --seed=x --country=NPL --religion=hindu --focus=work --city=比拉特納加   # print one whole life (also --era --gender --urban --wealth --birthYear)
+node tools/read-life.mjs --seed=x --country=NPL --religion=hindu --focus=work --city=比拉特納加   # print one whole life (also --era --gender --urban --wealth --birthYear), ending with the family roster at death (Phase 7A)
 node tools/fetch-raw.mjs && node tools/build-data.mjs   # regenerate data/countries.js
 ```
 Note: on Node 22 `node --test <directory>` is not supported (positional arguments are globs); use the glob form above.
@@ -475,4 +478,82 @@ A memory that was spoken (in any line: `pushLog` calls `noteSpoken`) is not spok
 **The person who decides.** `whoDecides` is now fixed per life stage (infant 0-5, child 6-11): two decisions in the same year, or the same stage, name the same adult. The `salt` argument is still accepted and no longer changes the answer.
 
 **Household view.** `getStatus(s).household = { mother, father, partner, children[] }` with `with_you | apart | home_country | abroad | with_partner | with_other_parent | with_grandparents | independent | ''`; the family drawer words them (`strings.js people.where`) and lists `getStatus(s).memories` (the newest five) under 回憶.
+
+## 12. The family roster (Phase 7A): every sibling, partner and in-law is a person
+
+`js/engine/kin.js`, `state.kin`. Before Phase 7A a life knew the NUMBER of its siblings (`family.siblings`), one partner object, two parent objects and nothing about the partner's parents. Now every one of them is a person with a name, a gender, a birth year, a life that ends (year, age, cause) and a place to live; events, memories, the life story and the UI should speak from the roster. Nothing here uses `state.rng`.
+
+### The state
+
+```js
+state.kin = {
+  v: 1,
+  siblings:  [ { id, name, given, gender, birthYear, older, alive, deathYear, deathAge, cause, where, married, kids } ],   // BORN siblings, oldest first, the dead stay
+  coming:    [ { id, name, given, gender, birthYear } ],     // younger siblings not born yet (they join `siblings` in their birth year)
+  birthRoster: [ { id, name, given, gender, birthYear } ],   // the family as planned at birth (what birthOf() gives a replay)
+  partners:  [ { id, name, gender, birthYear, status, since, until, marriedYear, alive, deathYear, deathAge, cause, pool, cc, ft, gt, from } ],  // oldest first
+  inLaws:    [ { id, rel, partnerId, name, given, gender, birthYear, alive, deathYear, deathAge, cause, cc, from } ],
+  cur, year, nid, dropped, news, waited,                     // bookkeeping
+}
+state.family.mother / .father   // as before ({ alive, age, name }) plus birthYear, deathYear, deathAge, cause, where
+```
+
+* **Siblings.** `family.siblings` (the lottery's number, unchanged and still drawn the same way) is the TOTAL the person will have over a life. At birth it is split into older siblings (already born: `kin.siblings`, `older: true`) and younger ones (`kin.coming`) by a plausible birth order: gaps between births follow the country's TFR (about 2 to 3.4 years), the first child comes at about 22 (never before 16), the last by 44; a mother who is dead at the birth has only older children. A younger sibling joins in his birth year **only while the mother is alive** (`deathYear` of the mother) and not past 45. So `siblings.length + coming.length` equals `family.siblings` (measured 99.9% in 4000 lives), and the number *alive and born at age X* follows from the life tables. Names: the family's culture group and family-name token (`names.js`; patronymic and syllabic cultures like `childFamilyToken`), unique inside the family. `given` is the given name (use it in sentences: 「你的哥哥志明」), `name` the full name. `older` is relative to the person (`birthYear < state.birthYear`). `where`: `'with_you' | 'apart' | 'home_country' | 'abroad' | ''` (dead). `married` / `kids` are the sibling's own life, derived from the hash stream (about 9 in 10 marry; children by the TFR).
+* **Parents.** Still decided by `systems.js agePeople` with `state.rng`, exactly as before (so the protagonist's stream is the old one). The roster only records: `birthYear`, `deathYear` (the year `state.year` was when they died; a parent dead at the birth: the birth year), `deathAge` (the parent's age), `cause` (a cause id from `causes.js`, drawn from the person's own hash stream) and `where` (`with_you | apart | home_country | ''`). The old log lines (「母親過世」, 「父親過世」) and memories are unchanged.
+* **Partners.** `state.partner` stays the current partner object (including a divorced or widowed one until the next partner replaces it). `kin.partners` keeps every partner: `status` is `dating | married | divorced | widowed | ended` (`ended` = a break-up, or a partner who died before a marriage), `since` the first year, `marriedYear`, `until` the year it ended, `alive / deathYear / deathAge / cause`, and `pool` (the culture group). `syncPartner(state)` makes the history follow `state.partner`; every system that sets or ends a partner calls it (`newPartner`, `setPartner`, `marry`, `divorce`, `endRelationship`, the break-up and the first meeting in `love`, widowhood in `agePeople`) and it runs once a year, so a state that was edited by hand is repaired at the next read. Dating and married partners die by the old rule (`state.rng`); former partners age on the roster's stream (no line in the log).
+* **In-laws.** Created when a partner is first married (`marriedYear`): two entries (`rel: 'mother' | 'father'`) with names from the PARTNER's culture group and family-name token, born 17 to 44 years before the partner, alive or dead at the wedding by the life tables (about a quarter are dead at the wedding), mortal afterwards. They stay under their partner (`partnerId`): after a divorce they are the ex's, after a widowhood they are still yours. `systems.js partnerParentsGone()` (the wedding texts) now reads them.
+
+### Years and deaths: the independent stream
+
+Every chance in the roster is `hash01(seed + purpose + person + year)` (kin.js `u01`): independent of `state.rng`, of the number of draws the life has made, and of the order in which things are asked, so it can be recomputed for an old save. Each year, for every living sibling, in-law and former partner: `q = lifeTable(home country, gender, birth year).q[age]` (the same tables as the protagonist; under five the family's wealth and urban/rural setting move it by the same factors as for the protagonist, which average to 1). Measured against the table in 4000 lives (sibling person-years): observed / table = 1.04 / 0.93 / 1.03 / 1.00 / 0.99 / 1.02 for ages 0-4, 5-14, 15-39, 40-59, 60-79, 80+. Causes come from `causes.js causeWeights` with the person's own age, gender, country and year.
+
+**The protagonist's life is not touched.** Same seed, same events, same choices, same death, the same final state of `state.rng`: `node tools/kin-determinism.mjs --base=<an older checkout>` plays seeds with both versions and compares (200 of 200 identical against the commit before Phase 7A). Three things could reach the protagonist and each is dealt with:
+
+1. The log line is written after the events (`kinAnnounce`, life.js), so it cannot use up the year's entry budget or replace the "ordinary year" draw. A quiet year's ordinary line is replaced by it; a year that already holds four lines holds the news back (at most `KIN_TUNING.holdYears` = 2 years; measured: 4 in 3155 announcements are late).
+2. The memory is `quiet` (`remember(..., { quiet: true })`, memory.js): kept, listed in the family drawer and used by the life story's keepsake, but never chosen by a reflection or an echo and outside the 48-memory cap (own cap 16). Reflections choose with `hash01`, but whether a year reflects decides whether `pickYearly` draws a number, so a spoken kin memory WOULD move the stream. `KIN_TUNING.quietMemories = false` lets them be spoken (the stream then changes).
+3. Grief is the one real feedback: a sibling's death takes happiness 3 to 4 and people 1 (an in-law: happiness 1), merged and capped (-8 / -3) in a year. Stats feed conditions, so a later event can differ. Measured: with grief **off** 200 of 200 lives are identical to the older version from birth to death; with grief **on** 190 of 200, and the others agree up to the first kin line. `KIN_TUNING.grief = false` removes the feedback entirely.
+
+`KIN_TUNING` (kin.js): `enabled` (false: no roster at all, as a control in tests), `grief`, `quietMemories`, `siblingMax`, `holdYears`.
+
+### The system line
+
+One `kin` entry per year (merged), second person, short: 「你的哥哥志明在52歲那年因中風過世了。小時候你總跟在他後面跑，如今，那條路只剩你一個人走了。」 Several in a year: 「…也在這一年走了。」 with the title `親人過世`. It carries the grief `delta`, a quiet memory (`loss:sib:<id>`, `loss:inlaw:<id>`, weight 3 / 2), and a highlight 「哥哥志明離世。」 for a sibling (from the person's age 6). The cause is named in words by `deathPredicate(cause)` (`因中風過世了`, `在戰事中喪生了`); a suicide or `other` is not named in the line, only in the roster. In-laws are told only while their partner is married or widowed to you; a former partner's in-laws die silently. The parents' lines are the old ones.
+
+### Helpers (`h`)
+
+| Helper | Returns |
+| --- | --- |
+| `siblings(sel?)` | the siblings born so far, oldest first, **the dead too**: `[{ id, name, given, gender, birthYear, older, alive, deathYear, deathAge, cause, where, married, kids }]`. `sel` filters: `{ older, younger, gender, alive, id, name }` (live objects: do not edit) |
+| `livingSiblings()` | `siblings({ alive: true })` |
+| `sibling(sel)` | one sibling matching `sel` (or an id / name / a sibling object): the one closest in age to you, the older on a tie; `null` |
+| `hasLivingSibling(sel?)` | `h.hasLivingSibling({ older: true, gender: 'M' })` = a living older brother |
+| `siblingName(sel, { full }?)` | the given name (the full name with `{ full: true }`), `''` when nobody matches |
+| `siblingWord(sel)` | `哥哥 / 姊姊 / 弟弟 / 妹妹` by birth order and gender, `''` when nobody matches |
+| `siblingsAtBirth()` | the legacy number (`family.siblings`: the lifetime total the lottery drew). **This is what `h.siblings()` returned before Phase 7A**; every existing event that used the number now calls it. New text should not: it counts the dead and the not yet born |
+| `partners()` | every partner entry, oldest first |
+| `currentPartner()` | the entry of the dating or married partner, else `null` |
+| `exPartners()` | divorced or ended partners (a late spouse is not an ex), oldest first |
+| `lastPartner()` | the most recent former partner (divorced, ended or widowed), `null` |
+| `inLaw('mother' \| 'father')` | the current partner's parent (partner married or widowed), alive or not; `null` without a marriage, after a divorce |
+| `inLawsAlive()` | the partner's parents who are alive (0 to 2) |
+| `inLawWord('mother' \| 'father')` | `岳母 / 岳父` (a wife's parents), `婆婆 / 公公` (a husband's), `伴侶的母親 / 父親` (same-sex couples), `''` |
+| `parentDiedAt('mother' \| 'father')` | `{ year, age (yours then), parentAge, cause, causeLabel, beforeBirth }` or `null` while the parent lives |
+| `kin()` | the whole roster as plain data (copies) with ages, words and labels filled in (`kinView`) |
+
+Module exports (kin.js) for engine code: `initKin, ensureKin, kinYear, kinAnnounce, syncPartner, kinParentDied, siblingsOf, siblingOf, partnersOf, currentPartnerOf, exPartnersOf, lastPartnerOf, inLawsOf, inLawWordOf, parentDiedAtOf, kinView, kinSummary, birthKinOf, cleanBirthKin, sibWord, inLawTerm, deathPredicate, causeLabelOf, KIN_TUNING`.
+
+### Reading it from the UI and the story
+
+* `getStatus(s).kin` (= `kinView(s)`): `{ siblings: [{ ...sibling, word, age (now, or at death), ageNow, causeLabel }], coming (a count), parents: { mother, father: { name, alive, age (now, or at death), birthYear, deathYear, cause, causeLabel, where } }, partners: [{ ...partner, age, causeLabel, current }], inLaws: [{ ...inLaw, word, age, causeLabel, current }] }`. `current` is true for the partner you have now (dating or married; a divorced partner who is still `state.partner` is not current) and, for in-laws, for the parents of a married or widowed partner (the ones `h.inLaw()` returns). `getStatus(s).siblings` is still the legacy number.
+* `getSummary(s).kin` (= `kinSummary(s)`, stored in the album by `storage.js normalizeSummary`): `{ siblings: [{ name, given, gender, word, older, birthYear, alive, deathYear, deathAge, cause, causeLabel, married, kids }], parents: { mother, father: { name, alive, birthYear, deathYear, deathAge, cause, causeLabel } }, partners: [{ name, gender, status, since, until, marriedYear, birthYear, alive, deathYear, deathAge, cause, causeLabel, current }], inLaws: [{ rel, word, partnerName, name, birthYear, alive, deathYear, deathAge, cause, causeLabel, current }] }`. Records from before Phase 7A have no `kin`.
+* `tools/read-life.mjs` prints the roster at death (`renderKin`).
+
+### Old saves, replays
+
+* `deserialize` calls `ensureKin`: a state without a roster gets one derived from `family.siblings`, the parents' ages and the log (`母親過世` gives the year), `state.partner` and `flags._married`; then every year lived so far is replayed from the hash stream, silently. No random number is used (`state.rng` is untouched), and the derived roster is the one the life would have had (same siblings, same years, same causes: `tests/kin.test.mjs`). An old save knows only its CURRENT partner (earlier ones were overwritten before Phase 7A).
+* `birthOf(state).kin` is the sibling roster planned at birth, in `meta.birth` of the album record (`storage.js cleanStart`, `birth.js normalizeBirth` via `cleanBirthKin`). `createLife(settings, newSeed, { birth })` reuses it (names, genders, birth years); mortality and the mother's death are new. A start without `kin` (an older album record) plans the family from the number.
+
+### Tests
+
+`tests/kin.test.mjs` (29 tests): the roster at birth (names, order, family sizes), younger siblings and the mother, mortality against the tables, the merged line, grief, the quiet memory, the held-back news, partners (remarriage keeps the ex, every setter), in-laws, parents, the protagonist's stream (with the roster off as the control, and with grief on), old saves, replays, getStatus / getSummary / storage, helpers.
 

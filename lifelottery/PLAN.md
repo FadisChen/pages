@@ -977,3 +977,89 @@ state = {
   - `node tests/e2e.mjs`、`tests/e2e-pacing.mjs`、`tests/e2e-eulogy.mjs`、`tests/a11y.mjs`
   - 三種模式的 `coherence-scan`，3000 段人生
 - 家人過世的系統行會增加閱讀量，要留意 10 分鐘人生的節奏。
+
+## Phase 7A notes（階段 7A：家族名冊）
+
+新模組 `js/engine/kin.js`、狀態 `s.kin`、文件在 `js/engine/README.md` 第 12 節（API 與欄位以那一節為準）、測試 `tests/kin.test.mjs`（29 項）、工具 `tools/kin-determinism.mjs`。`npm test` 289 項全過（原 260 項＋29 項）、`node tests/e2e.mjs` 83 項零 console 錯誤、`e2e-pacing` 17 項、`e2e-eulogy` 20 項、`a11y` 80 個畫面零違規。
+
+### 做了什麼
+
+- **手足逐人記錄**：`kin.siblings`（已出生，含已過世者）、`kin.coming`（尚未出生的弟妹）、`kin.birthRoster`（出生時規劃的名冊，`birthOf` 交給重活）。每人有 `id name given gender birthYear older alive deathYear deathAge cause where married kids`。名字來自家庭的文化群與家姓（沿用 `names.js` 的規則，父名制與音節制照 `childFamilyToken`），家中不重名。
+- **長幼與弟妹出生**：出生抽到的手足數 N（`family.siblings`，抽法完全不動）是**一生的總數**。依母親年齡與該國 TFR（生育間隔約 2–3.4 年、第一胎約 22 歲且不早於 16 歲、最後一胎不晚於 44 歲）分成哥哥姊姊（已出生）與弟弟妹妹（`coming`）。弟妹在出生年加入，**母親當年已過世或超過 45 歲就取消**。母親出生時已不在，則全是年長手足。
+- **父母**：仍用 `systems.js agePeople` 的舊邏輯與 `state.rng`，只補欄位 `birthYear deathYear deathAge cause where`（死因另用名冊自己的雜湊流抽）。**選的是你偏好的方案**：不搬動，所以主角的亂數序列與舊版完全相同；原本的「母親過世」「父親過世」系統行與回憶不變。
+- **伴侶歷史**：`kin.partners`，`status` 為 `dating | married | divorced | widowed | ended`；`s.partner` 仍是現任（離婚或喪偶後仍指向那一位，直到下一位取代）。`syncPartner(s)` 讓歷史跟著 `s.partner`，在 `newPartner / setPartner / marry / divorce / endRelationship`、`love()` 的初識與分手、`agePeople` 的喪偶各處呼叫，每年也跑一次，所以手動改過的狀態下次讀取時會被修正。現任（dating / married）的死亡仍由舊邏輯決定；前任的生死由名冊決定，不寫進日誌。
+- **姻親**：第一次結婚時建立兩位（`rel: mother | father`），名字依**伴侶**的文化群，出生年在伴侶之前 17–44 年，結婚當下是否在世依生命表（約四分之一在婚禮前已過世），之後逐年判定。離婚後留在前任名下，喪偶後仍是你的姻親。`partnerParentsGone()`（婚禮文字）改讀名冊。
+- **逐年生死**：手足、姻親、前任都用同一套生命表（國家、出生年、性別、年齡；五歲以下加上家境與城鄉的同一組係數，平均為 1），死因用 `causes.js` 的同一張表。
+- **系統行**：一年內的手足與姻親過世合併成**一條** `kind: 'kin'` 的日誌（標題 `哥哥過世`、`岳母過世`，多人則 `親人過世`），附小幅哀傷（手足：幸福 −3 到 −4、人際 −1；姻親：幸福 −1；合計上限 −8／−3），一則安靜的回憶（`loss:sib:<id>`、`loss:inlaw:<id>`）與手足的重要時刻（「哥哥志明離世。」）。只有現任（結婚或喪偶）伴侶的姻親會寫進日誌。
+- **舊存檔**：`deserialize` 呼叫 `ensureKin`，只用現有的數字、名字、日誌（父母過世的年份）與 `s.partner`（`flags._married` 判斷是否結過婚）推導，再把已活過的每一年用同一個雜湊流無聲地重播；不碰 `state.rng`；結果與一條從頭活下來的人生完全相同（測試逐人比對）。舊存檔只知道**現任**伴侶（更早的在 7A 之前就被覆蓋了）。
+- **重活**：`birthOf(s).kin = { siblings: [{ name, given, gender, birthYear }] }`，`normalizeBirth` 用 `cleanBirthKin` 驗證，`storage.js cleanStart` 保留。沒有 `kin` 的舊紀錄就依數字規劃。
+- **摘要與儲存**：`getStatus(s).kin`（`kinView`）、`getSummary(s).kin`（`kinSummary`）；`storage.js normalizeSummary` 以 `cleanKinSummary` 保留（手足 ≤14、伴侶 ≤8、姻親 ≤16，字串截長），舊紀錄沒有 `kin`。
+
+### 三個要特別說明的決定
+
+1. **「獨立的亂數流」＝雜湊流，不是另一個狀態陣列。** 名冊的每個機率都是 `hash01(seed + 用途 + 人 + 年)`（和 `memory.js`、`stableFlip` 同一種做法），不消耗也不讀取 `state.rng`，與其他抽籤的次數與順序無關，所以舊存檔可以無亂數地重建，`syncPartner` 也能在任何時候安全呼叫。
+2. **`h.siblings()` 的意義改了。** 規格要它回傳名冊，但既有 42 處事件條件和文字把它當**數字**用（`h.siblings() > 1`）。為了不動主角的序列，舊數字改名為 `h.siblingsAtBirth()`（回傳 `family.siblings`，永遠不變），既有事件檔（`js/data/events/*.js`）逐字機械式改名（只改這個呼叫）；`h.siblings()` 現在回傳名冊陣列。7B 改寫內容時要把 `siblingsAtBirth()` 逐一換成名冊 helper。
+3. **哀傷是唯一會回頭影響主角的地方。** 狀態會影響事件條件，所以幸福 −3 可能讓之後某個事件的資格或權重不同。實測見下表；`KIN_TUNING.grief = false` 可完全關掉。另外兩個潛在管道都已封死：日誌行寫在**年末**（`kinAnnounce`，`life.js` 在 `runEvents` 之後呼叫），不會佔用當年的條目額度，也不會取代「平凡的一年」的抽籤（安靜的一年，平凡的一行被這一條取代；當年已有四條時，消息最多晚兩年再說，實測 3155 次裡有 4 次晚）；回憶是 `quiet`（`remember(..., { quiet: true })`），不會被回想或呼應選中、也不佔 48 則的上限（自己的上限 16），因為「回想」會改變 `pickYearly` 是否抽一個數字，等於移動亂數流。
+
+### 實測
+
+3000–4000 段人生，自動遊玩。
+
+**手足數（出生抽到的數字不變，所以「之前」就是抽到的 N）**
+
+| | 平均 | 0 | 1 | 2 | 3 | 4 | 5 | 6+ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 抽到的 N（之前） | 2.522 | 20.0% | 21.1% | 17.3% | 14.3% | 9.3% | 6.7% | 11.5% |
+| 名冊規劃的總數 | 2.522 | 20.0% | 21.1% | 17.2% | 14.3% | 9.3% | 6.7% | 11.5% |
+| 其中出生時已出生（哥哥姊姊） | 1.313 | | | | | | | |
+| 其中之後才出生（弟妹，規劃） | 1.209 | | | | | | | |
+| 活到終點時：已出生＋尚未出生 | 2.498 | | | | | | | |
+
+放不進去的手足不到 0.1%；因母親先過世而取消的弟妹 2.0%（97／4837）；主角先過世而沒出生的 536 人不算損失。家庭大小沒有膨脹。
+
+**手足死亡率（每人每年，對照生命表）**
+
+| 年齡 | 0–4 | 5–14 | 15–39 | 40–59 | 60–79 | 80+ |
+| --- | --- | --- | --- | --- | --- | --- |
+| 觀察死亡數／生命表期望 | 432／417 | 213／229 | 706／684 | 969／972 | 1609／1633 | 611／598 |
+| 比值 | 1.04 | 0.93 | 1.03 | 1.00 | 0.99 | 1.02 |
+
+**比所有手足都晚走**：有手足的人中 29.4%（占全部人 23.2%；多數在 80 歲以上過世）。**日誌**：平均每人 2.1 條 `kin` 行，78% 的人至少有一條，同年合併 198 人，最多一人 13 條（11 個手足）。**姻親**：每次結婚 2.00 位，婚禮前已過世 24.4%，婚後過世 66.0%，主角過世時兩位都已不在 85.7%。**伴侶**：平均每人 1.16 位，離婚 1014 位、喪偶 1406 位（4000 人）。
+
+**決定性比較**（`git archive HEAD` 的複本 vs 這一版，`node tools/kin-determinism.mjs --base=… --n=200`，過去／現在／未來／隨機四種年代輪替，自動選擇；比較每條日誌的年齡、種類、標題（選擇則是選的選項）、死亡年齡與死因、**以及最後的 `state.rng`**）：
+
+| 模式 | 一模一樣 | 其餘 |
+| --- | --- | --- |
+| 哀傷關閉 | 200／200 | — |
+| 哀傷開啟（出貨設定） | 190／200 | 10 段在**第一條 kin 行之後**才分歧（0 段在之前） |
+
+還有 `tests/kin.test.mjs` 在 repo 內做同樣的對照（名冊整個關掉 vs 開著，`KIN_TUNING.enabled`）。
+
+**覆蓋率與校準**：`coherence-scan 1000 p7a`（自然、`--stress`、`--novelty`）旗標與 HEAD 完全相同（只剩既有的 `household` 1 筆）；`--migrant` 也與 HEAD 相同（既有的 `density` 1 筆）。有 4 條以上的年份由 0.10% 升為約 0.6%（一條 kin 行最多讓一年到 4 條，不會到 5 條）。校準：在複本跑 `node tools/calibrate-risk.mjs 30000 1`，與現行 `riskref.js` 相比中位數變動 1.27%、p90 10.6%（稀疏的老年格子，與 6B 當時的 1.25%／9.6% 同量級，屬抽樣雜訊），所以**沒有覆寫** `riskref.js`；主角的風險項只看健康、財富、病況，哀傷只動幸福與人際，沒有改到。
+
+### 改到的既有檔案
+
+- 引擎：`systems.js`（在上述各點呼叫 `syncPartner`／`kinParentDied`／`kinYear`；`partnerParentsGone` 讀名冊）、`life.js`（`initKin`、`birthOf().kin`、`deserialize` 呼叫 `ensureKin`、`getStatus().kin`、`kinAnnounce` 的兩個呼叫點）、`birth.js`（`normalizeBirth` 的 `kin`）、`summary.js`（`kin`）、`helpers.js`（16 個新 helper、`siblings()` 改名）、`memory.js`（`quiet` 選項與自己的上限）。
+- 事件資料：`js/data/events/*.js` 只把 `h.siblings()` 改名為 `h.siblingsAtBirth()`（42 處，沒有改任何文字或條件）。
+- 儲存：`storage.js`（`cleanStart` 保留 `kin`、`normalizeSummary` 保留 `kin`）。
+- 7C 的檔案，但不得不動：`sw.js` 加入 `js/engine/kin.js` 並把 `CACHE_VERSION` 升為 `v13`；`index.html` 由 `node tools/build-preload.mjs` 重新產生。
+- 測試：`events.test.mjs`（日誌種類加 `kin`）、`replay.test.mjs`（父母物件多了欄位，比對 `alive age name`）、`eulogy.test.mjs`（`calamity` 在快速模式的 800 段人生裡只有 6–9 段，下限改為 `scaled(8, 4, 4)`；完整模式仍是 8）。
+- 工具：`tools/read-life.mjs`（結尾印出名冊）、新增 `tools/kin-determinism.mjs`。
+
+### 給 7B（內容與稽核）
+
+- **名冊 helper**（全部在 `js/engine/README.md` 第 12 節）：`h.siblings(sel?)`（已出生者，含已過世）、`h.livingSiblings()`、`h.sibling(sel)`、`h.hasLivingSibling(sel?)`、`h.siblingName(sel, { full }?)`、`h.siblingWord(sel)`（哥哥／姊姊／弟弟／妹妹）、`h.partners()`、`h.currentPartner()`、`h.exPartners()`、`h.lastPartner()`、`h.inLaw('mother'|'father')`、`h.inLawsAlive()`、`h.inLawWord(rel)`（岳父母／公婆）、`h.parentDiedAt(who)`、`h.kin()`。`sel` 是 `{ older, younger, gender, alive, id, name }`。
+- **舊數字還在**：`h.siblingsAtBirth()` 與 `s.family.siblings` 是一生的總數，**包含已過世與還沒出生的**，文字不要再用它。稽核器 `snapshot()` 的 `siblings` 也是這個數字，`siblings_count`、`siblings` 兩條規則要改讀名冊（`s.kin.siblings` 的 `alive/older/gender`）。
+- **目前內容與名冊矛盾的實例**（`tools/read-life.mjs --seed=rd7 --country=IND --gender=M --wealth=2`）：44 歲哥哥過世，隔年事件「兄弟姊妹聚在一起：你和兄弟姊妹窩在舊房間…」；沒有任何手足的人（`--seed=rd1 --country=TWN --gender=F`）仍在 62 歲讀到「弟妹來接手三天」；2 歲讀到「家裡多了一個小嬰兒」，名冊的弟妹出生年未必相符。
+- **回想**：`KIN_TUNING.quietMemories = true`，手足與姻親的回憶只出現在家人面板、生平（`keepsake` 會挑 `loss:` 開頭者）與 `h.memories('family')`，不會被「平凡的一年」或事件呼應說出來。想讓它們被說出來，改成 `false`（或對單一回憶呼叫 `remember` 不帶 `quiet`），但那會移動亂數流（與舊版的逐段比較不再成立），要重跑校準與模擬測試。
+- **日誌行的時間**：`kin` 行在年末、事件之後；它不佔 `maxEntriesPerYear`。要寫「手足過世」的事件，請用 `h.siblings({ alive: false })` 與 `deathYear`，不要自己再寫一條日誌；`h.recentLog('哥哥過世')` 之類以標題找也行（標題為 `${稱謂}過世`、`${岳父|岳母|公公|婆婆|伴侶的父親|伴侶的母親}過世`、`親人過世`）。
+- **文字風格已固定**：第二人稱、短、不點出自殺（`cause: 'suicide'` 只在名冊裡）；有伴侶不同住時，姻親過世那條不會寫「陪著」「握著手」（`household` 稽核會抓）。新增的事件文字若提到 `inLaw(...)`，也要遵守。
+- **規則建議**（`rules-kin.mjs`）：名冊現在能驗證「已過世者以現在式出現」（`deathYear`）、「稱謂與長幼性別不符」（`older`、`gender`）、「兩個妹妹」（`siblings({ gender:'F', younger:true, alive:true }).length`）、「再婚後用前任名字」（`partners()`）、「公婆／岳父母的存歿」（`inLaw(rel).alive`、無伴侶時為 `null`）。
+
+### 給 7C（介面）
+
+- **資料來源**：`getStatus(s).kin`（隨時都有；停用時為 `null`）：`{ siblings: [{ id, name, given, gender, birthYear, older, alive, deathYear, deathAge, cause, causeLabel, where, married, kids, word, age, ageNow }], coming, parents: { mother, father: { name, alive, age, birthYear, deathYear, cause, causeLabel, where } }, partners: [{ id, name, gender, birthYear, status, since, until, marriedYear, alive, deathYear, deathAge, cause, causeLabel, age, current }], inLaws: [{ id, rel, partnerId, name, given, gender, birthYear, alive, deathYear, deathAge, cause, causeLabel, word, age, current }] }`。`age` 是現在的年齡，已過世者是享年；`where` 是 `with_you | apart | home_country | abroad | ''`（手足可有 `abroad`；已過世為空字串）；`partners[].status` 是 `dating | married | divorced | widowed | ended`（`ended` 要有自己的字：分手，或婚前過世）；`current` 對伴侶是「現在這段關係」（dating／married），對姻親是「現任（結婚或喪偶）伴侶的父母」。`getStatus(s).siblings` 還是舊數字，面板請改用 `kin.siblings.length`。
+- **回顧頁**：`getSummary(s).kin`（相同欄位的精簡版，沒有 `id`，姻親帶 `partnerName`）會存進相簿（`normalizeSummary`），**舊紀錄沒有 `kin`**，家族樹要處理 `undefined`。父母在 `kin.parents`。
+- **新日誌種類**：`entry.kind === 'kin'`（有 `title`、`text`、`delta`），目前 UI 走「有標題的一般條目」分支，樣式類別 `kind-kin`；7C 可以給它一個比 `milestone` 更安靜的樣式。`pacing.js loadOf` 把它算進 `entries`（不是 `quiet`）。
+- **建置**：新增模組時記得 `node tools/build-preload.mjs` 與 `sw.js` 的 `PRECACHE`（`pwa.test.mjs` 會檢查）；`CACHE_VERSION` 我已升到 `v13`。
+- **注意**：名字可能是拉丁字母（`Hassani`、`Funmilayo`），句子裡沒有加空白，介面顯示名字時請用 `given`（句子用）與 `name`（全名）。

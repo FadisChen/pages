@@ -1182,7 +1182,7 @@ export default [
     choices: [
       {
         label: '請手足輪班，或使用喘息照顧',
-        cond: (s, h) => h.incomeAtLeast('LM') || h.siblings() > 0,
+        cond: (s, h) => h.incomeAtLeast('LM') || h.siblingsAtBirth() > 0,
         effects: { health: +3, happiness: +3, wealth: -1, social: +1 },
         result: '你終於開口求助。弟妹來接手三天，你一個人去海邊坐了一整個下午，發現自己還記得怎麼放鬆。',
         ai: 2,

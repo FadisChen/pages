@@ -1527,7 +1527,7 @@ export default [
     ages: [26, 52],
     weight: 0.6,
     tags: ['work', 'family', 'chain'],
-    cond: (s, h) => h.parentsAlive() > 0 && h.parentsNear() && h.siblings() > 0 && !selfEmployed(h) && !h.has('w_family_biz') && !h.isMigrant() && (!h.urban() || h.familyBusiness()),
+    cond: (s, h) => h.parentsAlive() > 0 && h.parentsNear() && h.siblingsAtBirth() > 0 && !selfEmployed(h) && !h.has('w_family_biz') && !h.isMigrant() && (!h.urban() || h.familyBusiness()),
     text: (s, h) => (h.urban() ? '家裡的小店' : '家裡的田地') + '撐了好幾十年，長輩的身體不如從前。飯桌上，大家都沒開口，但目光一個接一個落在你身上，你的筷子停在半空中。',
     choices: [
       {
