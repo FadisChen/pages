@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ecebe4">
+  <meta name="description" content="Fadis Chen 的個人網站。全端工程師與 AI 探索者，專注 AI Agent、全端系統、瀏覽器知識工具與互動體驗。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Fadis Chen — Full-Stack Engineer & AI Explorer">
+  <meta property="og:description" content="把好奇心，做成能運作的東西。探索 AI、系統工程與人機互動的可能。">
+  <meta property="og:url" content="https://fadischen.github.io/pages/">
+  <meta name="robots" content="index,follow">
+  <title>Fadis Chen — Full-Stack Engineer & AI Explorer</title>
+  <link rel="canonical" href="https://fadischen.github.io/pages/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;600;700;800;900&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--paper:#ecebe4;--paper-2:#f5f4ee;--ink:#20312c;--ink-dim:#61706a;--line:#cbd0c5;--night:#172824;--night-2:#213a32;--acid:#c6ea72;--orange:#ed7653;--mono:'DM Mono',monospace;--sans:'Noto Sans TC',sans-serif;--display:'Syne','Noto Sans TC',sans-serif}
+    *,*::before,*::after{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:102px}
+    body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.85 var(--sans);-webkit-font-smoothing:antialiased}
+    ::selection{background:var(--acid);color:var(--night)}
+    a{color:inherit;text-decoration:none}
+    button{font:inherit;cursor:pointer}
+    button:focus-visible,a:focus-visible{outline:3px solid var(--orange);outline-offset:5px}
+    .noise{position:fixed;inset:0;pointer-events:none;opacity:.09;z-index:90;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E")}
+    .wrap{max-width:1280px;padding:0 46px;margin:0 auto}
+    .mono{font:500 11px/1.5 var(--mono);letter-spacing:.115em;text-transform:uppercase}
+    .section-pad{padding:125px 0}
+    .section-line{display:flex;align-items:center;gap:15px;margin:0 0 43px;color:var(--ink-dim)}
+    .section-line .number{color:var(--orange);font-weight:500}
+    .section-line::after{content:'';height:1px;background:var(--line);flex:1}
+    .nav{position:sticky;top:0;z-index:100;background:rgba(236,235,228,.91);backdrop-filter:blur(18px);border-bottom:1px solid rgba(32,49,44,.15)}
+    .nav-row{min-height:81px;display:flex;align-items:center;gap:36px}
+    .brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+    .brand-symbol{font:800 37px/.8 var(--display);letter-spacing:-.1em;color:var(--ink)}
+    .brand-symbol b{font-weight:800;color:var(--orange)}
+    .brand-name{font:800 15px/1.05 var(--display);letter-spacing:-.045em}
+    .brand-name small{display:block;margin-top:5px;font:500 8px/1.2 var(--mono);letter-spacing:.12em;color:var(--ink-dim)}
+    .nav-links{display:flex;align-items:center;justify-content:center;gap:33px;margin-left:auto}
+    .nav-links a{color:#3e514a;font:600 12px var(--sans);transition:color .2s}
+    .nav-links a:hover{color:#ce5d3b}
+    .nav-actions{display:flex;align-items:center;gap:13px}
+    .lang-btn{height:35px;min-width:51px;border:1px solid var(--line);background:transparent;border-radius:3px;font:500 11px var(--mono);transition:background .2s}
+    .lang-btn:hover{background:var(--acid)}
+    .header-github{border:1px solid var(--night);height:36px;padding:0 13px;display:inline-flex;align-items:center;gap:8px;background:var(--night);color:var(--paper-2);font:500 11px var(--mono);transition:background .2s,transform .2s}
+    .header-github:hover{background:#365148;transform:translateY(-2px)}
+    .menu-btn{display:none;border:0;background:none;color:var(--ink);font:500 11px var(--mono);letter-spacing:.08em}
+    .hero{min-height:690px;padding-top:85px;padding-bottom:88px;display:grid;grid-template-columns:1.1fr .9fr;gap:52px;align-items:center}
+    .hero-copy{padding:35px 0 20px;position:relative;z-index:2}
+    .eyebrow{display:flex;align-items:center;gap:12px;margin-bottom:35px;color:var(--ink-dim)}
+    .live-point{width:9px;height:9px;background:var(--orange);border-radius:50%;box-shadow:0 0 0 5px rgba(237,118,83,.12);animation:pulse 2.5s infinite}
+    .hero h1{margin:0;font-size:clamp(44px,4.15vw,62px);font-weight:900;line-height:1.24;letter-spacing:-.07em;max-width:850px}
+    .hero h1 em{display:inline-block;font-style:normal;color:var(--ink);position:relative;z-index:0}
+    .hero h1 em::after{content:'';position:absolute;z-index:-1;left:-.02em;right:-.02em;bottom:.06em;height:.23em;background:var(--acid);transform:rotate(-1.1deg)}
+    .hero-intro{max-width:590px;margin:28px 0 34px;font-size:16px;line-height:2;color:#51635b}
+    .hero-cta{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:21px;padding:15px 20px;min-height:50px;font:700 12px var(--sans);transition:transform .2s,box-shadow .2s,background .2s}
+    .btn:hover{transform:translateY(-3px)}
+    .btn-main{background:var(--ink);color:white;box-shadow:5px 5px 0 var(--acid)}
+    .btn-main:hover{box-shadow:7px 7px 0 var(--acid)}
+    .btn-alt{border:1px solid var(--line);background:var(--paper-2)}
+    .btn-icon{font:500 18px var(--mono)}
+    .hero-foot{margin-top:63px;border-top:1px solid var(--line);display:flex;gap:39px;padding-top:21px;max-width:540px}
+    .hero-foot div{display:flex;flex-direction:column;gap:5px}
+    .hero-foot small{font:500 9px var(--mono);letter-spacing:.08em;color:#89968a}
+    .hero-foot strong{font-size:11px;font-weight:600}
+    .art{position:relative;min-height:518px;background:var(--night);overflow:hidden;isolation:isolate;box-shadow:15px 15px 0 #d5d9c5}
+    .art::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:36px 36px;opacity:.6}
+    .art::after{content:'';position:absolute;width:680px;height:680px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(198,234,114,.11),transparent 58%);pointer-events:none}
+    .art-top{position:absolute;inset:23px 25px auto;display:flex;justify-content:space-between;color:rgba(244,249,234,.56);z-index:2}
+    .art-top strong{color:var(--acid);font-weight:400}
+    .target{position:absolute;top:50%;left:50%;width:380px;height:380px;transform:translate(-50%,-50%)}
+    .ring{position:absolute;border:1px solid rgba(198,234,114,.26);border-radius:50%;inset:0}
+    .ring.two{inset:39px;border-style:dashed;border-color:rgba(198,234,114,.24);animation:spin 33s linear infinite}
+    .ring.three{inset:86px;border-color:rgba(255,255,255,.18)}
+    .ring::before{content:'';position:absolute;width:7px;height:7px;border-radius:50%;top:50%;left:-4px;background:var(--acid)}
+    .ring.two::before{background:var(--orange)}
+    .ring.three::before{background:#fff}
+    .cross-h,.cross-v{position:absolute;background:rgba(198,234,114,.2)}
+    .cross-h{width:100%;height:1px;top:50%}
+    .cross-v{height:100%;width:1px;left:50%}
+    .core{position:absolute;inset:111px;display:flex;align-items:center;justify-content:center;z-index:2;background:var(--acid);color:var(--night);clip-path:polygon(50% 0,100% 27%,100% 73%,50% 100%,0 73%,0 27%);font:800 72px var(--display);letter-spacing:-.1em;animation:float 6s ease-in-out infinite}
+    .core span{transform:translateX(-4px)}
+    .corner{position:absolute;z-index:2;color:#f7f9ef;font:500 11px var(--mono);letter-spacing:.04em}
+    .corner-a{top:108px;left:28px}.corner-b{bottom:112px;right:28px;text-align:right}
+    .corner b{display:block;font:500 10px var(--mono);color:var(--acid);margin-bottom:5px}
+    .art-bottom{position:absolute;bottom:22px;left:25px;right:25px;z-index:2;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,.18);padding-top:15px;color:rgba(255,255,255,.6)}
+    .sound{display:flex;gap:3px;align-items:flex-end;height:17px}.sound i{height:8px;width:2px;background:var(--acid);animation:bars 1.15s ease-in-out infinite alternate}.sound i:nth-child(2){animation-delay:.2s;height:13px}.sound i:nth-child(3){animation-delay:.4s;height:5px}.sound i:nth-child(4){animation-delay:.1s;height:15px}.sound i:nth-child(5){animation-delay:.5s;height:9px}
+    .marquee{background:var(--acid);border-top:1px solid #b4d365;border-bottom:1px solid #b4d365;overflow:hidden}
+    .marquee-line{display:flex;gap:70px;white-space:nowrap;padding:17px 0;transform:translateX(-20px);font:700 12px var(--mono);letter-spacing:.07em;color:var(--ink)}
+    .marquee-line span{display:flex;align-items:center;gap:70px;flex-shrink:0}
+    .marquee-line i{font-style:normal;font-size:20px;line-height:.6;color:#557239}
+    .intro-grid{display:grid;grid-template-columns:.87fr 1.13fr;gap:100px;align-items:start}
+    .intro-grid h2,.section-heading{font-size:clamp(32px,3.7vw,53px);line-height:1.34;letter-spacing:-.065em;margin:0;font-weight:800}
+    .intro-grid h2 .italic-en{display:block;color:#829188;font:italic 500 clamp(33px,4.1vw,60px)/1.3 Georgia,serif;letter-spacing:-.07em;margin-top:8px}
+    .intro-text{font-size:17px;color:#4b5c53;line-height:2.2;padding-top:3px}
+    .intro-text p{margin:0 0 21px}
+    .focus{background:#e1e5d9}
+    .focus-head{display:flex;align-items:end;justify-content:space-between;gap:35px;margin-bottom:36px}
+    .subcopy{max-width:320px;color:#65756c;font-size:13px;line-height:1.9;margin:0}
+    .focus-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+    .focus-card{min-height:300px;background:var(--paper-2);padding:31px 33px 25px;position:relative;overflow:hidden;border:1px solid rgba(32,49,44,.07);transition:transform .25s,box-shadow .25s}
+    .focus-card:hover{transform:translateY(-5px);box-shadow:0 15px 35px rgba(31,52,42,.08)}
+    .focus-card.dark{background:var(--night);color:var(--paper-2)}
+    .focus-card.accent{background:var(--acid)}
+    .focus-card .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:34px}
+    .focus-card .chip-number{font:500 11px var(--mono);opacity:.65}
+    .focus-card .card-glyph{height:40px;width:40px;border:1px solid currentColor;opacity:.65;display:grid;place-items:center;font:500 25px var(--mono);line-height:1}
+    .focus-card h3{font-size:26px;line-height:1.25;letter-spacing:-.04em;margin:0 0 13px;font-weight:800}
+    .focus-card p{font-size:13px;line-height:2;margin:0;opacity:.77;max-width:425px}
+    .focus-card .tags{margin-top:25px;display:flex;flex-wrap:wrap;gap:7px}
+    .tag{font:500 10px/1.3 var(--mono);letter-spacing:0;border:1px solid rgba(32,49,44,.26);border-radius:2px;padding:6px 9px}
+    .dark .tag{border-color:rgba(255,255,255,.28);color:var(--acid)}
+    .work-grid{display:grid;grid-template-columns:.72fr 1.28fr;gap:75px}
+    .work-side p{max-width:270px;color:#718077;font-size:14px;line-height:2}
+    .mini-poster{margin-top:53px;display:inline-flex;flex-direction:column;gap:14px;transform:rotate(-4deg);border:1px solid var(--ink);padding:17px 21px;box-shadow:6px 6px 0 var(--acid);font:500 11px var(--mono);line-height:1.4}
+    .mini-poster span{font:800 36px/1 var(--display);letter-spacing:-.055em}
+    .work-list{border-top:1px solid var(--line);min-width:0}
+    .work-item{padding:30px 6px 34px 0;display:grid;grid-template-columns:70px minmax(0,1fr) 26px;gap:9px;border-bottom:1px solid var(--line);transition:padding .2s,background .2s}
+    .work-item:hover{padding-left:10px;background:rgba(255,255,255,.19)}
+    .work-num{font:500 11px var(--mono);color:#ce725a;padding-top:9px}
+    .work-item h3{margin:0 0 8px;font-size:23px;line-height:1.5;letter-spacing:-.04em}
+    .work-item>div{min-width:0;overflow-wrap:anywhere}.work-item p{margin:0;color:#607068;font-size:13px;line-height:2;max-width:580px}
+    .work-arrow{align-self:start;justify-self:center;font:400 24px/1.3 var(--mono);color:#9ba69a;transform:rotate(-45deg);transition:transform .25s,color .25s}
+    .work-item:hover .work-arrow{transform:rotate(0);color:var(--orange)}
+    .method{background:var(--night);color:var(--paper-2)}
+    .method .section-line{color:#a7bbad}.method .section-line::after{background:#395248}
+    .method-head{display:flex;align-items:end;justify-content:space-between;gap:30px}
+    .method .section-heading{max-width:710px}
+    .method-note{font:500 11px var(--mono);letter-spacing:.04em;color:var(--acid);padding-bottom:8px}
+    .method-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid #3e574c;margin-top:65px}
+    .method-step{padding:34px 29px 0 0;min-height:222px;position:relative}
+    .method-step:not(:first-child){border-left:1px solid #3e574c;padding-left:30px}
+    .method-step strong{font:500 12px var(--mono);color:var(--acid)}
+    .method-step h3{font:700 21px var(--sans);margin:28px 0 13px}
+    .method-step p{max-width:300px;font:400 13px/2 var(--sans);color:#acbcb2;margin:0}
+    .curiosity{display:grid;grid-template-columns:1fr 1.05fr;gap:70px;align-items:center}
+    .curiosity h2{font-size:clamp(35px,4.5vw,64px);line-height:1.29;letter-spacing:-.075em;margin:0 0 27px}
+    .curiosity p{font-size:15px;color:#607068;line-height:2.1;max-width:480px}
+    .interest-board{background:#dce2d3;min-height:365px;padding:32px;display:flex;flex-direction:column;justify-content:space-between;gap:40px;position:relative;overflow:hidden;border:1px solid #cdd3c7}
+    .interest-board::after{content:'*';position:absolute;right:3px;top:-94px;color:rgba(68,94,70,.08);font:800 410px/1 var(--display);pointer-events:none}
+    .board-top{display:flex;justify-content:space-between;color:#637467;position:relative;z-index:1}
+    .interest-list{display:flex;flex-wrap:wrap;gap:9px;align-items:center;position:relative;z-index:1}
+    .interest-list span{font:500 12px/1.4 var(--mono);border:1px solid #8e9f8d;color:#345245;background:rgba(255,255,255,.55);padding:11px 14px;transition:background .2s,transform .2s}
+    .interest-list span:hover{background:var(--acid);transform:translateY(-4px)}
+    footer{background:var(--acid);color:var(--night);padding:82px 0 24px}
+    .footer-main{display:grid;grid-template-columns:1fr auto;align-items:end;gap:30px;padding-bottom:80px}
+    .footer-kicker{display:block;margin-bottom:25px}
+    .footer-main h2{font-size:clamp(43px,6vw,88px);line-height:1.17;letter-spacing:-.085em;margin:0;max-width:1000px}
+    .footer-github{display:flex;align-items:center;justify-content:center;width:93px;height:93px;border:2px solid var(--night);border-radius:50%;font:500 37px var(--mono);transition:background .2s,color .2s,transform .2s}
+    .footer-github:hover{transform:rotate(45deg);background:var(--night);color:var(--acid)}
+    .footer-bottom{border-top:1px solid rgba(32,49,44,.3);padding-top:19px;display:flex;justify-content:space-between;gap:20px;align-items:center;font:500 10px var(--mono)}
+    .footer-bottom a{text-decoration:underline;text-underline-offset:3px}
+    .js .reveal:not(.visible){opacity:0;transform:translateY(24px)}
+    .reveal{transition:opacity .75s ease,transform .75s cubic-bezier(.2,.75,.2,1)}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 5px rgba(237,118,83,.12)}50%{box-shadow:0 0 0 10px rgba(237,118,83,0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    @keyframes bars{to{height:3px}}
+    @media(max-width:1100px){.wrap{padding:0 30px}.nav-row{gap:20px}.nav-links{gap:20px}.hero{gap:32px}.art{min-height:465px}.target{width:320px;height:320px}.ring.two{inset:33px}.ring.three{inset:74px}.core{inset:96px}.intro-grid,.work-grid{gap:45px}}
+    @media(max-width:780px){.nav-row{min-height:70px}.nav-links{display:none;position:absolute;left:0;right:0;top:70px;padding:23px 30px 30px;background:var(--paper-2);border-bottom:1px solid var(--line);box-shadow:0 19px 20px rgba(0,0,0,.08);flex-direction:column;align-items:stretch;gap:20px}.menu-open .nav-links{display:flex}.menu-btn{display:block}.header-github{display:none}.nav-actions{margin-left:auto}.hero{grid-template-columns:1fr;gap:55px;padding-top:65px;padding-bottom:80px}.hero-copy{padding:0}.hero h1{font-size:clamp(42px,9vw,65px)}.hero-foot{margin-top:45px}.art{width:100%;min-height:415px;max-width:580px;margin:0 auto;box-shadow:10px 10px 0 #d5d9c5}.intro-grid,.work-grid,.curiosity{grid-template-columns:1fr;gap:30px}.intro-text{font-size:15px}.focus-head,.method-head{align-items:start;flex-direction:column}.focus-card{min-height:295px}.section-pad{padding:90px 0}.work-side p{max-width:620px}.mini-poster{display:none}.method-grid{margin-top:40px}.curiosity{gap:35px}.footer-main h2{font-size:clamp(43px,8vw,69px)}}
+    @media(max-width:560px){.wrap{padding:0 21px}.nav-links{padding-left:21px;padding-right:21px}.brand-name{font-size:13px}.brand-symbol{font-size:33px}.hero{padding-top:57px;gap:42px}.eyebrow{margin-bottom:28px}.hero h1{font-size:clamp(39px,11vw,53px)}.hero-intro{font-size:14px;line-height:2}.hero-foot{gap:25px}.hero-foot small{font-size:8px}.hero-foot strong{font-size:10px}.art{min-height:350px;box-shadow:7px 7px 0 #d5d9c5}.target{width:270px;height:270px}.ring.two{inset:28px}.ring.three{inset:61px}.core{inset:81px;font-size:54px}.corner{font-size:9px}.corner-a{top:77px;left:16px}.corner-b{bottom:82px;right:16px}.art-top{inset:17px 17px auto}.art-bottom{inset:auto 17px 15px}.section-pad{padding:74px 0}.section-line{margin-bottom:28px}.section-heading,.intro-grid h2{font-size:clamp(30px,9vw,39px)}.focus-grid{grid-template-columns:1fr}.focus-card{min-height:255px;padding:25px}.focus-card .card-head{margin-bottom:23px}.focus-card h3{font-size:24px}.work-item{grid-template-columns:37px minmax(0,1fr) 17px;padding-top:24px;padding-bottom:26px;padding-right:15px}.work-item h3{font-size:19px}.work-item p{font-size:12px}.method-grid{display:block}.method-step{padding:22px 0 28px;min-height:0;border-top:1px solid #3e574c}.method-step:not(:first-child){border-left:0;padding-left:0}.method-step h3{margin:15px 0 8px}.interest-board{min-height:320px;padding:21px}.interest-list span{font-size:10px;padding:10px}.footer-main{grid-template-columns:1fr;gap:28px;padding-bottom:55px}.footer-main h2{font-size:clamp(42px,11vw,61px)}.footer-github{height:70px;width:70px;font-size:32px}.footer-bottom{align-items:start;flex-direction:column;gap:7px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}.js .reveal:not(.visible){opacity:1;transform:none}}
+  </style>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"Fadis Chen","jobTitle":"Full-Stack Engineer","url":"https://fadischen.github.io/pages/","sameAs":["https://github.com/FadisChen"]}</script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="nav" id="top">
+    <div class="wrap nav-row">
+      <a href="#top" class="brand" aria-label="Fadis Chen homepage"><span class="brand-symbol">F<b>.</b></span><span class="brand-name">FADIS CHEN<small>ENGINEER / EXPLORER</small></span></a>
+      <nav class="nav-links" id="site-nav" aria-label="Main navigation">
+        <a href="#about" data-zh="關於" data-en="About">關於</a><a href="#focus" data-zh="專注領域" data-en="Expertise">專注領域</a><a href="#work" data-zh="探索方向" data-en="Explorations">探索方向</a><a href="#approach" data-zh="做事方式" data-en="Approach">做事方式</a><a href="#contact" data-zh="聯繫" data-en="Connect">聯繫</a>
+      </nav>
+      <div class="nav-actions"><button class="lang-btn" id="lang-btn" type="button" aria-label="Switch language to English">EN</button><a class="header-github" href="https://github.com/FadisChen" target="_blank" rel="noopener noreferrer">GITHUB <span aria-hidden="true">↗</span></a><button type="button" id="menu-btn" class="menu-btn" aria-expanded="false" aria-controls="site-nav">MENU <span aria-hidden="true">+</span></button></div>
+    </div>
+  </header>
+  <main>
+    <section class="wrap hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="eyebrow mono"><span class="live-point" aria-hidden="true"></span><span data-zh="你好，我是 Fadis · 全端工程師 / AI 探索者" data-en="HELLO, I'M FADIS · ENGINEER / AI EXPLORER">你好，我是 Fadis · 全端工程師 / AI 探索者</span></div>
+        <h1 id="hero-title"><span data-zh="把好奇心，" data-en="Turning curiosity">把好奇心，</span><br><em data-zh="做成能運作的東西。" data-en="into working things.">做成能運作的東西。</em></h1>
+        <p class="hero-intro" data-zh="我是一名全端工程師，持續探索 AI 如何走出對話框，進入瀏覽器、語音、手機與真實工作流程。從互動原型到系統架構，我喜歡把想法完整做出來。" data-en="I'm a full-stack engineer exploring how AI moves beyond the chat box—into browsers, voice, mobile devices, and everyday workflows. From interactive prototypes to system architecture, I love making ideas work end to end.">我是一名全端工程師，持續探索 AI 如何走出對話框，進入瀏覽器、語音、手機與真實工作流程。從互動原型到系統架構，我喜歡把想法完整做出來。</p>
+        <div class="hero-cta"><a href="#focus" class="btn btn-main"><span data-zh="探索我的方向" data-en="Explore what I do">探索我的方向</span><span class="btn-icon" aria-hidden="true">↗</span></a><a href="https://github.com/FadisChen" target="_blank" rel="noopener noreferrer" class="btn btn-alt">GitHub <span class="btn-icon" aria-hidden="true">↗</span></a></div>
+        <div class="hero-foot"><div><small>DESIGN PRINCIPLE</small><strong data-zh="好奇心驅動，實作驗證" data-en="Curiosity led. Built to verify.">好奇心驅動，實作驗證</strong></div><div><small>ALWAYS EXPLORING</small><strong>AI · SOFTWARE · INTERACTION</strong></div></div>
+      </div>
+      <div class="art" aria-label="Abstract graphic illustrating engineering, AI, and interaction" role="img">
+        <div class="art-top mono"><span>FIELD NOTES / 001</span><strong>● LIVE EXPERIMENT</strong></div>
+        <div class="target" aria-hidden="true"><div class="ring"></div><div class="ring two"></div><div class="ring three"></div><div class="cross-h"></div><div class="cross-v"></div><div class="core"><span>F.</span></div></div>
+        <div class="corner corner-a"><b>01 / THINK</b>INTELLIGENCE<br>MEETS INTUITION</div><div class="corner corner-b"><b>02 / BUILD</b>CODE INTO<br>EXPERIENCE</div>
+        <div class="art-bottom mono"><span>BUILD — TEST — LEARN — REPEAT</span><div class="sound" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
+      </div>
+    </section>
+    <div class="marquee" aria-hidden="true"><div class="marquee-line"><span>FULL-STACK ENGINEERING <i>✳</i> AI EXPERIENCES <i>✳</i> CREATIVE TECHNOLOGY <i>✳</i> HUMAN-CENTERED TOOLS <i>✳</i></span><span>FULL-STACK ENGINEERING <i>✳</i> AI EXPERIENCES <i>✳</i> CREATIVE TECHNOLOGY <i>✳</i></span></div></div>
+    <section id="about" class="section-pad"><div class="wrap"><div class="section-line mono"><span class="number">01</span><span>ABOUT / 關於</span></div><div class="intro-grid"><h2 class="reveal"><span data-zh="我的工作，始於一個問題。" data-en="I start with a question.">我的工作，始於一個問題。</span><span class="italic-en">What if we try?</span></h2><div class="intro-text reveal"><p data-zh="一項技術真正有趣的時刻，是它開始解決人的問題。這也是我持續往返於產品體驗、前後端工程與 AI 應用之間的原因。" data-en="Technology gets interesting when it starts solving human problems. That is why I keep moving between product experience, full-stack engineering, and practical AI.">一項技術真正有趣的時刻，是它開始解決人的問題。這也是我持續往返於產品體驗、前後端工程與 AI 應用之間的原因。</p><p data-zh="我關心的不只是功能能否實現，還包括架構是否清晰、互動是否自然、工具是否真正幫上忙。比起單一技術標籤，我更喜歡從問題出發，跨越邊界把事情完成。" data-en="I care not only whether a feature works, but whether its architecture is clear, its interactions feel natural, and the result is genuinely useful. I prefer crossing technical boundaries to solve the problem in front of me.">我關心的不只是功能能否實現，還包括架構是否清晰、互動是否自然、工具是否真正幫上忙。比起單一技術標籤，我更喜歡從問題出發，跨越邊界把事情完成。</p></div></div></div></section>
+    <section id="focus" class="section-pad focus"><div class="wrap"><div class="section-line mono"><span class="number">02</span><span>WHAT I DO / 專注領域</span></div><div class="focus-head"><h2 class="section-heading reveal" data-zh="在技術之間，找到新的可能。" data-en="New possibilities at the intersections.">在技術之間，找到新的可能。</h2><p class="subcopy reveal" data-zh="以下不是技能排名，而是我長期反覆探索、實際動手建構的四個方向。" data-en="Not a skill ranking. Four recurring themes that I actively explore and build around.">以下不是技能排名，而是我長期反覆探索、實際動手建構的四個方向。</p></div><div class="focus-grid">
+      <article class="focus-card dark reveal"><div class="card-head"><span class="chip-number">EXPERTISE / 01</span><span class="card-glyph" aria-hidden="true">✳</span></div><h3 data-zh="AI Agent 與多模態互動" data-en="AI Agents & Multimodal Interaction">AI Agent 與多模態互動</h3><p data-zh="從工具呼叫、上下文與記憶，到即時語音、虛擬角色與 AI 協作流程，探索更自然、更可控的人機互動方式。" data-en="From tool calling, context and memory to real-time voice, avatars and agentic workflows—making human–AI interaction more natural and controllable.">從工具呼叫、上下文與記憶，到即時語音、虛擬角色與 AI 協作流程，探索更自然、更可控的人機互動方式。</p><div class="tags"><span class="tag">Gemini</span><span class="tag">Agents</span><span class="tag">Live API</span><span class="tag">RAG</span></div></article>
+      <article class="focus-card reveal"><div class="card-head"><span class="chip-number">EXPERTISE / 02</span><span class="card-glyph" aria-hidden="true">⌘</span></div><h3 data-zh="全端工程與系統設計" data-en="Full-Stack & Systems">全端工程與系統設計</h3><p data-zh="橫跨前端介面、後端 API、資料庫與背景工作流程。重視架構分層、安全邊界、測試與長期可維護性。" data-en="Bridging interfaces, APIs, databases, and background workflows—with attention to architecture, security boundaries, testing, and maintainability.">橫跨前端介面、後端 API、資料庫與背景工作流程。重視架構分層、安全邊界、測試與長期可維護性。</p><div class="tags"><span class="tag">TypeScript</span><span class="tag">Vue / React</span><span class="tag">.NET / Python</span><span class="tag">SQL</span></div></article>
+      <article class="focus-card reveal"><div class="card-head"><span class="chip-number">EXPERTISE / 03</span><span class="card-glyph" aria-hidden="true">▤</span></div><h3 data-zh="瀏覽器與知識工具" data-en="Browser & Knowledge Tools">瀏覽器與知識工具</h3><p data-zh="讓知識不只停留在文字：網頁擷取、智慧摘要、PDF 閱讀、翻譯、心智圖與聲音內容，融入日常使用情境。" data-en="Turning information into something usable: web capture, summaries, PDF reading, translation, mind maps, and audio content inside everyday workflows.">讓知識不只停留在文字：網頁擷取、智慧摘要、PDF 閱讀、翻譯、心智圖與聲音內容，融入日常使用情境。</p><div class="tags"><span class="tag">Chrome Extensions</span><span class="tag">Knowledge UX</span><span class="tag">PDF</span><span class="tag">TTS</span></div></article>
+      <article class="focus-card accent reveal"><div class="card-head"><span class="chip-number">EXPERTISE / 04</span><span class="card-glyph" aria-hidden="true">↗</span></div><h3 data-zh="行動裝置與即時體驗" data-en="Mobile & Real-Time Experiences">行動裝置與即時體驗</h3><p data-zh="從 Android 原生應用、點對點影音傳輸，到 3D 場景與多人互動遊戲，持續探索軟體與真實世界的連結。" data-en="Exploring the bridge between software and the physical world through native Android apps, peer-to-peer media, 3D scenes, and real-time multiplayer experiences.">從 Android 原生應用、點對點影音傳輸，到 3D 場景與多人互動遊戲，持續探索軟體與真實世界的連結。</p><div class="tags"><span class="tag">Kotlin</span><span class="tag">WebRTC</span><span class="tag">Three.js</span><span class="tag">Realtime</span></div></article>
+    </div></div></section>
+    <section id="work" class="section-pad"><div class="wrap"><div class="section-line mono"><span class="number">03</span><span>EXPLORATIONS / 探索方向</span></div><div class="work-grid"><div class="work-side reveal"><h2 class="section-heading" data-zh="不是專案清單，而是我在意的事。" data-en="Beyond a project list—what drives my work.">不是專案清單，而是我在意的事。</h2><p data-zh="每一段探索背後，都有一個想改善的使用情境。技術只是實現它的媒介。" data-en="Behind every experiment is a situation worth improving. Technology is the medium, not the destination.">每一段探索背後，都有一個想改善的使用情境。技術只是實現它的媒介。</p><div class="mini-poster" aria-hidden="true">ITERATE / EVERY DAY<span>MAKE<br>IT REAL.</span>KEEP ASKING BETTER QUESTIONS.</div></div><div class="work-list">
+      <article class="work-item reveal"><span class="work-num">01.</span><div><h3 data-zh="讓 AI 成為能協作的夥伴" data-en="AI that can collaborate">讓 AI 成為能協作的夥伴</h3><p data-zh="思考如何讓 AI 理解上下文、使用工具、保有記憶，並透過語音與人即時協作，而不只是回覆一句文字。" data-en="How can AI understand context, use tools, retain memory, and collaborate through real-time voice—instead of only returning another paragraph of text?">思考如何讓 AI 理解上下文、使用工具、保有記憶，並透過語音與人即時協作，而不只是回覆一句文字。</p></div><span class="work-arrow" aria-hidden="true">↗</span></article>
+      <article class="work-item reveal"><span class="work-num">02.</span><div><h3 data-zh="讓資訊在需要的地方被理解" data-en="Knowledge, right where it's needed">讓資訊在需要的地方被理解</h3><p data-zh="把閱讀、翻譯、摘要、知識整理與提問放回瀏覽器，減少工具切換，讓吸收資訊的流程更流暢。" data-en="Bringing reading, translation, summaries, knowledge capture, and questions back into the browser—reducing context switching along the way.">把閱讀、翻譯、摘要、知識整理與提問放回瀏覽器，減少工具切換，讓吸收資訊的流程更流暢。</p></div><span class="work-arrow" aria-hidden="true">↗</span></article>
+      <article class="work-item reveal"><span class="work-num">03.</span><div><h3 data-zh="讓互動走出傳統網頁" data-en="Interaction beyond the page">讓互動走出傳統網頁</h3><p data-zh="嘗試用 3D、多人連線、手機感測器、相機與即時串流，做出能被看見、聽見、共同參與的體驗。" data-en="Using 3D, multiplayer networking, phone sensors, cameras, and live streams to build experiences people can see, hear, and share.">嘗試用 3D、多人連線、手機感測器、相機與即時串流，做出能被看見、聽見、共同參與的體驗。</p></div><span class="work-arrow" aria-hidden="true">↗</span></article>
+      <article class="work-item reveal"><span class="work-num">04.</span><div><h3 data-zh="讓原型有工程上的底氣" data-en="Engineering behind the prototype">讓原型有工程上的底氣</h3><p data-zh="對架構分層、資料介接、權限控管、非同步處理與測試驗證保持敏感，讓探索不只停留在漂亮的畫面。" data-en="Thinking through architecture, data integration, permissions, asynchronous processing, and verification—so explorations don't stop at a polished screen.">對架構分層、資料介接、權限控管、非同步處理與測試驗證保持敏感，讓探索不只停留在漂亮的畫面。</p></div><span class="work-arrow" aria-hidden="true">↗</span></article>
+    </div></div></div></section>
+    <section id="approach" class="section-pad method"><div class="wrap"><div class="section-line mono"><span class="number">04</span><span>HOW I WORK / 做事方式</span></div><div class="method-head"><h2 class="section-heading reveal" data-zh="先弄懂問題，然後動手把答案做出來。" data-en="Understand the problem. Then build the answer.">先弄懂問題，然後動手把答案做出來。</h2><span class="method-note">THINK → BUILD → VALIDATE</span></div><div class="method-grid"><div class="method-step reveal"><strong>01 / THINK</strong><h3 data-zh="拆解真實情境" data-en="Understand the context">拆解真實情境</h3><p data-zh="從人的需求與使用流程出發，定義問題、邊界和最值得驗證的假設。" data-en="Start with people and workflows; define the problem, constraints, and assumptions worth testing.">從人的需求與使用流程出發，定義問題、邊界和最值得驗證的假設。</p></div><div class="method-step reveal"><strong>02 / BUILD</strong><h3 data-zh="快速實作與串接" data-en="Build across the stack">快速實作與串接</h3><p data-zh="選擇合適的技術，把介面、服務、資料與 AI 能力連成完整的工作流程。" data-en="Choose the right tools and connect interfaces, services, data, and AI into an end-to-end workflow.">選擇合適的技術，把介面、服務、資料與 AI 能力連成完整的工作流程。</p></div><div class="method-step reveal"><strong>03 / VALIDATE</strong><h3 data-zh="測試、修正、持續演進" data-en="Test, refine, repeat">測試、修正、持續演進</h3><p data-zh="透過測試、操作回饋與邊界情境檢查，不斷讓原型朝真正可用邁進。" data-en="Use tests, hands-on feedback, and edge-case checks to keep moving from prototype to usable software.">透過測試、操作回饋與邊界情境檢查，不斷讓原型朝真正可用邁進。</p></div></div></div></section>
+    <section class="section-pad"><div class="wrap"><div class="section-line mono"><span class="number">05</span><span>BEYOND CODE / 興趣與好奇心</span></div><div class="curiosity"><div class="reveal"><h2><span data-zh="工作之外，依然在探索。" data-en="Always curious. Even beyond work.">工作之外，依然在探索。</span></h2><p data-zh="我對新的互動方式、知識表達、聲音、影像與遊戲充滿興趣。從一個小工具、一段互動，到一個完整的實驗，創作和學習往往是同一件事。" data-en="I'm drawn to new forms of interaction, knowledge, audio, visuals, and games. Whether it's a tiny utility or a complete experiment, creating and learning often feel like the same thing.">我對新的互動方式、知識表達、聲音、影像與遊戲充滿興趣。從一個小工具、一段互動，到一個完整的實驗，創作和學習往往是同一件事。</p></div><div class="interest-board reveal"><div class="board-top mono"><span>PERSONAL SIGNALS</span><span>↗ 05 / ∞</span></div><div class="interest-list"><span>CREATIVE CODING</span><span>3D & GAMEPLAY</span><span>VOICE & AUDIO</span><span>READING TOOLS</span><span>HUMAN–AI INTERACTION</span><span>ANDROID LAB</span><span>VISUAL THINKING</span></div><div class="mono" style="color:#637467;position:relative;z-index:1">CURIOUS BY DEFAULT / BUILDER BY HABIT</div></div></div></div></section>
+  </main>
+  <footer id="contact"><div class="wrap"><div class="footer-main"><div><span class="footer-kicker mono" data-zh="一起讓有趣的想法發生 / LET'S CONNECT" data-en="LET'S TURN IDEAS INTO REALITY / CONNECT">一起讓有趣的想法發生 / LET'S CONNECT</span><h2 data-zh="下一個好點子，值得被做出來。" data-en="The next good idea deserves to be built.">下一個好點子，值得被做出來。</h2></div><a class="footer-github" aria-label="Visit Fadis Chen on GitHub" href="https://github.com/FadisChen" target="_blank" rel="noopener noreferrer">↗</a></div><div class="footer-bottom"><span>© <span id="year">2026</span> FADIS CHEN. <span data-zh="保持好奇，持續創造。" data-en="STAY CURIOUS. KEEP BUILDING.">保持好奇，持續創造。</span></span><a href="https://github.com/FadisChen" target="_blank" rel="noopener noreferrer">GITHUB / FADISCHEN ↗</a></div></div></footer>
+  <script>
+    (()=>{
+      document.documentElement.classList.add('js');
+      const langButton=document.getElementById('lang-btn');
+      const menuButton=document.getElementById('menu-btn');
+      const dictionaryNodes=[...document.querySelectorAll('[data-zh][data-en]')];
+      const setLanguage=lang=>{
+        const active=lang==='en'?'en':'zh';
+        document.documentElement.lang=active==='zh'?'zh-Hant':'en';
+        dictionaryNodes.forEach(el=>{el.textContent=el.getAttribute('data-'+active)});
+        langButton.textContent=active==='zh'?'EN':'中';
+        langButton.setAttribute('aria-label',active==='zh'?'Switch language to English':'切換至繁體中文');
+        try{localStorage.setItem('fadis-site-lang',active)}catch(_error){}
+      };
+      let preferred='zh';try{preferred=localStorage.getItem('fadis-site-lang')||'zh'}catch(_error){}
+      setLanguage(preferred);
+      langButton.addEventListener('click',()=>setLanguage(document.documentElement.lang==='en'?'zh':'en'));
+      menuButton.addEventListener('click',()=>{
+        const expanded=menuButton.getAttribute('aria-expanded')==='true';
+        menuButton.setAttribute('aria-expanded',String(!expanded));
+        document.body.classList.toggle('menu-open',!expanded);
+      });
+      document.querySelectorAll('.nav-links a').forEach(a=>a.addEventListener('click',()=>{
+        document.body.classList.remove('menu-open');menuButton.setAttribute('aria-expanded','false');
+      }));
+      document.addEventListener('keydown',event=>{if(event.key==='Escape'){document.body.classList.remove('menu-open');menuButton.setAttribute('aria-expanded','false')}});
+      document.getElementById('year').textContent=String(new Date().getFullYear());
+      const elements=document.querySelectorAll('.reveal');
+      if('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+        const observer=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('visible');observer.unobserve(entry.target)}})},{threshold:.12,rootMargin:'0px 0px -30px 0px'});
+        elements.forEach(el=>observer.observe(el));
+      }else{elements.forEach(el=>el.classList.add('visible'))}
+    })();
+  </script>
+</body>
+</html>
